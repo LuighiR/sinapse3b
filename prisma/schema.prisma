@@ -1,0 +1,108 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String       @id
+  name         String?
+  email        String       @unique
+  passwordHash String       @map("password_hash")
+  isSuperAdmin Boolean      @default(false) @map("is_super_admin")
+  isActive     Boolean      @default(true) @map("is_active")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @map("updated_at")
+  memberships  Membership[]
+
+  @@map("users")
+}
+
+model Tenant {
+  id                String       @id
+  name              String
+  slug              String       @unique
+  isActive          Boolean      @default(true) @map("is_active")
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @map("updated_at")
+  apiBaseUrl        String       @default("") @map("api_base_url")
+  apiKey            String       @default("") @map("api_key")
+  backendClientId   String?      @map("backend_client_id")
+  backendLastError  String?      @map("backend_last_error")
+  backendLastSyncAt DateTime?    @map("backend_last_sync_at")
+  backendSyncStatus String       @default("PENDING") @map("backend_sync_status")
+  backendClient     SinapseClient? @relation("TenantBackendClient", fields: [backendClientId], references: [id])
+  memberships       Membership[]
+
+  @@index([backendClientId], map: "tenants_backend_client_id_idx")
+  @@map("tenants")
+}
+
+model Membership {
+  id        String   @id
+  tenantId  String   @map("tenant_id")
+  userId    String   @map("user_id")
+  role      Role
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([tenantId, userId])
+  @@map("memberships")
+}
+
+model SinapseClient {
+  id         String   @id
+  slug       String   @unique
+  name       String
+  domainUuid String   @map("domain_uuid")
+  apiBaseUrl String   @map("api_base_url")
+  apiKey     String   @map("api_key")
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @map("updated_at")
+  branches   Branch[]
+  tenants    Tenant[] @relation("TenantBackendClient")
+
+  @@map("sinapse_clients")
+}
+
+model Branch {
+  id       Int           @id @default(autoincrement())
+  name     String
+  address  String
+  phone    String
+  cnpj     String
+  clientId String        @map("client_id")
+  erpId    BigInt        @map("erp_id")
+  client   SinapseClient @relation(fields: [clientId], references: [id])
+  employees Employee[]
+
+  @@map("branches")
+}
+
+model Employee {
+  id              Int      @id @default(autoincrement())
+  name            String
+  extensionNumber String   @map("extension_number")
+  extensionUuid   String   @map("extension_uuid")
+  erpId           BigInt   @map("erp_id")
+  chatId          String   @map("chat_id")
+  branchId        Int      @map("branch_id")
+  branch          Branch   @relation(fields: [branchId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([branchId], map: "employees_branch_id_idx")
+  @@map("employees")
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  MANAGER
+  VIEWER
+
+  @@map("role")
+}
