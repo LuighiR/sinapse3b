@@ -3,8 +3,9 @@ import { AuthModule } from './modules/auth/auth.module'
 import { CompaniesModule } from './modules/companies/companies.module'
 import { HealthModule } from './modules/health/health.module'
 import { MeModule } from './modules/me/me.module'
+import { KpiModule } from './modules/kpi/kpi.module'
 
 @Module({
-  imports: [HealthModule, AuthModule, MeModule, CompaniesModule],
+  imports: [HealthModule, AuthModule, MeModule, CompaniesModule, KpiModule],
 })
 export class AppModule {}

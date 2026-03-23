@@ -4,6 +4,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  schemas  = ["public", "core", "raw", "kpi"]
 }
 
 model User {
@@ -18,6 +19,7 @@ model User {
   memberships  Membership[]
 
   @@map("users")
+  @@schema("core")
 }
 
 model Tenant {
@@ -38,6 +40,7 @@ model Tenant {
 
   @@index([backendClientId], map: "tenants_backend_client_id_idx")
   @@map("tenants")
+  @@schema("core")
 }
 
 model Membership {
@@ -52,6 +55,7 @@ model Membership {
 
   @@unique([tenantId, userId])
   @@map("memberships")
+  @@schema("core")
 }
 
 model SinapseClient {
@@ -65,9 +69,15 @@ model SinapseClient {
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @map("updated_at")
   branches   Branch[]
+  budgetFacts BudgetFact[]
+  kpiAvailabilities KpiAvailability[]
+  kpiBreakdowns KpiBreakdown[]
+  kpiCalculationRuns KpiCalculationRun[]
+  kpiSnapshots KpiSnapshot[]
   tenants    Tenant[] @relation("TenantBackendClient")
 
   @@map("sinapse_clients")
+  @@schema("core")
 }
 
 model Branch {
@@ -79,9 +89,11 @@ model Branch {
   clientId String        @map("client_id")
   erpId    BigInt        @map("erp_id")
   client   SinapseClient @relation(fields: [clientId], references: [id])
+  budgetFacts BudgetFact[]
   employees Employee[]
 
   @@map("branches")
+  @@schema("core")
 }
 
 model Employee {
@@ -96,6 +108,179 @@ model Employee {
 
   @@index([branchId], map: "employees_branch_id_idx")
   @@map("employees")
+  @@schema("core")
+}
+
+model BudgetFact {
+  id                   BigInt            @id @default(autoincrement())
+  clientId             String            @map("client_id")
+  sourceTable          String            @map("source_table")
+  sourceRecordId       Int               @map("source_record_id")
+  branchName           String            @map("branch_name")
+  branchId             Int?              @map("branch_id")
+  sellerId             Int               @map("seller_id")
+  sellerName           String            @map("seller_name")
+  budgetDate           DateTime          @map("budget_date") @db.Date
+  budgetDatetime       DateTime          @map("budget_datetime")
+  closingDate          DateTime?         @map("closing_date") @db.Date
+  statusRaw            String?           @map("status_raw")
+  statusNormalized     String            @default("UNKNOWN") @map("status_normalized")
+  channel              String?
+  customerName         String            @map("customer_name")
+  cpfCnpj              String?           @map("cpf_cnpj")
+  valueAmount          Decimal           @map("value_amount") @db.Decimal(19, 4)
+  sequential           BigInt?
+  davId                BigInt            @map("dav_id")
+  sequentialLinkedSale BigInt?           @map("sequential_linked_sale")
+  payloadJson          Json              @default("{}") @map("payload_json")
+  createdAt            DateTime          @default(now()) @map("created_at")
+  updatedAt            DateTime          @default(now()) @map("updated_at")
+  branch               Branch?           @relation(fields: [branchId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  client               SinapseClient     @relation(fields: [clientId], references: [id])
+  drilldownRefs        KpiDrilldownRef[]
+
+  @@unique([clientId, sourceTable, sourceRecordId], map: "budget_facts_client_source_record_key")
+  @@index([clientId, budgetDate], map: "budget_facts_client_budget_date_idx")
+  @@index([clientId, sellerId, budgetDate], map: "budget_facts_client_seller_budget_date_idx")
+  @@index([clientId, branchId, budgetDate], map: "budget_facts_client_branch_budget_date_idx")
+  @@map("budget_facts")
+  @@schema("core")
+}
+
+model KpiDefinition {
+  id              BigInt              @id @default(autoincrement())
+  code            String              @unique
+  family          String
+  granularity     String
+  name            String
+  description     String?
+  isActive        Boolean             @default(true) @map("is_active")
+  createdAt       DateTime            @default(now()) @map("created_at")
+  updatedAt       DateTime            @default(now()) @map("updated_at")
+  availabilities  KpiAvailability[]
+  breakdowns      KpiBreakdown[]
+  calculationRuns KpiCalculationRun[]
+  snapshots       KpiSnapshot[]
+
+  @@map("definitions")
+  @@schema("kpi")
+}
+
+model KpiAvailability {
+  id           BigInt        @id @default(autoincrement())
+  clientId     String        @map("client_id")
+  definitionId BigInt        @map("definition_id")
+  isEnabled    Boolean       @default(true) @map("is_enabled")
+  availableAt  DateTime?     @map("available_at")
+  metadataJson Json?         @map("metadata_json")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @default(now()) @map("updated_at")
+  client       SinapseClient @relation(fields: [clientId], references: [id])
+  definition   KpiDefinition @relation(fields: [definitionId], references: [id])
+
+  @@unique([clientId, definitionId], map: "availability_client_definition_key")
+  @@index([clientId, isEnabled], map: "availability_client_enabled_idx")
+  @@map("availability")
+  @@schema("kpi")
+}
+
+model KpiSnapshot {
+  id            BigInt            @id @default(autoincrement())
+  clientId      String            @map("client_id")
+  definitionId  BigInt            @map("definition_id")
+  periodType    String            @map("period_type")
+  periodStart   DateTime          @map("period_start") @db.Date
+  periodEnd     DateTime          @map("period_end") @db.Date
+  metricKey     String            @map("metric_key")
+  metricValue   Decimal           @map("metric_value") @db.Decimal(19, 4)
+  dimensionsJson Json?            @map("dimensions_json")
+  calculatedAt  DateTime          @default(now()) @map("calculated_at")
+  createdAt     DateTime          @default(now()) @map("created_at")
+  updatedAt     DateTime          @default(now()) @map("updated_at")
+  client        SinapseClient     @relation(fields: [clientId], references: [id])
+  definition    KpiDefinition     @relation(fields: [definitionId], references: [id])
+  drilldownRefs KpiDrilldownRef[]
+
+  @@unique([clientId, definitionId, periodType, periodStart, periodEnd, metricKey], map: "snapshots_period_metric_key")
+  @@index([clientId, definitionId, periodStart, periodEnd], map: "snapshots_client_definition_period_idx")
+  @@map("snapshots")
+  @@schema("kpi")
+}
+
+model KpiBreakdown {
+  id             BigInt            @id @default(autoincrement())
+  clientId       String            @map("client_id")
+  definitionId   BigInt            @map("definition_id")
+  periodType     String            @map("period_type")
+  periodStart    DateTime          @map("period_start") @db.Date
+  periodEnd      DateTime          @map("period_end") @db.Date
+  bucketDate     DateTime?         @map("bucket_date") @db.Date
+  dimensionType  String            @map("dimension_type")
+  dimensionKey   String?           @map("dimension_key")
+  dimensionLabel String?           @map("dimension_label")
+  metricKey      String            @map("metric_key")
+  metricValue    Decimal           @map("metric_value") @db.Decimal(19, 4)
+  sortOrder      Int               @default(0) @map("sort_order")
+  payloadJson    Json?             @map("payload_json")
+  calculatedAt   DateTime          @default(now()) @map("calculated_at")
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @default(now()) @map("updated_at")
+  client         SinapseClient     @relation(fields: [clientId], references: [id])
+  definition     KpiDefinition     @relation(fields: [definitionId], references: [id])
+  drilldownRefs  KpiDrilldownRef[]
+
+  @@index([clientId, definitionId, periodStart, periodEnd], map: "breakdowns_client_definition_period_idx")
+  @@index([clientId, dimensionType, bucketDate], map: "breakdowns_client_dimension_bucket_idx")
+  @@map("breakdowns")
+  @@schema("kpi")
+}
+
+model KpiCalculationRun {
+  id            BigInt            @id @default(autoincrement())
+  clientId      String            @map("client_id")
+  definitionId  BigInt?           @map("definition_id")
+  runKey        String            @map("run_key")
+  status        String
+  periodType    String            @map("period_type")
+  periodStart   DateTime          @map("period_start") @db.Date
+  periodEnd     DateTime          @map("period_end") @db.Date
+  recordsRead   Int               @default(0) @map("records_read")
+  recordsWritten Int              @default(0) @map("records_written")
+  startedAt     DateTime          @default(now()) @map("started_at")
+  finishedAt    DateTime?         @map("finished_at")
+  errorMessage  String?           @map("error_message")
+  metadataJson  Json?             @map("metadata_json")
+  client        SinapseClient     @relation(fields: [clientId], references: [id])
+  definition    KpiDefinition?    @relation(fields: [definitionId], references: [id])
+  drilldownRefs KpiDrilldownRef[]
+
+  @@unique([clientId, runKey], map: "calculation_runs_client_run_key")
+  @@index([clientId, startedAt], map: "calculation_runs_client_started_idx")
+  @@map("calculation_runs")
+  @@schema("kpi")
+}
+
+model KpiDrilldownRef {
+  id               BigInt             @id @default(autoincrement())
+  calculationRunId BigInt?            @map("calculation_run_id")
+  snapshotId       BigInt?            @map("snapshot_id")
+  breakdownId      BigInt?            @map("breakdown_id")
+  budgetFactId     BigInt?            @map("budget_fact_id")
+  refType          String             @map("ref_type")
+  refKey           String?            @map("ref_key")
+  refValue         String?            @map("ref_value")
+  payloadJson      Json?              @map("payload_json")
+  createdAt        DateTime           @default(now()) @map("created_at")
+  breakdown        KpiBreakdown?      @relation(fields: [breakdownId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  budgetFact       BudgetFact?        @relation(fields: [budgetFactId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  calculationRun   KpiCalculationRun? @relation(fields: [calculationRunId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  snapshot         KpiSnapshot?       @relation(fields: [snapshotId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([snapshotId], map: "drilldown_refs_snapshot_idx")
+  @@index([breakdownId], map: "drilldown_refs_breakdown_idx")
+  @@index([budgetFactId], map: "drilldown_refs_budget_fact_idx")
+  @@map("drilldown_refs")
+  @@schema("kpi")
 }
 
 enum Role {
@@ -105,4 +290,5 @@ enum Role {
   VIEWER
 
   @@map("role")
+  @@schema("core")
 }

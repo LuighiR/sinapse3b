@@ -19,7 +19,7 @@
 4. Start the app in development:
 
    ```bash
-   npx ts-node src/main.ts
+   npm run dev
    ```
 
 ## Environment
@@ -37,3 +37,24 @@ Optional values:
 - `PORT`: defaults to `3000`.
 
 The app validates the environment at bootstrap and fails fast if any required variable is missing or empty.
+
+## Budget KPI Slice
+
+This slice adds the first KPI family for `budgets` on top of the auth and company foundation.
+
+- Raw source: `raw.ferraco_budgets`
+- Normalized facts: `core.budget_facts`
+- Materialized KPI layer: `kpi.*`
+
+Current budget endpoints:
+
+- `POST /kpis/budgets/refresh?from=YYYY-MM-DD&to=YYYY-MM-DD`
+- `GET /kpis/budgets/summary?from=YYYY-MM-DD&to=YYYY-MM-DD&sellerId=123`
+- `GET /kpis/budgets/daily?from=YYYY-MM-DD&to=YYYY-MM-DD&sellerId=123`
+- `GET /kpis/budgets/drilldown?from=YYYY-MM-DD&to=YYYY-MM-DD&sellerId=123&branchId=5&branchName=Matriz`
+
+Notes:
+
+- All KPI routes require `Authorization: Bearer <jwt>` and `X-Tenant-Id`.
+- The API resolves the active `clientId` from the authenticated tenant scope.
+- Budget KPIs are refreshed manually in this slice; scheduled jobs come later.
