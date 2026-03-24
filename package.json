@@ -4,10 +4,12 @@
   "version": "0.0.0",
   "type": "commonjs",
   "scripts": {
-    "mockup": "node scripts/mockup-server.cjs",
     "prisma:generate": "prisma generate",
     "predev": "npm run prisma:generate",
     "dev": "ts-node src/main.ts",
+    "frontend:dev": "npm --prefix frontend run dev",
+    "frontend:build": "npm --prefix frontend run build",
+    "frontend:test": "npm --prefix frontend run test",
     "prebuild": "npm run prisma:generate",
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/main.js",

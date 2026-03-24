@@ -1,4 +1,4 @@
-# Sinapse 3 Backend
+# Sinapse 3 Platform
 
 ## Setup
 
@@ -8,19 +8,53 @@
    npm install
    ```
 
-2. Copy `.env.example` to `.env` and adjust the values for your environment. The sample `DATABASE_URL` targets the PostgreSQL `core` schema with `?schema=core`.
+2. Install frontend dependencies:
 
-3. Validate the Prisma schema:
+   ```bash
+   npm --prefix frontend install
+   ```
+
+3. Copy `.env.example` to `.env` and adjust the values for your environment. The sample `DATABASE_URL` targets the PostgreSQL `core` schema with `?schema=core`.
+
+4. Validate the Prisma schema:
 
    ```bash
    npx prisma validate
    ```
 
-4. Start the app in development:
+5. Start the backend in development:
 
    ```bash
    npm run dev
    ```
+
+6. Start the frontend in development:
+
+   ```bash
+   npm run frontend:dev
+   ```
+
+## Frontend
+
+The repository now includes a dedicated Next.js frontend in `frontend/`.
+
+Current frontend routes:
+
+- `/login`
+- `/dashboard`
+
+The first frontend slice is intentionally UI-first:
+
+- branded split login page
+- smooth transition into the dashboard
+- executive budget KPI cockpit powered by typed mock data
+- route contract already shaped for a future redirect to either dashboard or admin
+
+Useful frontend commands:
+
+- `npm run frontend:dev`
+- `npm run frontend:build`
+- `npm run frontend:test`
 
 ## Environment
 
@@ -38,9 +72,9 @@ Optional values:
 
 The app validates the environment at bootstrap and fails fast if any required variable is missing or empty.
 
-## Budget KPI Slice
+## Backend KPI APIs
 
-This slice adds the first KPI family for `budgets` on top of the auth and company foundation.
+The backend currently exposes the first KPI family for `budgets` on top of the auth and company foundation.
 
 - Raw source: `raw.ferraco_budgets`
 - Normalized facts: `core.budget_facts`

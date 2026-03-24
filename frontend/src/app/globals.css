@@ -1,0 +1,74 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f1efe8;
+  --foreground: #16161e;
+  --color-ink: #16161e;
+  --color-navy: #202048;
+  --color-paper: #f1efe8;
+  --color-paper-strong: #e5e0d5;
+  --color-muted: #727382;
+  --color-mist: #c8c9d2;
+  --color-line: rgba(22, 22, 30, 0.12);
+  --color-accent: #6f86ff;
+  --color-accent-soft: rgba(111, 134, 255, 0.18);
+  --color-success: #70c0a0;
+  --shadow-soft: 0 24px 64px rgba(15, 15, 26, 0.14);
+  --shadow-card: 0 20px 44px rgba(15, 15, 26, 0.12);
+  --shadow-panel: 0 30px 80px rgba(10, 10, 18, 0.18);
+  --radius-shell: 32px;
+  --radius-card: 24px;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-body);
+  --font-display: var(--font-display);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-body), sans-serif;
+  background-image:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.72), transparent 34%),
+    linear-gradient(160deg, #d8d5dd 0%, #c3c3ce 42%, #f1efe8 100%);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-display), sans-serif;
+  letter-spacing: -0.04em;
+}
+
+::selection {
+  background: rgba(111, 134, 255, 0.22);
+}
+
+@keyframes sinapse-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
