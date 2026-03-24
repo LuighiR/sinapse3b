@@ -411,7 +411,7 @@ class PrismaBudgetKpiRepository
   async getBudgetFactRows(input: {
     clientId: string
     period: KpiPeriod
-    sellerId: number
+    sellerId?: number
   }): Promise<BudgetFactRecord[]> {
     const prisma = this.prisma as any
     const from = KpiPeriod.toDatabaseDate(input.period.from)
@@ -420,19 +420,21 @@ class PrismaBudgetKpiRepository
     return prisma.budgetFact.findMany({
       where: {
         clientId: input.clientId,
-        sellerId: input.sellerId,
         budgetDate: {
           gte: from,
           lte: to,
         },
+        ...(input.sellerId !== undefined ? { sellerId: input.sellerId } : {}),
       },
       orderBy: [{ budgetDate: 'asc' }, { id: 'asc' }],
       select: {
         id: true,
         budgetDate: true,
+        budgetDatetime: true,
         sellerId: true,
         sellerName: true,
         statusNormalized: true,
+        channel: true,
         valueAmount: true,
       },
     })

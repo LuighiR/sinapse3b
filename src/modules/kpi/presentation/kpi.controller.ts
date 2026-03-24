@@ -5,8 +5,12 @@ import { JwtAuthGuard } from '../../auth/presentation/guards/jwt-auth.guard'
 import { TenantScopeGuard } from '../../auth/presentation/guards/tenant-scope.guard'
 import { BudgetKpiQueryService } from '../application/budget-kpi-query.service'
 import { BudgetKpiRefreshService } from '../application/budget-kpi-refresh.service'
+import { parseBudgetChannelAbandonmentQuery } from './query/budget-channel-abandonment.query'
+import { parseBudgetChannelDailyQuery } from './query/budget-channel-daily.query'
+import { parseBudgetChannelHourlyQuery } from './query/budget-channel-hourly.query'
 import { parseBudgetDailyQuery } from './query/budget-daily.query'
 import { parseBudgetDrilldownQuery } from './query/budget-drilldown.query'
+import { parseBudgetHourlyQuery } from './query/budget-hourly.query'
 import { parseBudgetSummaryQuery } from './query/budget-summary.query'
 
 @Controller('kpis/budgets')
@@ -46,6 +50,46 @@ export class KpiController {
     const period = parseBudgetDailyQuery(query)
 
     return this.queryService.getDailySeries({
+      clientId: authContext.clientId,
+      ...period,
+    })
+  }
+
+  @Get('hourly')
+  getHourly(@RequestContext() authContext: AuthContext, @Query() query: Record<string, unknown>) {
+    const period = parseBudgetHourlyQuery(query)
+
+    return this.queryService.getHourlySeries({
+      clientId: authContext.clientId,
+      ...period,
+    })
+  }
+
+  @Get('channel/daily')
+  getChannelDaily(@RequestContext() authContext: AuthContext, @Query() query: Record<string, unknown>) {
+    const period = parseBudgetChannelDailyQuery(query)
+
+    return this.queryService.getChannelDaily({
+      clientId: authContext.clientId,
+      ...period,
+    })
+  }
+
+  @Get('channel/hourly')
+  getChannelHourly(@RequestContext() authContext: AuthContext, @Query() query: Record<string, unknown>) {
+    const period = parseBudgetChannelHourlyQuery(query)
+
+    return this.queryService.getChannelHourly({
+      clientId: authContext.clientId,
+      ...period,
+    })
+  }
+
+  @Get('channel/abandonment')
+  getChannelAbandonment(@RequestContext() authContext: AuthContext, @Query() query: Record<string, unknown>) {
+    const period = parseBudgetChannelAbandonmentQuery(query)
+
+    return this.queryService.getChannelAbandonment({
       clientId: authContext.clientId,
       ...period,
     })

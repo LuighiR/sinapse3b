@@ -436,4 +436,262 @@ describe('BudgetKpiQueryService', () => {
 
     expect(repository.getDrilldownRows).not.toHaveBeenCalled()
   })
+
+  it('filters summary by status and orderType from canonical facts', async () => {
+    const repository: jest.Mocked<BudgetKpiQueryRepository> = {
+      getSummaryRows: jest.fn(),
+      getDailyRows: jest.fn(),
+      getBudgetFactRows: jest.fn().mockResolvedValue([
+        {
+          id: 1n,
+          budgetDate: utcDate(2026, 0, 1),
+          budgetDatetime: utcDate(2026, 0, 1, 10, 0),
+          sellerId: 7,
+          sellerName: 'Maria',
+          statusNormalized: 'WON',
+          channel: 'Balcao',
+          valueAmount: '100.00',
+        },
+        {
+          id: 2n,
+          budgetDate: utcDate(2026, 0, 1),
+          budgetDatetime: utcDate(2026, 0, 1, 11, 0),
+          sellerId: 7,
+          sellerName: 'Maria',
+          statusNormalized: 'OPEN',
+          channel: 'Balcao',
+          valueAmount: '50.00',
+        },
+        {
+          id: 3n,
+          budgetDate: utcDate(2026, 0, 1),
+          budgetDatetime: utcDate(2026, 0, 1, 12, 0),
+          sellerId: 7,
+          sellerName: 'Maria',
+          statusNormalized: 'WON',
+          channel: null,
+          valueAmount: '75.00',
+        },
+      ]),
+      getDrilldownRows: jest.fn(),
+    }
+
+    const service = new BudgetKpiQueryService(repository)
+
+    const result = await service.getSummary({
+      clientId: 'c1',
+      from: '2026-01-01',
+      to: '2026-01-31',
+      status: 'Baixado',
+      orderType: 'Balcao',
+    })
+
+    expect(result.total).toEqual({ count: 1, value: '100.0000' })
+    expect(result.won).toEqual({ count: 1, value: '100.0000' })
+    expect(result.open).toEqual({ count: 0, value: '0.0000' })
+    expect(result.lost).toEqual({ count: 0, value: '0.0000' })
+  })
+
+  it('returns a zero-filled hourly series sorted from 00 to 23', async () => {
+    const repository: jest.Mocked<BudgetKpiQueryRepository> = {
+      getSummaryRows: jest.fn(),
+      getDailyRows: jest.fn(),
+      getBudgetFactRows: jest.fn().mockResolvedValue([
+        {
+          id: 1n,
+          budgetDate: utcDate(2026, 0, 5),
+          budgetDatetime: utcDate(2026, 0, 5, 8, 15),
+          sellerId: 7,
+          sellerName: 'Maria',
+          statusNormalized: 'OPEN',
+          channel: 'Balcao',
+          valueAmount: '100.00',
+        },
+        {
+          id: 2n,
+          budgetDate: utcDate(2026, 0, 5),
+          budgetDatetime: utcDate(2026, 0, 5, 8, 45),
+          sellerId: 7,
+          sellerName: 'Maria',
+          statusNormalized: 'WON',
+          channel: 'Balcao',
+          valueAmount: '50.00',
+        },
+        {
+          id: 3n,
+          budgetDate: utcDate(2026, 0, 5),
+          budgetDatetime: utcDate(2026, 0, 5, 10, 10),
+          sellerId: 7,
+          sellerName: 'Maria',
+          statusNormalized: 'WON',
+          channel: null,
+          valueAmount: '25.00',
+        },
+      ]),
+      getDrilldownRows: jest.fn(),
+    }
+
+    const service = new BudgetKpiQueryService(repository)
+
+    const result = await service.getHourlySeries({
+      clientId: 'c1',
+      from: '2026-01-05',
+      to: '2026-01-05',
+    })
+
+    expect(result.series).toHaveLength(24)
+    expect(result.series[0]).toEqual({ hour: '00', count: 0, value: '0.0000' })
+    expect(result.series[8]).toEqual({ hour: '08', count: 2, value: '150.0000' })
+    expect(result.series[10]).toEqual({ hour: '10', count: 1, value: '25.0000' })
+    expect(result.series[23]).toEqual({ hour: '23', count: 0, value: '0.0000' })
+  })
+
+  it('returns channel daily rows with null orderType labeled as Nao identificado', async () => {
+    const repository: jest.Mocked<BudgetKpiQueryRepository> = {
+      getSummaryRows: jest.fn(),
+      getDailyRows: jest.fn(),
+      getBudgetFactRows: jest.fn().mockResolvedValue([
+        {
+          id: 1n,
+          budgetDate: utcDate(2026, 0, 5),
+          budgetDatetime: utcDate(2026, 0, 5, 8, 15),
+          sellerId: 7,
+          sellerName: 'Maria',
+          statusNormalized: 'OPEN',
+          channel: null,
+          valueAmount: '100.00',
+        },
+        {
+          id: 2n,
+          budgetDate: utcDate(2026, 0, 5),
+          budgetDatetime: utcDate(2026, 0, 5, 10, 0),
+          sellerId: 7,
+          sellerName: 'Maria',
+          statusNormalized: 'WON',
+          channel: 'Televendas',
+          valueAmount: '50.00',
+        },
+      ]),
+      getDrilldownRows: jest.fn(),
+    }
+
+    const service = new BudgetKpiQueryService(repository)
+
+    const result = await service.getChannelDaily({
+      clientId: 'c1',
+      from: '2026-01-05',
+      to: '2026-01-05',
+    })
+
+    expect(result.rows).toEqual([
+      { date: '2026-01-05', orderType: 'Nao identificado', count: 1, value: '100.0000' },
+      { date: '2026-01-05', orderType: 'Televendas', count: 1, value: '50.0000' },
+    ])
+  })
+
+  it('returns channel hourly rows grouped by hour and orderType', async () => {
+    const repository: jest.Mocked<BudgetKpiQueryRepository> = {
+      getSummaryRows: jest.fn(),
+      getDailyRows: jest.fn(),
+      getBudgetFactRows: jest.fn().mockResolvedValue([
+        {
+          id: 1n,
+          budgetDate: utcDate(2026, 0, 5),
+          budgetDatetime: utcDate(2026, 0, 5, 8, 15),
+          sellerId: 7,
+          sellerName: 'Maria',
+          statusNormalized: 'OPEN',
+          channel: null,
+          valueAmount: '100.00',
+        },
+        {
+          id: 2n,
+          budgetDate: utcDate(2026, 0, 5),
+          budgetDatetime: utcDate(2026, 0, 5, 8, 45),
+          sellerId: 7,
+          sellerName: 'Maria',
+          statusNormalized: 'WON',
+          channel: null,
+          valueAmount: '50.00',
+        },
+        {
+          id: 3n,
+          budgetDate: utcDate(2026, 0, 5),
+          budgetDatetime: utcDate(2026, 0, 5, 10, 0),
+          sellerId: 7,
+          sellerName: 'Maria',
+          statusNormalized: 'WON',
+          channel: 'Televendas',
+          valueAmount: '25.00',
+        },
+      ]),
+      getDrilldownRows: jest.fn(),
+    }
+
+    const service = new BudgetKpiQueryService(repository)
+
+    const result = await service.getChannelHourly({
+      clientId: 'c1',
+      from: '2026-01-05',
+      to: '2026-01-05',
+    })
+
+    expect(result.rows).toEqual([
+      { hour: '08', orderType: 'Nao identificado', count: 2, value: '150.0000' },
+      { hour: '10', orderType: 'Televendas', count: 1, value: '25.0000' },
+    ])
+  })
+
+  it('returns abandonment by channel using cancelados only', async () => {
+    const repository: jest.Mocked<BudgetKpiQueryRepository> = {
+      getSummaryRows: jest.fn(),
+      getDailyRows: jest.fn(),
+      getBudgetFactRows: jest.fn().mockResolvedValue([
+        {
+          id: 1n,
+          budgetDate: utcDate(2026, 0, 5),
+          budgetDatetime: utcDate(2026, 0, 5, 8, 15),
+          sellerId: 7,
+          sellerName: 'Maria',
+          statusNormalized: 'LOST',
+          channel: null,
+          valueAmount: '100.00',
+        },
+        {
+          id: 2n,
+          budgetDate: utcDate(2026, 0, 5),
+          budgetDatetime: utcDate(2026, 0, 5, 8, 45),
+          sellerId: 7,
+          sellerName: 'Maria',
+          statusNormalized: 'LOST',
+          channel: 'Televendas',
+          valueAmount: '50.00',
+        },
+        {
+          id: 3n,
+          budgetDate: utcDate(2026, 0, 5),
+          budgetDatetime: utcDate(2026, 0, 5, 10, 0),
+          sellerId: 7,
+          sellerName: 'Maria',
+          statusNormalized: 'WON',
+          channel: 'Televendas',
+          valueAmount: '25.00',
+        },
+      ]),
+      getDrilldownRows: jest.fn(),
+    }
+
+    const service = new BudgetKpiQueryService(repository)
+
+    const result = await service.getChannelAbandonment({
+      clientId: 'c1',
+      from: '2026-01-05',
+      to: '2026-01-05',
+    })
+
+    expect(result.rows).toEqual([
+      { orderType: 'Nao identificado', count: 1, value: '100.0000' },
+      { orderType: 'Televendas', count: 1, value: '50.0000' },
+    ])
+  })
 })

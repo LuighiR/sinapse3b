@@ -49,8 +49,12 @@ This slice adds the first KPI family for `budgets` on top of the auth and compan
 Current budget endpoints:
 
 - `POST /kpis/budgets/refresh?from=YYYY-MM-DD&to=YYYY-MM-DD`
-- `GET /kpis/budgets/summary?from=YYYY-MM-DD&to=YYYY-MM-DD&sellerId=123`
-- `GET /kpis/budgets/daily?from=YYYY-MM-DD&to=YYYY-MM-DD&sellerId=123`
+- `GET /kpis/budgets/summary?from=YYYY-MM-DD&to=YYYY-MM-DD&sellerId=123&status=Baixado&orderType=Nao%20identificado`
+- `GET /kpis/budgets/daily?from=YYYY-MM-DD&to=YYYY-MM-DD&sellerId=123&status=Pendente&orderType=Pedido%20Televendas`
+- `GET /kpis/budgets/hourly?from=YYYY-MM-DD&to=YYYY-MM-DD&sellerId=123&status=Cancelado&orderType=Balcao`
+- `GET /kpis/budgets/channel/daily?from=YYYY-MM-DD&to=YYYY-MM-DD&sellerId=123&status=Pendente&orderType=Nao%20identificado`
+- `GET /kpis/budgets/channel/hourly?from=YYYY-MM-DD&to=YYYY-MM-DD&sellerId=123&status=Baixado&orderType=Pedido%20Televendas`
+- `GET /kpis/budgets/channel/abandonment?from=YYYY-MM-DD&to=YYYY-MM-DD&sellerId=123&orderType=Nao%20identificado`
 - `GET /kpis/budgets/drilldown?from=YYYY-MM-DD&to=YYYY-MM-DD&sellerId=123&branchId=5&branchName=Matriz`
 
 Notes:
@@ -58,3 +62,6 @@ Notes:
 - All KPI routes require `Authorization: Bearer <jwt>` and `X-Tenant-Id`.
 - The API resolves the active `clientId` from the authenticated tenant scope.
 - Budget KPIs are refreshed manually in this slice; scheduled jobs come later.
+- `status` accepts `Cancelado`, `Baixado`, and `Pendente`.
+- `orderType` filters by `order_type`; null/blank channels are exposed as `Nao identificado`.
+- Unfiltered `summary` and `daily` can use materialized KPI rows; filtered queries and all hourly/channel cuts read from `core.budget_facts`.

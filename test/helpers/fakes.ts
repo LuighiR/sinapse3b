@@ -100,11 +100,11 @@ export function buildJwt(payload: Partial<TestJwtPayload>) {
 }
 
 export function ensureTestEnv() {
-  process.env.NODE_ENV ??= 'test'
-  process.env.DATABASE_URL ??= TEST_DATABASE_URL
-  process.env.AUTH_JWT_SECRET ??= TEST_AUTH_JWT_SECRET
-  process.env.AUTH_JWT_ISSUER ??= TEST_AUTH_JWT_ISSUER
-  process.env.AUTH_JWT_AUDIENCE ??= TEST_AUTH_JWT_AUDIENCE
+  process.env.NODE_ENV = 'test'
+  process.env.DATABASE_URL = TEST_DATABASE_URL
+  process.env.AUTH_JWT_SECRET = TEST_AUTH_JWT_SECRET
+  process.env.AUTH_JWT_ISSUER = TEST_AUTH_JWT_ISSUER
+  process.env.AUTH_JWT_AUDIENCE = TEST_AUTH_JWT_AUDIENCE
 }
 
 export function createTestFixtures(input: TestFixtures = {}) {

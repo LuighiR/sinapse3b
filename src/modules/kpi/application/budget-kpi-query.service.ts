@@ -7,11 +7,15 @@ import {
   BudgetKpiSnapshotRow,
 } from './budget-kpi-refresh.service'
 
+export type BudgetStatusFilter = 'Cancelado' | 'Baixado' | 'Pendente'
+
 export type BudgetKpiQueryPeriodInput = {
   clientId: string
   from: string | Date
   to: string | Date
   sellerId?: string | number | bigint
+  status?: BudgetStatusFilter
+  orderType?: string
 }
 
 export type BudgetKpiPeriodView = {
@@ -42,6 +46,52 @@ export type BudgetKpiDailySeriesItem = {
 export type BudgetKpiDailySeriesResponse = {
   period: BudgetKpiPeriodView
   series: BudgetKpiDailySeriesItem[]
+}
+
+export type BudgetKpiHourlySeriesItem = {
+  hour: string
+  count: number
+  value: string
+}
+
+export type BudgetKpiHourlySeriesResponse = {
+  period: BudgetKpiPeriodView
+  series: BudgetKpiHourlySeriesItem[]
+}
+
+export type BudgetKpiChannelDailyRow = {
+  date: string
+  orderType: string
+  count: number
+  value: string
+}
+
+export type BudgetKpiChannelDailyResponse = {
+  period: BudgetKpiPeriodView
+  rows: BudgetKpiChannelDailyRow[]
+}
+
+export type BudgetKpiChannelHourlyRow = {
+  hour: string
+  orderType: string
+  count: number
+  value: string
+}
+
+export type BudgetKpiChannelHourlyResponse = {
+  period: BudgetKpiPeriodView
+  rows: BudgetKpiChannelHourlyRow[]
+}
+
+export type BudgetKpiChannelAbandonmentRow = {
+  orderType: string
+  count: number
+  value: string
+}
+
+export type BudgetKpiChannelAbandonmentResponse = {
+  period: BudgetKpiPeriodView
+  rows: BudgetKpiChannelAbandonmentRow[]
 }
 
 export type BudgetKpiDrilldownInput = BudgetKpiQueryPeriodInput & {
@@ -112,7 +162,7 @@ export type BudgetKpiQueryRepository = {
   getBudgetFactRows(input: {
     clientId: string
     period: KpiPeriod
-    sellerId: number
+    sellerId?: number
   }): Promise<BudgetFactRecord[]>
   getDrilldownRows(input: {
     clientId: string
@@ -124,6 +174,9 @@ export type BudgetKpiQueryRepository = {
 }
 
 type SummaryBucket = 'total' | 'open' | 'won' | 'lost'
+type NormalizedBudgetStatus = 'OPEN' | 'WON' | 'LOST' | 'UNKNOWN'
+
+const MISSING_ORDER_TYPE_LABEL = 'Nao identificado'
 
 @Injectable()
 export class BudgetKpiQueryService {
@@ -131,14 +184,9 @@ export class BudgetKpiQueryService {
 
   async getSummary(input: BudgetKpiQueryPeriodInput): Promise<BudgetKpiSummaryResponse> {
     const period = this.toPeriod(input)
-    const sellerId = this.normalizeSellerId(input.sellerId)
 
-    if (sellerId !== undefined) {
-      const facts = await this.repository.getBudgetFactRows({
-        clientId: input.clientId,
-        period,
-        sellerId,
-      })
+    if (this.hasFactFilters(input)) {
+      const facts = await this.getFilteredFacts(input, period)
 
       return {
         period: this.toPeriodView(period),
@@ -179,14 +227,9 @@ export class BudgetKpiQueryService {
 
   async getDailySeries(input: BudgetKpiQueryPeriodInput): Promise<BudgetKpiDailySeriesResponse> {
     const period = this.toPeriod(input)
-    const sellerId = this.normalizeSellerId(input.sellerId)
 
-    if (sellerId !== undefined) {
-      const facts = await this.repository.getBudgetFactRows({
-        clientId: input.clientId,
-        period,
-        sellerId,
-      })
+    if (this.hasFactFilters(input)) {
+      const facts = await this.getFilteredFacts(input, period)
 
       return {
         period: this.toPeriodView(period),
@@ -229,7 +272,113 @@ export class BudgetKpiQueryService {
 
     return {
       period: this.toPeriodView(period),
-      series: this.zeroFilledSeries(period, seriesByDate),
+      series: this.zeroFilledDailySeries(period, seriesByDate),
+    }
+  }
+
+  async getHourlySeries(input: BudgetKpiQueryPeriodInput): Promise<BudgetKpiHourlySeriesResponse> {
+    const period = this.toPeriod(input)
+    const facts = await this.getFilteredFacts(input, period)
+
+    return {
+      period: this.toPeriodView(period),
+      series: this.buildHourlySeriesFromFacts(facts),
+    }
+  }
+
+  async getChannelDaily(input: BudgetKpiQueryPeriodInput): Promise<BudgetKpiChannelDailyResponse> {
+    const period = this.toPeriod(input)
+    const facts = await this.getFilteredFacts(input, period)
+    const grouped = new Map<string, BudgetKpiChannelDailyRow>()
+
+    for (const fact of facts) {
+      const date = this.toDateKey(fact.budgetDate)
+      const orderType = this.toOrderTypeLabel(fact.channel ?? null)
+      const key = `${date}|${orderType}`
+      const current = grouped.get(key) ?? {
+        date,
+        orderType,
+        count: 0,
+        value: '0.0000',
+      }
+
+      current.count += 1
+      current.value = this.addValue(current.value, fact.valueAmount)
+      grouped.set(key, current)
+    }
+
+    return {
+      period: this.toPeriodView(period),
+      rows: [...grouped.values()].sort((left, right) => {
+        if (left.date !== right.date) {
+          return left.date.localeCompare(right.date)
+        }
+
+        return left.orderType.localeCompare(right.orderType)
+      }),
+    }
+  }
+
+  async getChannelHourly(input: BudgetKpiQueryPeriodInput): Promise<BudgetKpiChannelHourlyResponse> {
+    const period = this.toPeriod(input)
+    const facts = await this.getFilteredFacts(input, period)
+    const grouped = new Map<string, BudgetKpiChannelHourlyRow>()
+
+    for (const fact of facts) {
+      const hour = this.toHourKey(fact.budgetDatetime)
+      const orderType = this.toOrderTypeLabel(fact.channel ?? null)
+      const key = `${hour}|${orderType}`
+      const current = grouped.get(key) ?? {
+        hour,
+        orderType,
+        count: 0,
+        value: '0.0000',
+      }
+
+      current.count += 1
+      current.value = this.addValue(current.value, fact.valueAmount)
+      grouped.set(key, current)
+    }
+
+    return {
+      period: this.toPeriodView(period),
+      rows: [...grouped.values()].sort((left, right) => {
+        if (left.hour !== right.hour) {
+          return left.hour.localeCompare(right.hour)
+        }
+
+        return left.orderType.localeCompare(right.orderType)
+      }),
+    }
+  }
+
+  async getChannelAbandonment(input: Omit<BudgetKpiQueryPeriodInput, 'status'>): Promise<BudgetKpiChannelAbandonmentResponse> {
+    const period = this.toPeriod(input)
+    const facts = await this.getFilteredFacts(
+      {
+        ...input,
+        status: 'Cancelado',
+      },
+      period,
+    )
+    const grouped = new Map<string, BudgetKpiChannelAbandonmentRow>()
+
+    for (const fact of facts) {
+      const orderType = this.toOrderTypeLabel(fact.channel ?? null)
+      const current = grouped.get(orderType) ?? {
+        orderType,
+        count: 0,
+        value: '0.0000',
+      }
+
+      current.count += 1
+      current.value = this.addValue(current.value, fact.valueAmount)
+      grouped.set(orderType, current)
+    }
+
+    return {
+      period: this.toPeriodView(period),
+      rows: [...grouped.values()].sort((left, right) => left.orderType.localeCompare(right.orderType)),
     }
   }
 
@@ -250,6 +399,31 @@ export class BudgetKpiQueryService {
       filters: this.buildFilters({ ...input, sellerId, branchId }),
       rows: rows.map((row) => this.toDrilldownRow(row)),
     }
+  }
+
+  private async getFilteredFacts(input: BudgetKpiQueryPeriodInput, period: KpiPeriod): Promise<BudgetFactRecord[]> {
+    const sellerId = this.normalizeSellerId(input.sellerId)
+    const facts = await this.repository.getBudgetFactRows({
+      clientId: input.clientId,
+      period,
+      sellerId,
+    })
+
+    return facts.filter((fact) => {
+      if (input.status !== undefined && this.normalizeStatusFilter(input.status) !== this.normalizeStatus(fact.statusNormalized)) {
+        return false
+      }
+
+      if (input.orderType !== undefined && !this.matchesOrderTypeFilter(fact.channel ?? null, input.orderType)) {
+        return false
+      }
+
+      return true
+    })
+  }
+
+  private hasFactFilters(input: BudgetKpiQueryPeriodInput): boolean {
+    return input.sellerId !== undefined || input.status !== undefined || input.orderType !== undefined
   }
 
   private createEmptySummary(): Record<SummaryBucket, BudgetKpiSummaryCard> {
@@ -314,16 +488,42 @@ export class BudgetKpiQueryService {
       }
 
       current.count += 1
-      current.value = new Prisma.Decimal(current.value)
-        .add(new Prisma.Decimal(this.toText(fact.valueAmount)))
-        .toFixed(4)
+      current.value = this.addValue(current.value, fact.valueAmount)
       seriesByDate.set(date, current)
     }
 
-    return this.zeroFilledSeries(period, seriesByDate)
+    return this.zeroFilledDailySeries(period, seriesByDate)
   }
 
-  private zeroFilledSeries(
+  private buildHourlySeriesFromFacts(facts: BudgetFactRecord[]): BudgetKpiHourlySeriesItem[] {
+    const seriesByHour = new Map<string, BudgetKpiHourlySeriesItem>()
+
+    for (let hour = 0; hour < 24; hour += 1) {
+      const key = String(hour).padStart(2, '0')
+      seriesByHour.set(key, {
+        hour: key,
+        count: 0,
+        value: '0.0000',
+      })
+    }
+
+    for (const fact of facts) {
+      const hour = this.toHourKey(fact.budgetDatetime)
+      const current = seriesByHour.get(hour) ?? {
+        hour,
+        count: 0,
+        value: '0.0000',
+      }
+
+      current.count += 1
+      current.value = this.addValue(current.value, fact.valueAmount)
+      seriesByHour.set(hour, current)
+    }
+
+    return [...seriesByHour.values()].sort((left, right) => left.hour.localeCompare(right.hour))
+  }
+
+  private zeroFilledDailySeries(
     period: KpiPeriod,
     seriesByDate: Map<string, BudgetKpiDailySeriesItem>,
   ): BudgetKpiDailySeriesItem[] {
@@ -398,7 +598,7 @@ export class BudgetKpiQueryService {
     return value === 'total' || value === 'open' || value === 'won' || value === 'lost'
   }
 
-  private normalizeStatus(value: string | null): 'OPEN' | 'WON' | 'LOST' | 'UNKNOWN' {
+  private normalizeStatus(value: string | null): NormalizedBudgetStatus {
     const normalized = (value ?? 'UNKNOWN').toUpperCase()
 
     if (normalized === 'OPEN' || normalized === 'WON' || normalized === 'LOST') {
@@ -408,12 +608,57 @@ export class BudgetKpiQueryService {
     return 'UNKNOWN'
   }
 
+  private normalizeStatusFilter(value: BudgetStatusFilter): Exclude<NormalizedBudgetStatus, 'UNKNOWN'> {
+    if (value === 'Baixado') {
+      return 'WON'
+    }
+
+    if (value === 'Pendente') {
+      return 'OPEN'
+    }
+
+    return 'LOST'
+  }
+
+  private matchesOrderTypeFilter(channel: string | null, orderTypeFilter: string): boolean {
+    return this.normalizeLabelForComparison(this.toOrderTypeLabel(channel)) === this.normalizeLabelForComparison(orderTypeFilter)
+  }
+
+  private toOrderTypeLabel(channel: string | null): string {
+    if (channel == null || channel.trim() === '') {
+      return MISSING_ORDER_TYPE_LABEL
+    }
+
+    return channel
+  }
+
+  private normalizeLabelForComparison(value: string): string {
+    return value
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '')
+      .trim()
+      .toLowerCase()
+  }
+
   private toDateKey(value: Date | string): string {
     if (typeof value === 'string') {
       return value.slice(0, 10)
     }
 
     return KpiPeriod.formatDateKey(value)
+  }
+
+  private toHourKey(value: Date | string | undefined): string {
+    if (value === undefined) {
+      return '00'
+    }
+
+    if (typeof value === 'string') {
+      const match = value.match(/(?:T|\s)(\d{2}):/)
+      return match ? match[1] : '00'
+    }
+
+    return String(value.getUTCHours()).padStart(2, '0')
   }
 
   private toTimestampText(value: Date | string): string {
@@ -434,13 +679,12 @@ export class BudgetKpiQueryService {
     return value instanceof Prisma.Decimal ? value.toString() : String(value)
   }
 
+  private addValue(currentValue: string, nextValue: string | number | bigint | Prisma.Decimal): string {
+    return new Prisma.Decimal(currentValue).add(new Prisma.Decimal(this.toText(nextValue))).toFixed(4)
+  }
+
   private sumValues(facts: BudgetFactRecord[]): string {
-    return facts
-      .reduce(
-        (accumulator, fact) => accumulator.add(new Prisma.Decimal(this.toText(fact.valueAmount))),
-        new Prisma.Decimal(0),
-      )
-      .toFixed(4)
+    return facts.reduce((accumulator, fact) => this.addValue(accumulator, fact.valueAmount), '0.0000')
   }
 
   private normalizeSellerId(value: BudgetKpiQueryPeriodInput['sellerId']): number | undefined {

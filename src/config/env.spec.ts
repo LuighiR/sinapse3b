@@ -25,7 +25,14 @@ describe('loadEnv', () => {
 
   it('loads env values from a local .env file', async () => {
     const cwd = process.cwd()
-    const originalNodeEnv = process.env.NODE_ENV
+    const originalEnv = {
+      DATABASE_URL: process.env.DATABASE_URL,
+      AUTH_JWT_SECRET: process.env.AUTH_JWT_SECRET,
+      AUTH_JWT_ISSUER: process.env.AUTH_JWT_ISSUER,
+      AUTH_JWT_AUDIENCE: process.env.AUTH_JWT_AUDIENCE,
+      NODE_ENV: process.env.NODE_ENV,
+      PORT: process.env.PORT,
+    }
     const tempDir = mkdtempSync(join(tmpdir(), 'sinapse3-env-'))
     writeFileSync(
       join(tempDir, '.env'),
@@ -40,7 +47,12 @@ describe('loadEnv', () => {
 
     try {
       process.chdir(tempDir)
+      delete process.env.DATABASE_URL
+      delete process.env.AUTH_JWT_SECRET
+      delete process.env.AUTH_JWT_ISSUER
+      delete process.env.AUTH_JWT_AUDIENCE
       delete process.env.NODE_ENV
+      delete process.env.PORT
       jest.resetModules()
       const { loadEnv: reloadedLoadEnv } = await import('./env')
 
@@ -53,12 +65,22 @@ describe('loadEnv', () => {
         PORT: 3000,
       })
     } finally {
-      if (originalNodeEnv === undefined) {
-        delete process.env.NODE_ENV
-      } else {
-        process.env.NODE_ENV = originalNodeEnv
-      }
+      restoreEnvValue('DATABASE_URL', originalEnv.DATABASE_URL)
+      restoreEnvValue('AUTH_JWT_SECRET', originalEnv.AUTH_JWT_SECRET)
+      restoreEnvValue('AUTH_JWT_ISSUER', originalEnv.AUTH_JWT_ISSUER)
+      restoreEnvValue('AUTH_JWT_AUDIENCE', originalEnv.AUTH_JWT_AUDIENCE)
+      restoreEnvValue('NODE_ENV', originalEnv.NODE_ENV)
+      restoreEnvValue('PORT', originalEnv.PORT)
       process.chdir(cwd)
     }
   })
 })
+
+function restoreEnvValue(key: string, value: string | undefined) {
+  if (value === undefined) {
+    delete process.env[key]
+    return
+  }
+
+  process.env[key] = value
+}

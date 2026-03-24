@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common'
 import { z } from 'zod'
 import { KpiPeriod } from '../../domain/kpi-period'
+import { numericIdSchema } from './budget-filters.query'
 
 export type BudgetDrilldownQuery = {
   from: string
@@ -9,20 +10,6 @@ export type BudgetDrilldownQuery = {
   branchId?: number
   branchName?: string
 }
-
-const numericIdSchema = z
-  .string()
-  .trim()
-  .min(1)
-  .regex(/^\d+$/)
-  .refine((value) => {
-    try {
-      return BigInt(value) <= BigInt(Number.MAX_SAFE_INTEGER)
-    } catch {
-      return false
-    }
-  })
-  .transform((value) => Number(value))
 
 const budgetDrilldownQuerySchema = z.object({
   from: z.string().trim().min(1),

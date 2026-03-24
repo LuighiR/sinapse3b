@@ -6,9 +6,11 @@ import { BudgetNormalizationService } from '../../normalization/application/budg
 export type BudgetFactRecord = {
   id: bigint | number | string
   budgetDate: Date
+  budgetDatetime?: Date | string
   sellerId: number | string | bigint
   sellerName: string | null
   statusNormalized: string | null
+  channel?: string | null
   valueAmount: string | number | bigint | Prisma.Decimal
 }
 
