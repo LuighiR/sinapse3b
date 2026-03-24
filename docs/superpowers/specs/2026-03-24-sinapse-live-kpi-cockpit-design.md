@@ -73,9 +73,16 @@ This means the frontend should not invent a separate date contract. It should de
 
 ## Global Filter Model
 
-The whole dashboard must be driven by one shared period state.
+The whole dashboard must be driven by one small shared filter state.
 
-Approved modes:
+Approved global filters:
+
+- `date`
+- `seller` optional
+
+Only these filters should apply to every KPI, every chart, and every modal.
+
+Approved date modes:
 
 - `month`
 - `range`
@@ -110,6 +117,8 @@ This state affects:
 
 There must be no separate hidden modal-only date state by default. The modal reflects the same selected period as the rest of the cockpit.
 
+There must also be no global `status` or `order type` control in this slice. Those recuts are internal to how each KPI card is computed.
+
 ## Dashboard Information Architecture
 
 The dashboard should be reorganized into category-based sections rather than one generic KPI grid.
@@ -136,7 +145,7 @@ Target cards:
 
 These are conceptually different cards, but they can still be backed by the same real KPI family with different filters or aggregations.
 
-The user explicitly noted that distinctions such as total, open, won, and lost are likely achieved through filtering. The frontend should therefore centralize the mapping between UI cards and backend filters instead of scattering custom logic per component.
+The user explicitly clarified that distinctions such as total, open, won, and lost should not become global screen filters. Instead, they are KPI definitions built from backend filters. The frontend should therefore centralize the mapping between each UI card and the backend query parameters instead of scattering custom logic per component.
 
 Additional supporting budget blocks can include:
 
@@ -153,10 +162,18 @@ The sales category should expose live cards and charts based on the sales endpoi
 Target first cards:
 
 - total sales
+- canceled sales
 - ticket average
 - sales by day and channel
 
 The exact visual composition can remain premium and executive rather than dense, but the data must now be real.
+
+The canceled sales KPI must expose both:
+
+- number of sales
+- total canceled value
+
+As with budgets, this is not a global filter control. It is a KPI composed by querying the live sales family with the correct internal status filter.
 
 ## Modal and Drilldown Behavior
 
@@ -183,9 +200,12 @@ When the user opens the total sales card, the modal should show:
 ### Modal principles
 
 - the modal inherits the global period state
+- the modal inherits the global seller filter when one is selected
 - the header must show what period is active
 - the body is KPI-specific, not one template blindly reused for all cards
 - the visual language should remain premium and calm
+
+The modal can include additional explanatory context about which internal KPI definition is being shown, such as "won budgets" or "canceled sales", but the user should not need to manually reselect those hidden filters.
 
 ## Data Flow
 
@@ -210,6 +230,7 @@ The dashboard needs explicit state for:
 - current period mode
 - selected month and year
 - selected range start and end
+- selected seller
 - active KPI modal
 - loading state per KPI family or section
 - recoverable error state per section
@@ -222,18 +243,21 @@ Recommended interpretation:
 
 ## UX Requirements
 
-The period selector should be easy to understand and fast to use.
+The global filter controls should be easy to understand and fast to use.
 
 Recommended UX:
 
 - segmented control between `Mes` and `Range`
 - in `Mes`, use month and year selectors
 - in `Range`, use start and end date inputs
+- optional seller selector shared by the whole dashboard
 - visual confirmation of the active period near the section heading or modal title
 
 The whole dashboard should visibly refresh when the period changes.
 
 The cards must remain scannable and premium, but now also behave like entry points into deeper analysis.
+
+Status-specific KPI meanings like won, open, lost, active, and canceled should be presented as card titles and contextual copy, not as extra global filter widgets.
 
 ## Visual Direction for the Expanded Cockpit
 
@@ -264,8 +288,10 @@ The safest implementation direction is:
 - keep the login flow as-is for now
 - focus changes in the dashboard route and supporting data modules
 - add dedicated frontend API helpers for budgets and sales
-- build a shared period utility that converts `month` or `range` into backend `from` and `to`
+- build a shared filter utility that converts `month` or `range` into backend `from` and `to`
+- propagate optional `sellerId` through the same shared filter layer
 - add modal components specialized by KPI type
+- implement KPI-definition helpers that translate UI cards like `won budgets` or `canceled sales` into backend status-based requests
 
 The frontend should be able to consume the live backend while preserving the existing room for future role-based routing and later authentication hardening.
 
@@ -274,10 +300,12 @@ The frontend should be able to consume the live backend while preserving the exi
 The next implementation should add or update tests for:
 
 - period state conversion from `month` and `range` to `from` and `to`
+- propagation of optional `sellerId`
 - dashboard rendering with live data adapters
 - category section rendering for budgets and sales
 - modal opening from key cards
 - drilldown content using the currently selected period
+- KPI-definition mapping for status-derived cards such as won budgets and canceled sales
 
 It is especially important to test the filter contract because it is now the shared driver of the whole cockpit.
 
@@ -288,6 +316,7 @@ This slice is successful when:
 - the dashboard no longer depends on the static mock budget dataset for its main KPIs
 - budgets and sales both appear as real categories on the same cockpit
 - the user can switch between `Mes` and `Range`
-- the selected period updates all KPI sections consistently
+- the selected period and optional seller update all KPI sections consistently
+- status-derived cards like won budgets, lost budgets, and canceled sales are computed correctly without becoming global filters
 - clicking a KPI card opens a tailored modal with useful detail
 - the design remains coherent with the approved premium Sinapse direction
