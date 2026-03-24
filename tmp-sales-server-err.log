@@ -1,0 +1,20 @@
+[31m[Nest] 17704  - [39m24/03/2026, 15:07:44 [31m  ERROR[39m [38;5;3m[ExceptionsHandler] [39m[31m
+Invalid `prisma.$executeRaw()` invocation:
+
+
+Raw query failed. Code: `23502`. Message: `null value in column "customer_name" of relation "sale_facts" violates not-null constraint`[39m
+PrismaClientKnownRequestError: 
+Invalid `prisma.$executeRaw()` invocation:
+
+
+Raw query failed. Code: `23502`. Message: `null value in column "customer_name" of relation "sale_facts" violates not-null constraint`
+    at Gr.handleRequestError (D:\Projetos\sinapse3\node_modules\@prisma\client\runtime\client.js:65:8286)
+    at Gr.handleAndLogRequestError (D:\Projetos\sinapse3\node_modules\@prisma\client\runtime\client.js:65:7581)
+    at Gr.request (D:\Projetos\sinapse3\node_modules\@prisma\client\runtime\client.js:65:7288)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async a (D:\Projetos\sinapse3\node_modules\@prisma\client\runtime\client.js:75:6730)
+    at async PrismaSaleFactUpsertRepository.bulkUpsertClient (D:\Projetos\sinapse3\dist\src\modules\normalization\application\sale-normalization.service.js:87:9)
+    at async SaleNormalizationService.normalizeClientSales (D:\Projetos\sinapse3\dist\src\modules\normalization\application\sale-normalization.service.js:199:13)
+    at async SaleKpiRefreshService.refresh (D:\Projetos\sinapse3\dist\src\modules\kpi\application\sale-kpi-refresh.service.js:37:13)
+    at async D:\Projetos\sinapse3\node_modules\@nestjs\core\router\router-execution-context.js:46:28
+    at async D:\Projetos\sinapse3\node_modules\@nestjs\core\router\router-proxy.js:9:17

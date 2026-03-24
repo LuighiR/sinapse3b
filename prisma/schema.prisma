@@ -70,6 +70,7 @@ model SinapseClient {
   updatedAt  DateTime @map("updated_at")
   branches   Branch[]
   budgetFacts BudgetFact[]
+  saleFacts  SaleFact[]
   kpiAvailabilities KpiAvailability[]
   kpiBreakdowns KpiBreakdown[]
   kpiCalculationRuns KpiCalculationRun[]
@@ -90,6 +91,7 @@ model Branch {
   erpId    BigInt        @map("erp_id")
   client   SinapseClient @relation(fields: [clientId], references: [id])
   budgetFacts BudgetFact[]
+  saleFacts SaleFact[]
   employees Employee[]
 
   @@map("branches")
@@ -144,6 +146,43 @@ model BudgetFact {
   @@index([clientId, sellerId, budgetDate], map: "budget_facts_client_seller_budget_date_idx")
   @@index([clientId, branchId, budgetDate], map: "budget_facts_client_branch_budget_date_idx")
   @@map("budget_facts")
+  @@schema("core")
+}
+
+model SaleFact {
+  id                     BigInt        @id @default(autoincrement())
+  clientId               String        @map("client_id")
+  sourceTable            String        @map("source_table")
+  sourceRecordId         Int           @map("source_record_id")
+  branchName             String        @map("branch_name")
+  branchId               Int?          @map("branch_id")
+  sellerId               Int           @map("seller_id")
+  sellerName             String        @map("seller_name")
+  saleDate               DateTime      @map("sale_date") @db.Date
+  saleDatetime           DateTime      @map("sale_datetime")
+  statusRaw              String?       @map("status_raw")
+  statusNormalized       String        @default("UNKNOWN") @map("status_normalized")
+  channel                String?
+  hasLinkedBudget        Boolean       @default(false) @map("has_linked_budget")
+  linkedBudgetSourceRecordId Int?      @map("linked_budget_source_record_id")
+  customerName           String        @map("customer_name")
+  cpfCnpj                String?       @map("cpf_cnpj")
+  valueAmount            Decimal       @map("value_amount") @db.Decimal(19, 4)
+  sequential             BigInt?
+  invoiceSerie           BigInt?       @map("invoice_serie")
+  invoiceNumeric         BigInt?       @map("invoice_numeric")
+  listDavsId             String?       @map("list_davs_id")
+  payloadJson            Json          @default("{}") @map("payload_json")
+  createdAt              DateTime      @default(now()) @map("created_at")
+  updatedAt              DateTime      @default(now()) @map("updated_at")
+  branch                 Branch?       @relation(fields: [branchId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  client                 SinapseClient @relation(fields: [clientId], references: [id])
+
+  @@unique([clientId, sourceTable, sourceRecordId], map: "sale_facts_client_source_record_key")
+  @@index([clientId, saleDate], map: "sale_facts_client_sale_date_idx")
+  @@index([clientId, sellerId, saleDate], map: "sale_facts_client_seller_sale_date_idx")
+  @@index([clientId, branchId, saleDate], map: "sale_facts_client_branch_sale_date_idx")
+  @@map("sale_facts")
   @@schema("core")
 }
 

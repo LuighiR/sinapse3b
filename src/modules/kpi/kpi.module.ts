@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client'
 import { AuthModule } from '../auth/auth.module'
 import { NormalizationModule } from '../normalization/normalization.module'
 import { BudgetNormalizationService } from '../normalization/application/budget-normalization.service'
+import { SaleNormalizationService } from '../normalization/application/sale-normalization.service'
 import { PrismaModule } from '../../infra/prisma/prisma.module'
 import { PrismaService } from '../../infra/prisma/prisma.service'
 import { JwtAuthGuard } from '../auth/presentation/guards/jwt-auth.guard'
@@ -29,6 +30,23 @@ import {
 } from './application/budget-kpi-refresh.service'
 import { KpiPeriod } from './domain/kpi-period'
 import { KpiController } from './presentation/kpi.controller'
+import {
+  SaleKpiAvailabilityRepository,
+  SaleKpiAvailabilityService,
+  SaleKpiAvailabilityUpdate,
+} from './application/sale-kpi-availability.service'
+import { SaleKpiQueryRepository, SaleKpiQueryService } from './application/sale-kpi-query.service'
+import {
+  SaleFactRecord,
+  SaleKpiBreakdownRow as SaleKpiBreakdownMaterializationRow,
+  SaleKpiCalculationRunInput,
+  SaleKpiCalculationRunUpdate,
+  SaleKpiDefinitionSet,
+  SaleKpiRefreshRepository,
+  SaleKpiRefreshService,
+  SaleKpiSnapshotRow as SaleKpiSnapshotMaterializationRow,
+} from './application/sale-kpi-refresh.service'
+import { SalesKpiController } from './presentation/sales-kpi.controller'
 
 @Injectable()
 class PrismaBudgetKpiRepository
@@ -551,10 +569,371 @@ class PrismaBudgetKpiRepository
   }
 }
 
+@Injectable()
+class PrismaSaleKpiRepository
+  implements SaleKpiRefreshRepository, SaleKpiAvailabilityRepository, SaleKpiQueryRepository
+{
+  constructor(private readonly prisma: PrismaService) {}
+
+  async hasUsableSaleFacts(clientId: string): Promise<boolean> {
+    const prisma = this.prisma as any
+    const count = await prisma.saleFact.count({
+      where: {
+        clientId,
+      },
+    })
+
+    return count > 0
+  }
+
+  async ensureDefinitions(): Promise<SaleKpiDefinitionSet> {
+    const prisma = this.prisma as any
+
+    const [summary, daily] = await Promise.all([
+      prisma.kpiDefinition.upsert({
+        where: { code: 'sales.summary' },
+        create: {
+          code: 'sales.summary',
+          family: 'sales',
+          granularity: 'summary',
+          name: 'Sales Summary',
+          description: 'Summary metrics for sales KPIs',
+        },
+        update: {
+          family: 'sales',
+          granularity: 'summary',
+          name: 'Sales Summary',
+          description: 'Summary metrics for sales KPIs',
+          isActive: true,
+        },
+      }),
+      prisma.kpiDefinition.upsert({
+        where: { code: 'sales.daily' },
+        create: {
+          code: 'sales.daily',
+          family: 'sales',
+          granularity: 'daily',
+          name: 'Sales Daily Series',
+          description: 'Daily sales KPI series',
+        },
+        update: {
+          family: 'sales',
+          granularity: 'daily',
+          name: 'Sales Daily Series',
+          description: 'Daily sales KPI series',
+          isActive: true,
+        },
+      }),
+    ])
+
+    return {
+      summaryDefinitionId: summary.id,
+      dailyDefinitionId: daily.id,
+    }
+  }
+
+  async listSaleFacts(input: { clientId: string; from: Date; to: Date }): Promise<SaleFactRecord[]> {
+    const prisma = this.prisma as any
+    const from = KpiPeriod.toDatabaseDate(input.from)
+    const to = KpiPeriod.toDatabaseDate(input.to)
+
+    return prisma.saleFact.findMany({
+      where: {
+        clientId: input.clientId,
+        saleDate: {
+          gte: from,
+          lte: to,
+        },
+      },
+      orderBy: [{ saleDate: 'asc' }, { sellerId: 'asc' }, { id: 'asc' }],
+      select: {
+        id: true,
+        saleDate: true,
+        saleDatetime: true,
+        sellerId: true,
+        sellerName: true,
+        statusNormalized: true,
+        channel: true,
+        valueAmount: true,
+      },
+    })
+  }
+
+  async createCalculationRun(input: SaleKpiCalculationRunInput): Promise<{ id: bigint }> {
+    const prisma = this.prisma as any
+    const periodStart = KpiPeriod.toDatabaseDate(input.periodStart)
+    const periodEnd = KpiPeriod.toDatabaseDate(input.periodEnd)
+
+    const run = await prisma.kpiCalculationRun.create({
+      data: {
+        clientId: input.clientId,
+        definitionId: input.definitionId,
+        runKey: input.runKey,
+        status: input.status,
+        periodType: input.periodType,
+        periodStart,
+        periodEnd,
+        recordsRead: input.recordsRead,
+        recordsWritten: input.recordsWritten,
+        metadataJson: input.metadataJson,
+      },
+      select: {
+        id: true,
+      },
+    })
+
+    return { id: run.id }
+  }
+
+  async completeCalculationRun(input: SaleKpiCalculationRunUpdate): Promise<void> {
+    const prisma = this.prisma as any
+
+    await prisma.kpiCalculationRun.update({
+      where: {
+        id: input.runId,
+      },
+      data: {
+        status: input.status ?? 'COMPLETED',
+        recordsRead: input.recordsRead,
+        recordsWritten: input.recordsWritten,
+        finishedAt: input.finishedAt,
+        errorMessage: null,
+      },
+    })
+  }
+
+  async failCalculationRun(input: SaleKpiCalculationRunUpdate): Promise<void> {
+    const prisma = this.prisma as any
+
+    await prisma.kpiCalculationRun.update({
+      where: {
+        id: input.runId,
+      },
+      data: {
+        status: input.status ?? 'FAILED',
+        recordsRead: input.recordsRead,
+        recordsWritten: input.recordsWritten,
+        finishedAt: input.finishedAt,
+        errorMessage: input.errorMessage ?? 'Sale KPI refresh failed',
+      },
+    })
+  }
+
+  async persistMaterialization(input: {
+    clientId: string
+    summaryDefinitionId: bigint
+    dailyDefinitionId: bigint
+    period: KpiPeriod
+    summaryRows: SaleKpiSnapshotMaterializationRow[]
+    dailyRows: SaleKpiBreakdownMaterializationRow[]
+  }): Promise<{ snapshotsCreated: number; breakdownsCreated: number }> {
+    const prisma = this.prisma as any
+
+    return prisma.$transaction(async (tx: any) => {
+      const periodStart = KpiPeriod.toDatabaseDate(input.period.from)
+      const periodEnd = KpiPeriod.toDatabaseDate(input.period.to)
+
+      await tx.kpiSnapshot.deleteMany({
+        where: {
+          clientId: input.clientId,
+          definitionId: input.summaryDefinitionId,
+          periodType: KpiPeriod.periodType,
+          periodStart,
+          periodEnd,
+        },
+      })
+      await tx.kpiBreakdown.deleteMany({
+        where: {
+          clientId: input.clientId,
+          definitionId: input.dailyDefinitionId,
+          periodType: KpiPeriod.periodType,
+          periodStart,
+          periodEnd,
+        },
+      })
+
+      if (input.summaryRows.length > 0) {
+        await tx.kpiSnapshot.createMany({
+          data: input.summaryRows.map((row) => ({
+            clientId: input.clientId,
+            definitionId: input.summaryDefinitionId,
+            periodType: KpiPeriod.periodType,
+            periodStart,
+            periodEnd,
+            metricKey: row.metricKey,
+            metricValue: new Prisma.Decimal(row.metricValue),
+            dimensionsJson: row.dimensionsJson,
+          })),
+        })
+      }
+
+      if (input.dailyRows.length > 0) {
+        await tx.kpiBreakdown.createMany({
+          data: input.dailyRows.map((row) => ({
+            clientId: input.clientId,
+            definitionId: input.dailyDefinitionId,
+            periodType: KpiPeriod.periodType,
+            periodStart,
+            periodEnd,
+            bucketDate: KpiPeriod.toDatabaseDate(row.bucketDate),
+            dimensionType: row.dimensionType,
+            dimensionKey: row.dimensionKey,
+            dimensionLabel: row.dimensionLabel,
+            metricKey: row.metricKey,
+            metricValue: new Prisma.Decimal(row.metricValue),
+            sortOrder: row.sortOrder,
+            payloadJson: row.payloadJson,
+          })),
+        })
+      }
+
+      return {
+        snapshotsCreated: input.summaryRows.length,
+        breakdownsCreated: input.dailyRows.length,
+      }
+    })
+  }
+
+  async upsertAvailability(input: SaleKpiAvailabilityUpdate): Promise<void> {
+    const prisma = this.prisma as any
+
+    await prisma.kpiAvailability.upsert({
+      where: {
+        clientId_definitionId: {
+          clientId: input.clientId,
+          definitionId: input.definitionId,
+        },
+      },
+      create: {
+        clientId: input.clientId,
+        definitionId: input.definitionId,
+        isEnabled: input.isEnabled,
+        availableAt: input.availableAt,
+        metadataJson: input.metadataJson,
+      },
+      update: {
+        isEnabled: input.isEnabled,
+        availableAt: input.availableAt,
+        metadataJson: input.metadataJson,
+      },
+    })
+  }
+
+  async getSummaryRows(input: { clientId: string; period: KpiPeriod }): Promise<SaleKpiSnapshotMaterializationRow[]> {
+    const prisma = this.prisma as any
+    const periodStart = KpiPeriod.toDatabaseDate(input.period.from)
+    const periodEnd = KpiPeriod.toDatabaseDate(input.period.to)
+
+    const rows = await prisma.kpiSnapshot.findMany({
+      where: {
+        clientId: input.clientId,
+        periodType: KpiPeriod.periodType,
+        periodStart,
+        periodEnd,
+        definition: {
+          code: 'sales.summary',
+        },
+      },
+      orderBy: [{ metricKey: 'asc' }, { id: 'asc' }],
+      select: {
+        metricKey: true,
+        metricValue: true,
+        dimensionsJson: true,
+      },
+    })
+
+    return rows.map((row: { metricKey: string; metricValue: { toString(): string }; dimensionsJson: unknown }) => ({
+      metricKey: row.metricKey,
+      metricValue: row.metricValue.toString(),
+      dimensionsJson: (row.dimensionsJson ?? null) as Record<string, unknown> | null,
+    }))
+  }
+
+  async getDailyRows(input: { clientId: string; period: KpiPeriod }): Promise<SaleKpiBreakdownMaterializationRow[]> {
+    const prisma = this.prisma as any
+    const periodStart = KpiPeriod.toDatabaseDate(input.period.from)
+    const periodEnd = KpiPeriod.toDatabaseDate(input.period.to)
+
+    const rows = await prisma.kpiBreakdown.findMany({
+      where: {
+        clientId: input.clientId,
+        periodType: KpiPeriod.periodType,
+        periodStart,
+        periodEnd,
+        definition: {
+          code: 'sales.daily',
+        },
+      },
+      orderBy: [{ bucketDate: 'asc' }, { sortOrder: 'asc' }, { id: 'asc' }],
+      select: {
+        bucketDate: true,
+        dimensionType: true,
+        dimensionKey: true,
+        dimensionLabel: true,
+        metricKey: true,
+        metricValue: true,
+        payloadJson: true,
+        sortOrder: true,
+      },
+    })
+
+    return rows.map(
+      (row: {
+        bucketDate: Date | null
+        dimensionType: string
+        dimensionKey: string | null
+        dimensionLabel: string | null
+        metricKey: string
+        metricValue: { toString(): string }
+        payloadJson: unknown
+        sortOrder: number
+      }) => ({
+        bucketDate: row.bucketDate ?? input.period.from,
+        dimensionType: row.dimensionType,
+        dimensionKey: row.dimensionKey,
+        dimensionLabel: row.dimensionLabel,
+        metricKey: row.metricKey,
+        metricValue: row.metricValue.toString(),
+        payloadJson: (row.payloadJson ?? null) as Record<string, unknown> | null,
+        sortOrder: row.sortOrder,
+      }),
+    )
+  }
+
+  async getSaleFactRows(input: { clientId: string; period: KpiPeriod; sellerId?: number }): Promise<SaleFactRecord[]> {
+    const prisma = this.prisma as any
+    const from = KpiPeriod.toDatabaseDate(input.period.from)
+    const to = KpiPeriod.toDatabaseDate(input.period.to)
+
+    return prisma.saleFact.findMany({
+      where: {
+        clientId: input.clientId,
+        saleDate: {
+          gte: from,
+          lte: to,
+        },
+        ...(input.sellerId !== undefined ? { sellerId: input.sellerId } : {}),
+      },
+      orderBy: [{ saleDate: 'asc' }, { id: 'asc' }],
+      select: {
+        id: true,
+        saleDate: true,
+        saleDatetime: true,
+        sellerId: true,
+        sellerName: true,
+        statusNormalized: true,
+        channel: true,
+        valueAmount: true,
+      },
+    })
+  }
+}
+
 @Module({
   imports: [PrismaModule, AuthModule, NormalizationModule],
   providers: [
     PrismaBudgetKpiRepository,
+    PrismaSaleKpiRepository,
     JwtAuthGuard,
     TenantScopeGuard,
     {
@@ -576,8 +955,34 @@ class PrismaBudgetKpiRepository
       useFactory: (repository: PrismaBudgetKpiRepository) => new BudgetKpiQueryService(repository),
       inject: [PrismaBudgetKpiRepository],
     },
+    {
+      provide: SaleKpiAvailabilityService,
+      useFactory: (repository: PrismaSaleKpiRepository) => new SaleKpiAvailabilityService(repository),
+      inject: [PrismaSaleKpiRepository],
+    },
+    {
+      provide: SaleKpiRefreshService,
+      useFactory: (
+        repository: PrismaSaleKpiRepository,
+        availabilityService: SaleKpiAvailabilityService,
+        saleNormalizationService: SaleNormalizationService,
+      ) => new SaleKpiRefreshService(repository, availabilityService, saleNormalizationService),
+      inject: [PrismaSaleKpiRepository, SaleKpiAvailabilityService, SaleNormalizationService],
+    },
+    {
+      provide: SaleKpiQueryService,
+      useFactory: (repository: PrismaSaleKpiRepository) => new SaleKpiQueryService(repository),
+      inject: [PrismaSaleKpiRepository],
+    },
   ],
-  controllers: [KpiController],
-  exports: [BudgetKpiAvailabilityService, BudgetKpiRefreshService, BudgetKpiQueryService],
+  controllers: [KpiController, SalesKpiController],
+  exports: [
+    BudgetKpiAvailabilityService,
+    BudgetKpiRefreshService,
+    BudgetKpiQueryService,
+    SaleKpiAvailabilityService,
+    SaleKpiRefreshService,
+    SaleKpiQueryService,
+  ],
 })
 export class KpiModule {}

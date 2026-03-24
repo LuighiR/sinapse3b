@@ -34,6 +34,8 @@
    npm run frontend:dev
    ```
 
+   The frontend runs on `http://localhost:3001` so it can coexist with the Nest backend on `http://localhost:3000`.
+
 ## Frontend
 
 The repository now includes a dedicated Next.js frontend in `frontend/`.
@@ -99,3 +101,26 @@ Notes:
 - `status` accepts `Cancelado`, `Baixado`, and `Pendente`.
 - `orderType` filters by `order_type`; null/blank channels are exposed as `Nao identificado`.
 - Unfiltered `summary` and `daily` can use materialized KPI rows; filtered queries and all hourly/channel cuts read from `core.budget_facts`.
+
+## Sales KPI Slice
+
+This slice adds the first KPI family for `sales` following the same `raw -> core -> kpi` flow used by budgets.
+
+- Raw source: `raw.ferraco_sales`
+- Normalized facts: `core.sale_facts`
+- Materialized KPI layer: `kpi.*`
+- Sales channel is enriched from the linked budget when `sale.sequential = budget_fact.sequential_linked_sale`
+
+Current sales endpoints:
+
+- `POST /kpis/sales/refresh?from=YYYY-MM-DD&to=YYYY-MM-DD`
+- `GET /kpis/sales/summary?from=YYYY-MM-DD&to=YYYY-MM-DD&sellerId=123&status=Ativa&orderType=Nao%20identificado`
+- `GET /kpis/sales/daily?from=YYYY-MM-DD&to=YYYY-MM-DD&sellerId=123&status=Cancelada&orderType=Pedido%20Televendas`
+- `GET /kpis/sales/channel/daily?from=YYYY-MM-DD&to=YYYY-MM-DD&sellerId=123&status=Ativa&orderType=Nao%20identificado`
+- `GET /kpis/sales/ticket-average?from=YYYY-MM-DD&to=YYYY-MM-DD&sellerId=123&status=Ativa&orderType=Pedido%20Televendas`
+
+Sales notes:
+
+- `status` accepts `Ativa` and `Cancelada`.
+- `orderType` in sales comes from the linked budget channel; sales without linked budgets expose `Nao identificado`.
+- Unfiltered `summary` and `daily` read from materialized KPI rows; filtered queries plus channel and ticket-average cuts read from `core.sale_facts`.
