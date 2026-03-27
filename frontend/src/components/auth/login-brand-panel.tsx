@@ -2,69 +2,120 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { SinapseHubLogo } from "@/components/ui/sinapse-hub-logo";
 
-const floatingMetrics = [
+const highlightMetrics = [
   { title: "Conversao", value: "72%", note: "orcamentos ganhos" },
-  { title: "Ticket medio", value: "R$ 2,8k", note: "ultimos 30 dias" },
-  { title: "Tempo", value: "24h", note: "resposta comercial" },
+  { title: "Ticket medio", value: "R$ 2,8 mil", note: "ultimos 30 dias" },
+  { title: "Tempo medio", value: "24h", note: "retorno comercial" },
 ];
 
 export function LoginBrandPanel() {
   return (
-    <div className="relative overflow-hidden rounded-[var(--radius-shell)] bg-[linear-gradient(160deg,#16161E_0%,#202048_60%,#23235A_100%)] px-7 py-8 text-[var(--color-paper)] shadow-[var(--shadow-panel)]">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.12),transparent_32%),radial-gradient(circle_at_70%_48%,rgba(111,134,255,0.24),transparent_22%),radial-gradient(circle_at_bottom_left,rgba(255,255,255,0.08),transparent_28%)]" />
+    <div className="relative overflow-hidden rounded-[28px] border border-[color:rgba(255,255,255,0.08)] bg-[linear-gradient(180deg,#171720_0%,#1C1E34_48%,#202048_100%)] px-8 py-8 text-[var(--color-paper)] shadow-[var(--shadow-panel)]">
+      <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.02),transparent_22%,rgba(255,255,255,0.02)_100%)]" />
+      <div className="absolute inset-y-0 right-0 w-[44%] border-l border-white/6 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),transparent)]" />
+
       <div className="relative flex h-full flex-col">
         <SinapseHubLogo className="text-[var(--color-paper)]" />
-        <div className="mt-10 max-w-md">
-          <Badge className="bg-white/12 text-[var(--color-paper)]">budget cockpit</Badge>
-          <h1 className="mt-5 text-5xl leading-[0.92] text-balance">
-            Bem-vindo de volta ao cockpit da Sinapse.
+
+        <div className="mt-12 max-w-xl">
+          <Badge className="bg-white/8 text-[var(--color-paper)]">executive workspace</Badge>
+          <h1 className="mt-5 text-[clamp(2.8rem,4vw,4.25rem)] leading-[0.96] text-balance">
+            Gestao comercial com leitura clara, diaria e executiva.
           </h1>
-          <p className="mt-5 max-w-sm text-base leading-7 text-[color:rgba(241,239,232,0.74)]">
-            Uma entrada institucional para chegar rapido aos indicadores de orcamentos,
-            comparativos e sinais de performance comercial.
+          <p className="mt-5 max-w-lg text-[15px] leading-7 text-[color:rgba(247,248,251,0.72)]">
+            Uma entrada unica para acompanhar orcamentos, vendas e operacao com
+            consistencia visual de produto, sem parecer prototipo.
           </p>
         </div>
 
-        <div className="relative mt-10 flex-1">
-          <div className="absolute left-1/2 top-1/2 h-72 w-72 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/10 shadow-[0_0_0_28px_rgba(255,255,255,0.03),0_0_0_56px_rgba(255,255,255,0.02)]" />
-          <div className="absolute left-1/2 top-1/2 h-48 w-48 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle_at_center,rgba(111,134,255,0.34),rgba(255,255,255,0.04)_70%,transparent_100%)] blur-md" />
-
-          <Card className="absolute left-0 top-4 w-40 bg-white/92 p-4 text-[var(--color-ink)]">
-            <span className="text-[11px] uppercase tracking-[0.18em] text-[var(--color-muted)]">
-              Orcamentos
-            </span>
-            <div className="mt-3 text-3xl font-semibold">72%</div>
-            <div className="mt-3 h-16 rounded-full border-[10px] border-[color:rgba(22,22,30,0.08)] border-b-0 relative overflow-hidden">
-              <div className="absolute inset-0 rounded-full border-[10px] border-transparent border-t-[var(--color-navy)] border-l-[var(--color-accent)] -rotate-[18deg]" />
+        <div className="mt-10 grid flex-1 gap-5 xl:grid-cols-[minmax(0,1.25fr)_260px]">
+          <Card className="border-white/8 bg-white/6 p-6 text-[var(--color-paper)] shadow-none">
+            <div className="flex items-center justify-between gap-4 border-b border-white/8 pb-4">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[color:rgba(247,248,251,0.5)]">
+                  Panorama do workspace
+                </div>
+                <div className="mt-2 text-2xl font-semibold tracking-[-0.04em]">
+                  Budget cockpit
+                </div>
+              </div>
+              <div className="rounded-xl border border-white/8 bg-white/6 px-4 py-3 text-right">
+                <div className="text-[11px] uppercase tracking-[0.18em] text-[color:rgba(247,248,251,0.5)]">
+                  Receita
+                </div>
+                <div className="mt-1 text-xl font-semibold">R$ 1,86 mi</div>
+              </div>
             </div>
-          </Card>
 
-          <Card className="absolute right-8 top-10 w-44 bg-white/92 p-4 text-[var(--color-ink)]">
-            <span className="text-[11px] uppercase tracking-[0.18em] text-[var(--color-muted)]">
-              Progresso
-            </span>
-            <div className="mt-4 space-y-2">
-              {floatingMetrics.map((metric) => (
-                <div key={metric.title} className="flex items-center justify-between gap-3 text-sm">
-                  <span>{metric.title}</span>
-                  <span className="font-semibold">{metric.value}</span>
+            <div className="mt-6 grid gap-4 md:grid-cols-3">
+              {highlightMetrics.map((metric) => (
+                <div
+                  key={metric.title}
+                  className="rounded-2xl border border-white/8 bg-[rgba(255,255,255,0.04)] px-4 py-4"
+                >
+                  <div className="text-[11px] uppercase tracking-[0.18em] text-[color:rgba(247,248,251,0.52)]">
+                    {metric.title}
+                  </div>
+                  <div className="mt-3 text-3xl font-semibold tracking-[-0.05em]">
+                    {metric.value}
+                  </div>
+                  <div className="mt-2 text-sm text-[color:rgba(247,248,251,0.62)]">
+                    {metric.note}
+                  </div>
                 </div>
               ))}
             </div>
-          </Card>
 
-          <Card className="absolute bottom-6 left-5 w-36 bg-white/92 p-4 text-[var(--color-ink)]">
-            <span className="text-[11px] uppercase tracking-[0.18em] text-[var(--color-muted)]">
-              Pipeline
-            </span>
-            <div className="mt-3 text-3xl font-semibold">35.05</div>
-            <div className="mt-3 flex h-12 items-end gap-2">
-              <div className="w-3 rounded-full bg-[var(--color-accent)]/60" style={{ height: "45%" }} />
-              <div className="w-3 rounded-full bg-[var(--color-navy)]" style={{ height: "88%" }} />
-              <div className="w-3 rounded-full bg-[var(--color-success)]" style={{ height: "62%" }} />
-              <div className="w-3 rounded-full bg-[var(--color-accent)]/70" style={{ height: "76%" }} />
+            <div className="mt-6 rounded-2xl border border-white/8 bg-[rgba(255,255,255,0.03)] p-4">
+              <div className="flex items-end gap-3">
+                {[44, 58, 52, 67, 74, 69, 82, 76, 88].map((height, index) => (
+                  <div key={`${height}-${index}`} className="flex flex-1 flex-col gap-2">
+                    <div className="flex h-24 items-end rounded-md bg-white/4 px-1.5 py-1">
+                      <div
+                        className={`w-full rounded-sm ${index > 5 ? "bg-white/85" : "bg-[rgba(111,134,255,0.78)]"}`}
+                        style={{ height: `${height}%` }}
+                      />
+                    </div>
+                    <div className="text-center text-[10px] uppercase tracking-[0.16em] text-[color:rgba(247,248,251,0.42)]">
+                      S{index + 1}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </Card>
+
+          <div className="grid gap-5">
+            <Card className="border-white/8 bg-white/6 p-5 text-[var(--color-paper)] shadow-none">
+              <div className="text-[11px] uppercase tracking-[0.18em] text-[color:rgba(247,248,251,0.5)]">
+                Destaque do dia
+              </div>
+              <div className="mt-3 text-4xl font-semibold tracking-[-0.06em]">35,05</div>
+              <div className="mt-2 text-sm text-[color:rgba(247,248,251,0.64)]">
+                oportunidades em andamento
+              </div>
+            </Card>
+
+            <Card className="border-white/8 bg-white/6 p-5 text-[var(--color-paper)] shadow-none">
+              <div className="text-[11px] uppercase tracking-[0.18em] text-[color:rgba(247,248,251,0.5)]">
+                Leitura esperada
+              </div>
+              <div className="mt-4 space-y-3 text-sm text-[color:rgba(247,248,251,0.72)]">
+                <div className="flex items-center justify-between gap-3">
+                  <span>Orcamentos por periodo</span>
+                  <span className="font-semibold text-white">Diario</span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span>Vendas por seller</span>
+                  <span className="font-semibold text-white">Ao vivo</span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span>Drilldown por KPI</span>
+                  <span className="font-semibold text-white">Detalhado</span>
+                </div>
+              </div>
+            </Card>
+          </div>
         </div>
       </div>
     </div>

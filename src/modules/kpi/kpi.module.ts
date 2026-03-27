@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client'
 import { AuthModule } from '../auth/auth.module'
 import { NormalizationModule } from '../normalization/normalization.module'
 import { BudgetNormalizationService } from '../normalization/application/budget-normalization.service'
+import { CallNormalizationService } from '../normalization/application/call-normalization.service'
 import { SaleNormalizationService } from '../normalization/application/sale-normalization.service'
 import { PrismaModule } from '../../infra/prisma/prisma.module'
 import { PrismaService } from '../../infra/prisma/prisma.service'
@@ -47,6 +48,16 @@ import {
   SaleKpiSnapshotRow as SaleKpiSnapshotMaterializationRow,
 } from './application/sale-kpi-refresh.service'
 import { SalesKpiController } from './presentation/sales-kpi.controller'
+import {
+  CallKpiAvailabilityService,
+} from './application/call-kpi-availability.service'
+import { CallKpiQueryService } from './application/call-kpi-query.service'
+import { CallKpiRefreshService } from './application/call-kpi-refresh.service'
+import { WhatsAppKpiQueryService } from './application/whatsapp-kpi-query.service'
+import { CallKpiController } from './presentation/call-kpi.controller'
+import { WhatsAppKpiController } from './presentation/whatsapp-kpi.controller'
+import { PrismaCallKpiRepository } from './infrastructure/prisma-call-kpi.repository'
+import { PrismaWhatsAppKpiRepository } from './infrastructure/prisma-whatsapp-kpi.repository'
 
 @Injectable()
 class PrismaBudgetKpiRepository
@@ -449,11 +460,13 @@ class PrismaBudgetKpiRepository
         id: true,
         budgetDate: true,
         budgetDatetime: true,
+        closingDate: true,
         sellerId: true,
         sellerName: true,
         statusNormalized: true,
         channel: true,
         valueAmount: true,
+        payloadJson: true,
       },
     })
   }
@@ -934,6 +947,8 @@ class PrismaSaleKpiRepository
   providers: [
     PrismaBudgetKpiRepository,
     PrismaSaleKpiRepository,
+    PrismaCallKpiRepository,
+    PrismaWhatsAppKpiRepository,
     JwtAuthGuard,
     TenantScopeGuard,
     {
@@ -974,8 +989,32 @@ class PrismaSaleKpiRepository
       useFactory: (repository: PrismaSaleKpiRepository) => new SaleKpiQueryService(repository),
       inject: [PrismaSaleKpiRepository],
     },
+    {
+      provide: CallKpiAvailabilityService,
+      useFactory: (repository: PrismaCallKpiRepository) => new CallKpiAvailabilityService(repository),
+      inject: [PrismaCallKpiRepository],
+    },
+    {
+      provide: CallKpiRefreshService,
+      useFactory: (
+        repository: PrismaCallKpiRepository,
+        availabilityService: CallKpiAvailabilityService,
+        callNormalizationService: CallNormalizationService,
+      ) => new CallKpiRefreshService(repository, availabilityService, callNormalizationService),
+      inject: [PrismaCallKpiRepository, CallKpiAvailabilityService, CallNormalizationService],
+    },
+    {
+      provide: CallKpiQueryService,
+      useFactory: (repository: PrismaCallKpiRepository) => new CallKpiQueryService(repository),
+      inject: [PrismaCallKpiRepository],
+    },
+    {
+      provide: WhatsAppKpiQueryService,
+      useFactory: (repository: PrismaWhatsAppKpiRepository) => new WhatsAppKpiQueryService(repository),
+      inject: [PrismaWhatsAppKpiRepository],
+    },
   ],
-  controllers: [KpiController, SalesKpiController],
+  controllers: [KpiController, SalesKpiController, CallKpiController, WhatsAppKpiController],
   exports: [
     BudgetKpiAvailabilityService,
     BudgetKpiRefreshService,
@@ -983,6 +1022,10 @@ class PrismaSaleKpiRepository
     SaleKpiAvailabilityService,
     SaleKpiRefreshService,
     SaleKpiQueryService,
+    CallKpiAvailabilityService,
+    CallKpiRefreshService,
+    CallKpiQueryService,
+    WhatsAppKpiQueryService,
   ],
 })
 export class KpiModule {}

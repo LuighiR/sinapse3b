@@ -2,6 +2,7 @@ import { INestApplication } from '@nestjs/common'
 import request from 'supertest'
 import { buildTestApp } from './helpers/build-test-app'
 import {
+  type BudgetKpiFollowUpSummaryResponse,
   BudgetKpiQueryService,
   type BudgetKpiDailySeriesResponse,
   type BudgetKpiDrilldownResponse,
@@ -70,6 +71,22 @@ describe('Budget KPI endpoints', () => {
         { date: '2026-01-02', count: 2, value: '200.0000' },
       ],
     })
+    jest.spyOn(queryService, 'getFollowUpSummary').mockResolvedValue({
+      period: { from: '2026-01-01', to: '2026-01-31', key: '2026-01-01_2026-01-31' },
+      total: { count: 6, value: '630.0000' },
+      within24h: {
+        total: { count: 3, value: '300.0000' },
+        converted: { count: 1, value: '120.0000', percentage: '16.67' },
+        lost: { count: 1, value: '80.0000', percentage: '16.67' },
+        open: { count: 1, value: '100.0000', percentage: '16.67' },
+      },
+      after24h: {
+        total: { count: 3, value: '330.0000' },
+        converted: { count: 2, value: '240.0000', percentage: '33.33' },
+        lost: { count: 1, value: '90.0000', percentage: '16.67' },
+        open: { count: 0, value: '0.0000', percentage: '0.00' },
+      },
+    } satisfies BudgetKpiFollowUpSummaryResponse)
     jest.spyOn(queryService, 'getDrilldown').mockResolvedValue({
       period: { from: '2026-01-01', to: '2026-01-31', key: '2026-01-01_2026-01-31' },
       filters: { sellerId: 7, branchId: 5, branchName: 'Matriz' },
@@ -210,6 +227,16 @@ describe('Budget KPI endpoints', () => {
     })
   })
 
+  it('answers the dashboard preflight request with CORS headers', async () => {
+    await request(app.getHttpServer())
+      .options('/kpis/budgets/daily')
+      .set('Origin', 'http://localhost:3001')
+      .set('Access-Control-Request-Method', 'GET')
+      .set('Access-Control-Request-Headers', 'Authorization, X-Tenant-Id')
+      .expect(204)
+      .expect('Access-Control-Allow-Origin', 'http://localhost:3001')
+  })
+
   it('passes sellerId through the daily endpoint', async () => {
     await request(app.getHttpServer())
       .get('/kpis/budgets/daily')
@@ -224,6 +251,47 @@ describe('Budget KPI endpoints', () => {
       to: '2026-01-31',
       sellerId: 7,
     })
+  })
+
+  it('returns the budget follow-up summary for the active tenant client', async () => {
+    await request(app.getHttpServer())
+      .get('/kpis/budgets/follow-up/summary')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Tenant-Id', 'tenant-1')
+      .query({ from: '2026-01-01', to: '2026-01-31', referenceAt: '2026-01-31T18:30:00-03:00' })
+      .expect(200)
+      .expect({
+        period: { from: '2026-01-01', to: '2026-01-31', key: '2026-01-01_2026-01-31' },
+        total: { count: 6, value: '630.0000' },
+        within24h: {
+          total: { count: 3, value: '300.0000' },
+          converted: { count: 1, value: '120.0000', percentage: '16.67' },
+          lost: { count: 1, value: '80.0000', percentage: '16.67' },
+          open: { count: 1, value: '100.0000', percentage: '16.67' },
+        },
+        after24h: {
+          total: { count: 3, value: '330.0000' },
+          converted: { count: 2, value: '240.0000', percentage: '33.33' },
+          lost: { count: 1, value: '90.0000', percentage: '16.67' },
+          open: { count: 0, value: '0.0000', percentage: '0.00' },
+        },
+      })
+
+    expect(queryService.getFollowUpSummary).toHaveBeenCalledWith({
+      clientId: 'client-1',
+      from: '2026-01-01',
+      to: '2026-01-31',
+      referenceAt: '2026-01-31T18:30:00-03:00',
+    })
+  })
+
+  it('rejects follow-up summary without referenceAt', async () => {
+    await request(app.getHttpServer())
+      .get('/kpis/budgets/follow-up/summary')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Tenant-Id', 'tenant-1')
+      .query({ from: '2026-01-01', to: '2026-01-31' })
+      .expect(400)
   })
 
   it('returns drilldown rows scoped by the active tenant client', async () => {

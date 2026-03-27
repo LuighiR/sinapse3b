@@ -14,16 +14,26 @@ import {
   SALE_FACT_UPSERT_REPOSITORY,
   SaleNormalizationService,
 } from './application/sale-normalization.service'
+import {
+  CALL_FACT_UPSERT_REPOSITORY,
+  CallNormalizationService,
+  PrismaCallFactUpsertRepository,
+  PrismaRawFerracoCallReader,
+  RAW_FERRACO_CALL_READER,
+} from './application/call-normalization.service'
 
 @Module({
   imports: [PrismaModule],
   providers: [
     BudgetNormalizationService,
     SaleNormalizationService,
+    CallNormalizationService,
     PrismaRawFerracoBudgetReader,
     PrismaBudgetFactUpsertRepository,
     PrismaRawFerracoSaleReader,
     PrismaSaleFactUpsertRepository,
+    PrismaRawFerracoCallReader,
+    PrismaCallFactUpsertRepository,
     {
       provide: RAW_FERRACO_BUDGET_READER,
       useExisting: PrismaRawFerracoBudgetReader,
@@ -40,7 +50,15 @@ import {
       provide: SALE_FACT_UPSERT_REPOSITORY,
       useExisting: PrismaSaleFactUpsertRepository,
     },
+    {
+      provide: RAW_FERRACO_CALL_READER,
+      useExisting: PrismaRawFerracoCallReader,
+    },
+    {
+      provide: CALL_FACT_UPSERT_REPOSITORY,
+      useExisting: PrismaCallFactUpsertRepository,
+    },
   ],
-  exports: [BudgetNormalizationService, SaleNormalizationService],
+  exports: [BudgetNormalizationService, SaleNormalizationService, CallNormalizationService],
 })
 export class NormalizationModule {}

@@ -14,6 +14,7 @@ export type RawFerracoBudgetRecord = {
   openingDate: string | Date
   openingTime: string | Date | null
   closingDate: string | Date | null
+  closingTime: string | Date | null
   status: string | null
   channel: string | null
   customerName: string | null
@@ -106,6 +107,7 @@ export class PrismaRawFerracoBudgetReader implements RawFerracoBudgetReader {
         budget.opening_date AS "openingDate",
         budget.opening_time::text AS "openingTime",
         budget.closing_date AS "closingDate",
+        budget.closing_time::text AS "closingTime",
         budget.status,
         budget.order_type AS channel,
         budget.customer_name AS "customerName",
@@ -160,10 +162,10 @@ export class PrismaBudgetFactUpsertRepository implements BudgetFactUpsertReposit
         budget.client_id,
         'raw.ferraco_budgets',
         budget.id,
-        budget.branch,
+        COALESCE(budget.branch, ''),
         NULL::integer,
         budget.seller_id,
-        budget.seller_name,
+        COALESCE(budget.seller_name, ''),
         budget.opening_date,
         budget.opening_date::timestamp + COALESCE(budget.opening_time, time '00:00:00'),
         budget.closing_date,
@@ -176,7 +178,7 @@ export class PrismaBudgetFactUpsertRepository implements BudgetFactUpsertReposit
           ELSE 'UNKNOWN'
         END,
         budget.order_type,
-        budget.customer_name,
+        COALESCE(budget.customer_name, ''),
         budget.cpf_cnpj,
         budget.value,
         budget.sequential,
@@ -299,7 +301,10 @@ export class BudgetNormalizationService {
       sequential: this.parseOptionalBigInt(budget.sequential),
       davId: this.parseBigInt(budget.davId, 'davId'),
       sequentialLinkedSale: this.parseOptionalBigInt(budget.sequentialLinkedSale),
-      payloadJson: budget.payload ?? {},
+      payloadJson: {
+        ...(budget.payload ?? {}),
+        ...(budget.closingTime != null && budget.closingTime !== '' ? { closing_time: String(budget.closingTime) } : {}),
+      },
     }
   }
 

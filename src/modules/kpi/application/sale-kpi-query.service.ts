@@ -115,6 +115,15 @@ export class SaleKpiQueryService {
       period,
     })
 
+    if (this.shouldFallbackToFactsForSummary(rows)) {
+      const facts = await this.getFilteredFacts(input, period)
+
+      return {
+        period: this.toPeriodView(period),
+        ...this.buildSummaryFromFacts(period, facts),
+      }
+    }
+
     const summary = this.createEmptySummary()
 
     for (const row of rows) {
@@ -173,6 +182,15 @@ export class SaleKpiQueryService {
       clientId: input.clientId,
       period,
     })
+
+    if (this.shouldFallbackToFactsForDaily(rows)) {
+      const facts = await this.getFilteredFacts(input, period)
+
+      return {
+        period: this.toPeriodView(period),
+        series: this.buildDailySeriesFromFacts(period, facts),
+      }
+    }
 
     const seriesByDate = new Map<string, SaleKpiDailySeriesItem>()
 
@@ -419,6 +437,26 @@ export class SaleKpiQueryService {
 
   private isSummaryBucket(value: string): value is SaleSummaryBucket {
     return value === 'total' || value === 'active' || value === 'canceled'
+  }
+
+  private shouldFallbackToFactsForSummary(rows: SaleKpiSnapshotRow[]): boolean {
+    if (rows.length === 0) {
+      return true
+    }
+
+    return rows.every((row) => this.isZeroMetricValue(row.metricValue))
+  }
+
+  private shouldFallbackToFactsForDaily(rows: SaleKpiBreakdownRow[]): boolean {
+    if (rows.length === 0) {
+      return true
+    }
+
+    return rows.every((row) => this.isZeroMetricValue(row.metricValue))
+  }
+
+  private isZeroMetricValue(value: string | number | bigint | Prisma.Decimal): boolean {
+    return new Prisma.Decimal(this.toText(value)).equals(0)
   }
 
   private toDateKey(value: Date | string): string {

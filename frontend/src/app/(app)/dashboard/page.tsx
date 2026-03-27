@@ -1,41 +1,47 @@
+import { DashboardConnectionState } from "@/components/dashboard/dashboard-connection-state";
+import { LiveDashboard } from "@/components/dashboard/live-dashboard";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
-import { KpiBreakdownCard } from "@/components/dashboard/kpi-breakdown-card";
-import { KpiComparisonCard } from "@/components/dashboard/kpi-comparison-card";
-import { KpiHighlightCard } from "@/components/dashboard/kpi-highlight-card";
-import { KpiSummaryGrid } from "@/components/dashboard/kpi-summary-grid";
-import { KpiTrendCard } from "@/components/dashboard/kpi-trend-card";
-import { budgetDashboardMock } from "@/lib/mock-budget-data";
+import { parseDashboardFilters } from "@/lib/dashboard-filters";
+import { getLiveDashboardData } from "@/lib/dashboard-live-data";
 
-export default function DashboardPage() {
+export const dynamic = "force-dynamic";
+
+type DashboardPageProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
+
+export default async function DashboardPage({
+  searchParams,
+}: DashboardPageProps) {
+  const filters = parseDashboardFilters(searchParams ? await searchParams : {});
+  const result = await loadDashboardResult(filters);
+
+  if ("detail" in result) {
+    return (
+      <DashboardShell>
+        <DashboardConnectionState detail={result.detail} />
+      </DashboardShell>
+    );
+  }
+
   return (
     <DashboardShell>
-      <div className="space-y-6">
-        <KpiSummaryGrid cards={budgetDashboardMock.summaryCards} />
-
-        <div className="grid gap-6 xl:grid-cols-[1.45fr_0.95fr]">
-          <KpiTrendCard
-            points={budgetDashboardMock.dailyTrend.points}
-            subtitle={budgetDashboardMock.dailyTrend.subtitle}
-            title={budgetDashboardMock.dailyTrend.title}
-          />
-          <KpiBreakdownCard
-            items={budgetDashboardMock.statusBreakdown.items}
-            title={budgetDashboardMock.statusBreakdown.title}
-          />
-        </div>
-
-        <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-          <KpiComparisonCard
-            items={budgetDashboardMock.comparison.items}
-            title={budgetDashboardMock.comparison.title}
-          />
-          <KpiHighlightCard
-            note={budgetDashboardMock.highlight.note}
-            title={budgetDashboardMock.highlight.title}
-            value={budgetDashboardMock.highlight.value}
-          />
-        </div>
-      </div>
+      <LiveDashboard viewModel={result.viewModel} />
     </DashboardShell>
   );
+}
+
+async function loadDashboardResult(filters: ReturnType<typeof parseDashboardFilters>) {
+  try {
+    return {
+      viewModel: await getLiveDashboardData(filters),
+    };
+  } catch (error) {
+    return {
+      detail:
+        error instanceof Error
+          ? error.message
+          : "Falha desconhecida ao carregar o cockpit.",
+    };
+  }
 }

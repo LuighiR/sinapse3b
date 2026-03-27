@@ -1,6 +1,8 @@
 import { DynamicModule, Global, INestApplication, Module } from '@nestjs/common'
 import { Test } from '@nestjs/testing'
 import { AppModule } from '../../src/app.module'
+import { loadEnv } from '../../src/config/env'
+import { configureApp } from '../../src/configure-app'
 import { PrismaService } from '../../src/infra/prisma/prisma.service'
 import { AUTH_TEST_FIXTURES } from '../../src/modules/auth/application/user-membership.service'
 import { TestFixtures, createTestFixtures, ensureTestEnv } from './fakes'
@@ -94,6 +96,7 @@ export async function buildTestApp(options: BuildTestAppOptions = {}): Promise<I
   const moduleRef = await moduleBuilder.compile()
 
   const app = moduleRef.createNestApplication()
+  configureApp(app, loadEnv(process.env))
   await app.init()
   return app
 }

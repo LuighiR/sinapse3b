@@ -2,6 +2,7 @@ import { Test } from '@nestjs/testing'
 import {
   BUDGET_FACT_UPSERT_REPOSITORY,
   BudgetNormalizationService,
+  PrismaBudgetFactUpsertRepository,
   RAW_FERRACO_BUDGET_READER,
   type BudgetFactUpsertRepository,
   type RawFerracoBudgetReader,
@@ -33,6 +34,7 @@ describe('BudgetNormalizationService', () => {
           openingDate: '2026-01-10',
           openingTime: '08:15:00',
           closingDate: '2026-01-15',
+          closingTime: '16:45:00',
           status: 'Baixado',
           channel: 'SHOWROOM',
           customerName: 'Cliente Teste',
@@ -87,7 +89,7 @@ describe('BudgetNormalizationService', () => {
         sequential: BigInt(1001),
         davId: BigInt(2002),
         sequentialLinkedSale: BigInt(3003),
-        payloadJson: { source: 'fixture' },
+        payloadJson: { source: 'fixture', closing_time: '16:45:00' },
       },
       update: {
         branchId: null,
@@ -105,7 +107,7 @@ describe('BudgetNormalizationService', () => {
         sequential: BigInt(1001),
         davId: BigInt(2002),
         sequentialLinkedSale: BigInt(3003),
-        payloadJson: { source: 'fixture' },
+        payloadJson: { source: 'fixture', closing_time: '16:45:00' },
       },
     })
 
@@ -125,6 +127,7 @@ describe('BudgetNormalizationService', () => {
           openingDate: new Date(Date.UTC(2026, 0, 2, 0, 0, 0)),
           openingTime: '10:30:00',
           closingDate: new Date(Date.UTC(2026, 0, 5, 0, 0, 0)),
+          closingTime: '18:15:00',
           status: 'Pendente',
           channel: 'BALCAO',
           customerName: 'Cliente UTC',
@@ -181,5 +184,26 @@ describe('BudgetNormalizationService', () => {
     }).compile()
 
     expect(moduleRef.get(BudgetNormalizationService)).toBeInstanceOf(BudgetNormalizationService)
+  })
+})
+
+describe('PrismaBudgetFactUpsertRepository', () => {
+  it('coalesces nullable raw text fields during bulk upsert to match canonical constraints', async () => {
+    const executeRaw = jest.fn().mockResolvedValue(undefined)
+    const repository = new PrismaBudgetFactUpsertRepository({
+      $executeRaw: executeRaw,
+    } as never)
+
+    await repository.bulkUpsertClient('ferracosul')
+
+    expect(executeRaw).toHaveBeenCalledTimes(1)
+
+    const [queryParts, clientId] = executeRaw.mock.calls[0] as [TemplateStringsArray, string]
+    const sql = queryParts.join('?')
+
+    expect(clientId).toBe('ferracosul')
+    expect(sql).toContain("COALESCE(budget.branch, '')")
+    expect(sql).toContain("COALESCE(budget.seller_name, '')")
+    expect(sql).toContain("COALESCE(budget.customer_name, '')")
   })
 })

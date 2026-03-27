@@ -52,6 +52,48 @@ describe('SaleKpiQueryService', () => {
     })
   })
 
+  it('falls back to canonical facts when summary snapshots are empty', async () => {
+    const repository: jest.Mocked<SaleKpiQueryRepository> = {
+      getSummaryRows: jest.fn().mockResolvedValue([]),
+      getDailyRows: jest.fn(),
+      getSaleFactRows: jest.fn().mockResolvedValue([
+        {
+          id: 1n,
+          saleDate: utcDate(2026, 2, 5),
+          saleDatetime: utcDate(2026, 2, 5, 10, 0),
+          sellerId: 7,
+          sellerName: 'Maria',
+          statusNormalized: 'VALID',
+          channel: null,
+          valueAmount: '6406599.99',
+        },
+        {
+          id: 2n,
+          saleDate: utcDate(2026, 2, 5),
+          saleDatetime: utcDate(2026, 2, 5, 11, 0),
+          sellerId: 7,
+          sellerName: 'Maria',
+          statusNormalized: 'VALID',
+          channel: 'Pedido Televendas',
+          valueAmount: '666087.47',
+        },
+      ]),
+    }
+
+    const service = new SaleKpiQueryService(repository)
+
+    const result = await service.getSummary({
+      clientId: 'c1',
+      from: '2026-03-01',
+      to: '2026-03-31',
+    })
+
+    expect(repository.getSaleFactRows).toHaveBeenCalled()
+    expect(result.total).toEqual({ count: 2, value: '7072687.4600' })
+    expect(result.active).toEqual({ count: 2, value: '7072687.4600' })
+    expect(result.canceled).toEqual({ count: 0, value: '0.0000' })
+  })
+
   it('filters sales summary by status and orderType from canonical facts', async () => {
     const repository: jest.Mocked<SaleKpiQueryRepository> = {
       getSummaryRows: jest.fn(),
@@ -155,6 +197,49 @@ describe('SaleKpiQueryService', () => {
         { date: '2026-01-03', count: 0, value: '0.0000' },
       ],
     })
+  })
+
+  it('falls back to canonical facts when daily snapshots are empty', async () => {
+    const repository: jest.Mocked<SaleKpiQueryRepository> = {
+      getSummaryRows: jest.fn(),
+      getDailyRows: jest.fn().mockResolvedValue([]),
+      getSaleFactRows: jest.fn().mockResolvedValue([
+        {
+          id: 1n,
+          saleDate: utcDate(2026, 2, 5),
+          saleDatetime: utcDate(2026, 2, 5, 10, 0),
+          sellerId: 7,
+          sellerName: 'Maria',
+          statusNormalized: 'VALID',
+          channel: null,
+          valueAmount: '6406599.99',
+        },
+        {
+          id: 2n,
+          saleDate: utcDate(2026, 2, 5),
+          saleDatetime: utcDate(2026, 2, 5, 11, 0),
+          sellerId: 7,
+          sellerName: 'Maria',
+          statusNormalized: 'VALID',
+          channel: 'Pedido Televendas',
+          valueAmount: '666087.47',
+        },
+      ]),
+    }
+
+    const service = new SaleKpiQueryService(repository)
+
+    const result = await service.getDailySeries({
+      clientId: 'c1',
+      from: '2026-03-05',
+      to: '2026-03-06',
+    })
+
+    expect(repository.getSaleFactRows).toHaveBeenCalled()
+    expect(result.series).toEqual([
+      { date: '2026-03-05', count: 2, value: '7072687.4600' },
+      { date: '2026-03-06', count: 0, value: '0.0000' },
+    ])
   })
 
   it('returns sales by channel per day with null channels labeled as Nao identificado', async () => {

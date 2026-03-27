@@ -7,11 +7,13 @@ export type BudgetFactRecord = {
   id: bigint | number | string
   budgetDate: Date
   budgetDatetime?: Date | string
+  closingDate?: Date | string | null
   sellerId: number | string | bigint
   sellerName: string | null
   statusNormalized: string | null
   channel?: string | null
   valueAmount: string | number | bigint | Prisma.Decimal
+  payloadJson?: Record<string, unknown> | null
 }
 
 export type BudgetKpiDefinitionSet = {

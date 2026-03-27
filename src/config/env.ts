@@ -8,6 +8,10 @@ export const envSchema = z.object({
   AUTH_JWT_SECRET: requiredString,
   AUTH_JWT_ISSUER: requiredString,
   AUTH_JWT_AUDIENCE: requiredString,
+  AUTH_REFRESH_JWT_SECRET: z.string().default('').transform((value) => value.trim()),
+  AUTH_ACCESS_TOKEN_TTL_MINUTES: z.coerce.number().int().min(1).default(60),
+  AUTH_REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).default(30),
+  CORS_ALLOWED_ORIGINS: z.string().default('').transform((value) => value.trim()),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
 })

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common'
+import { BadRequestException, Injectable } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
 import { KpiPeriod } from '../domain/kpi-period'
 import {
@@ -18,6 +18,10 @@ export type BudgetKpiQueryPeriodInput = {
   orderType?: string
 }
 
+export type BudgetKpiFollowUpSummaryInput = Omit<BudgetKpiQueryPeriodInput, 'status'> & {
+  referenceAt: string | Date
+}
+
 export type BudgetKpiPeriodView = {
   from: string
   to: string
@@ -35,6 +39,26 @@ export type BudgetKpiSummaryResponse = {
   open: BudgetKpiSummaryCard
   won: BudgetKpiSummaryCard
   lost: BudgetKpiSummaryCard
+}
+
+export type BudgetKpiFollowUpMetric = {
+  count: number
+  value: string
+  percentage: string
+}
+
+export type BudgetKpiFollowUpWindow = {
+  total: BudgetKpiSummaryCard
+  converted: BudgetKpiFollowUpMetric
+  lost: BudgetKpiFollowUpMetric
+  open: BudgetKpiFollowUpMetric
+}
+
+export type BudgetKpiFollowUpSummaryResponse = {
+  period: BudgetKpiPeriodView
+  total: BudgetKpiSummaryCard
+  within24h: BudgetKpiFollowUpWindow
+  after24h: BudgetKpiFollowUpWindow
 }
 
 export type BudgetKpiDailySeriesItem = {
@@ -175,8 +199,11 @@ export type BudgetKpiQueryRepository = {
 
 type SummaryBucket = 'total' | 'open' | 'won' | 'lost'
 type NormalizedBudgetStatus = 'OPEN' | 'WON' | 'LOST' | 'UNKNOWN'
+type FollowUpStatusBucket = 'converted' | 'lost' | 'open'
+type FollowUpWindowBucket = 'within24h' | 'after24h'
 
 const MISSING_ORDER_TYPE_LABEL = 'Nao identificado'
+const FOLLOW_UP_WINDOW_LIMIT_MS = 24 * 60 * 60 * 1000
 
 @Injectable()
 export class BudgetKpiQueryService {
@@ -198,6 +225,15 @@ export class BudgetKpiQueryService {
       clientId: input.clientId,
       period,
     })
+
+    if (this.shouldFallbackToFactsForSummary(rows)) {
+      const facts = await this.getFilteredFacts(input, period)
+
+      return {
+        period: this.toPeriodView(period),
+        ...this.buildSummaryFromFacts(facts),
+      }
+    }
 
     const summary = this.createEmptySummary()
 
@@ -242,6 +278,15 @@ export class BudgetKpiQueryService {
       period,
     })
 
+    if (this.shouldFallbackToFactsForDaily(rows)) {
+      const facts = await this.getFilteredFacts(input, period)
+
+      return {
+        period: this.toPeriodView(period),
+        series: this.buildDailySeriesFromFacts(period, facts),
+      }
+    }
+
     const seriesByDate = new Map<string, BudgetKpiDailySeriesItem>()
 
     for (const day of period.eachDay()) {
@@ -283,6 +328,29 @@ export class BudgetKpiQueryService {
     return {
       period: this.toPeriodView(period),
       series: this.buildHourlySeriesFromFacts(facts),
+    }
+  }
+
+  async getFollowUpSummary(input: BudgetKpiFollowUpSummaryInput): Promise<BudgetKpiFollowUpSummaryResponse> {
+    const period = this.toPeriod(input)
+    const referenceAt = this.parseReferenceAt(input.referenceAt)
+    const sellerId = this.normalizeSellerId(input.sellerId)
+    const facts = await this.repository.getBudgetFactRows({
+      clientId: input.clientId,
+      period,
+      sellerId,
+    })
+    const filteredFacts = facts.filter((fact) => {
+      if (input.orderType !== undefined && !this.matchesOrderTypeFilter(fact.channel ?? null, input.orderType)) {
+        return false
+      }
+
+      return true
+    })
+
+    return {
+      period: this.toPeriodView(period),
+      ...this.buildFollowUpSummaryFromFacts(filteredFacts, referenceAt),
     }
   }
 
@@ -467,6 +535,61 @@ export class BudgetKpiQueryService {
     }
   }
 
+  private buildFollowUpSummaryFromFacts(
+    facts: BudgetFactRecord[],
+    referenceAt: Date,
+  ): Omit<BudgetKpiFollowUpSummaryResponse, 'period'> {
+    const grouped = {
+      within24h: {
+        converted: [] as BudgetFactRecord[],
+        lost: [] as BudgetFactRecord[],
+        open: [] as BudgetFactRecord[],
+      },
+      after24h: {
+        converted: [] as BudgetFactRecord[],
+        lost: [] as BudgetFactRecord[],
+        open: [] as BudgetFactRecord[],
+      },
+    }
+
+    for (const fact of facts) {
+      const status = this.normalizeStatus(fact.statusNormalized)
+
+      if (status === 'UNKNOWN') {
+        continue
+      }
+
+      const openedAt = this.toTimestamp(fact.budgetDatetime)
+
+      if (openedAt === null) {
+        continue
+      }
+
+      if (openedAt.getTime() > referenceAt.getTime()) {
+        continue
+      }
+
+      const { bucket, statusBucket } = this.resolveFollowUpClassification(fact, status, openedAt, referenceAt)
+
+      grouped[bucket][statusBucket].push(fact)
+    }
+
+    const within24hFacts = [
+      ...grouped.within24h.converted,
+      ...grouped.within24h.lost,
+      ...grouped.within24h.open,
+    ]
+    const after24hFacts = [...grouped.after24h.converted, ...grouped.after24h.lost, ...grouped.after24h.open]
+    const allFacts = [...within24hFacts, ...after24hFacts]
+    const overallCount = allFacts.length
+
+    return {
+      total: this.toSummaryCardFromFacts(allFacts),
+      within24h: this.toFollowUpWindow(grouped.within24h, overallCount),
+      after24h: this.toFollowUpWindow(grouped.after24h, overallCount),
+    }
+  }
+
   private buildDailySeriesFromFacts(period: KpiPeriod, facts: BudgetFactRecord[]): BudgetKpiDailySeriesItem[] {
     const seriesByDate = new Map<string, BudgetKpiDailySeriesItem>()
 
@@ -598,6 +721,26 @@ export class BudgetKpiQueryService {
     return value === 'total' || value === 'open' || value === 'won' || value === 'lost'
   }
 
+  private shouldFallbackToFactsForSummary(rows: BudgetKpiSnapshotRow[]): boolean {
+    if (rows.length === 0) {
+      return true
+    }
+
+    return rows.every((row) => this.isZeroMetricValue(row.metricValue))
+  }
+
+  private shouldFallbackToFactsForDaily(rows: BudgetKpiBreakdownRow[]): boolean {
+    if (rows.length === 0) {
+      return true
+    }
+
+    return rows.every((row) => this.isZeroMetricValue(row.metricValue))
+  }
+
+  private isZeroMetricValue(value: string | number | bigint | Prisma.Decimal): boolean {
+    return new Prisma.Decimal(this.toText(value)).equals(0)
+  }
+
   private normalizeStatus(value: string | null): NormalizedBudgetStatus {
     const normalized = (value ?? 'UNKNOWN').toUpperCase()
 
@@ -606,6 +749,189 @@ export class BudgetKpiQueryService {
     }
 
     return 'UNKNOWN'
+  }
+
+  private toFollowUpStatusBucket(status: Exclude<NormalizedBudgetStatus, 'UNKNOWN'>): FollowUpStatusBucket {
+    if (status === 'WON') {
+      return 'converted'
+    }
+
+    if (status === 'LOST') {
+      return 'lost'
+    }
+
+    return 'open'
+  }
+
+  private resolveFollowUpClassification(
+    fact: BudgetFactRecord,
+    status: Exclude<NormalizedBudgetStatus, 'UNKNOWN'>,
+    openedAt: Date,
+    referenceAt: Date,
+  ): { bucket: FollowUpWindowBucket; statusBucket: FollowUpStatusBucket } {
+    const closingAt = this.resolveClosingTimestamp(fact)
+
+    if ((status === 'WON' || status === 'LOST') && closingAt !== null && closingAt.getTime() <= referenceAt.getTime()) {
+      return {
+        bucket: this.toFollowUpWindowBucket(closingAt, openedAt),
+        statusBucket: this.toFollowUpStatusBucket(status),
+      }
+    }
+
+    return {
+      bucket: this.toFollowUpWindowBucket(referenceAt, openedAt),
+      statusBucket: 'open',
+    }
+  }
+
+  private toFollowUpWindowBucket(reference: Date, openedAt: Date): FollowUpWindowBucket {
+    const elapsedMs = Math.max(0, reference.getTime() - openedAt.getTime())
+
+    return elapsedMs <= FOLLOW_UP_WINDOW_LIMIT_MS ? 'within24h' : 'after24h'
+  }
+
+  private resolveClosingTimestamp(fact: BudgetFactRecord): Date | null {
+    if (fact.closingDate == null) {
+      return null
+    }
+
+    const closingDate = this.toSaoPauloDayStart(fact.closingDate)
+    const closingTime = this.readClosingTimeValue(fact.payloadJson ?? null)
+
+    if (closingTime === null) {
+      return null
+    }
+
+    const timeParts = this.parseTimeParts(closingTime)
+
+    if (timeParts === null) {
+      return null
+    }
+
+    const [hours, minutes, seconds] = timeParts
+    return new Date(
+      Date.UTC(
+        closingDate.getUTCFullYear(),
+        closingDate.getUTCMonth(),
+        closingDate.getUTCDate(),
+        hours + KpiPeriod.saoPauloUtcOffsetHours,
+        minutes,
+        seconds,
+      ),
+    )
+  }
+
+  private readClosingTimeValue(payloadJson: Record<string, unknown> | null): string | null {
+    if (payloadJson === null) {
+      return null
+    }
+
+    const value = payloadJson.closing_time ?? payloadJson.closingTime
+
+    if (typeof value === 'string' && value.trim() !== '') {
+      return value.trim()
+    }
+
+    return null
+  }
+
+  private parseTimeParts(value: string): [number, number, number] | null {
+    const match = value.match(/^(\d{2}):(\d{2})(?::(\d{2}))?$/)
+
+    if (!match) {
+      return null
+    }
+
+    return [Number(match[1]), Number(match[2]), Number(match[3] ?? '0')]
+  }
+
+  private toSaoPauloDayStart(value: Date | string): Date {
+    if (typeof value === 'string') {
+      const [year, month, day] = value.slice(0, 10).split('-').map((part) => Number(part))
+
+      return new Date(Date.UTC(year, month - 1, day, KpiPeriod.saoPauloUtcOffsetHours))
+    }
+
+    return new Date(
+      Date.UTC(
+        value.getUTCFullYear(),
+        value.getUTCMonth(),
+        value.getUTCDate(),
+        KpiPeriod.saoPauloUtcOffsetHours,
+      ),
+    )
+  }
+
+  private endOfSaoPauloDay(value: Date): Date {
+    return new Date(value.getTime() + FOLLOW_UP_WINDOW_LIMIT_MS - 1)
+  }
+
+  private parseReferenceAt(value: string | Date): Date {
+    if (value instanceof Date) {
+      return value
+    }
+
+    const trimmed = value.trim()
+
+    if (trimmed.length === 0) {
+      throw new BadRequestException('Invalid budget follow-up summary query params')
+    }
+
+    const normalized = /[zZ]|[+-]\d{2}:\d{2}$/.test(trimmed)
+      ? trimmed
+      : /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2})?$/.test(trimmed)
+        ? `${(trimmed.length === 16 ? `${trimmed}:00` : trimmed).replace(' ', 'T')}-03:00`
+        : trimmed
+    const parsed = new Date(normalized)
+
+    if (Number.isNaN(parsed.getTime())) {
+      throw new BadRequestException('Invalid budget follow-up summary query params')
+    }
+
+    return parsed
+  }
+
+  private toTimestamp(value: Date | string | undefined): Date | null {
+    if (value === undefined) {
+      return null
+    }
+
+    if (value instanceof Date) {
+      return value
+    }
+
+    const parsed = new Date(value)
+
+    return Number.isNaN(parsed.getTime()) ? null : parsed
+  }
+
+  private toFollowUpWindow(
+    input: Record<FollowUpStatusBucket, BudgetFactRecord[]>,
+    overallCount: number,
+  ): BudgetKpiFollowUpWindow {
+    const windowFacts = [...input.converted, ...input.lost, ...input.open]
+
+    return {
+      total: this.toSummaryCardFromFacts(windowFacts),
+      converted: this.toFollowUpMetric(input.converted, overallCount),
+      lost: this.toFollowUpMetric(input.lost, overallCount),
+      open: this.toFollowUpMetric(input.open, overallCount),
+    }
+  }
+
+  private toFollowUpMetric(facts: BudgetFactRecord[], overallCount: number): BudgetKpiFollowUpMetric {
+    return {
+      count: facts.length,
+      value: this.sumValues(facts),
+      percentage: overallCount === 0 ? '0.00' : ((facts.length / overallCount) * 100).toFixed(2),
+    }
+  }
+
+  private toSummaryCardFromFacts(facts: BudgetFactRecord[]): BudgetKpiSummaryCard {
+    return {
+      count: facts.length,
+      value: this.sumValues(facts),
+    }
   }
 
   private normalizeStatusFilter(value: BudgetStatusFilter): Exclude<NormalizedBudgetStatus, 'UNKNOWN'> {

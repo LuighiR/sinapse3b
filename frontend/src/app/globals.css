@@ -1,23 +1,23 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f1efe8;
+  --background: #eef1f5;
   --foreground: #16161e;
   --color-ink: #16161e;
   --color-navy: #202048;
-  --color-paper: #f1efe8;
-  --color-paper-strong: #e5e0d5;
-  --color-muted: #727382;
-  --color-mist: #c8c9d2;
-  --color-line: rgba(22, 22, 30, 0.12);
-  --color-accent: #6f86ff;
-  --color-accent-soft: rgba(111, 134, 255, 0.18);
-  --color-success: #70c0a0;
-  --shadow-soft: 0 24px 64px rgba(15, 15, 26, 0.14);
-  --shadow-card: 0 20px 44px rgba(15, 15, 26, 0.12);
-  --shadow-panel: 0 30px 80px rgba(10, 10, 18, 0.18);
-  --radius-shell: 32px;
-  --radius-card: 24px;
+  --color-paper: #f7f8fb;
+  --color-paper-strong: #e7eaf0;
+  --color-muted: #667085;
+  --color-mist: #d7dce5;
+  --color-line: rgba(15, 23, 42, 0.12);
+  --color-accent: #5368d9;
+  --color-accent-soft: rgba(83, 104, 217, 0.1);
+  --color-success: #2f9b76;
+  --shadow-soft: 0 12px 28px rgba(15, 23, 42, 0.08);
+  --shadow-card: 0 8px 20px rgba(15, 23, 42, 0.06);
+  --shadow-panel: 0 18px 44px rgba(15, 23, 42, 0.08);
+  --radius-shell: 24px;
+  --radius-card: 18px;
 }
 
 @theme inline {
@@ -40,8 +40,8 @@ body {
   color: var(--foreground);
   font-family: var(--font-body), sans-serif;
   background-image:
-    radial-gradient(circle at top left, rgba(255, 255, 255, 0.72), transparent 34%),
-    linear-gradient(160deg, #d8d5dd 0%, #c3c3ce 42%, #f1efe8 100%);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(238, 241, 245, 0.96)),
+    linear-gradient(90deg, rgba(32, 32, 72, 0.03), rgba(255, 255, 255, 0));
 }
 
 a {

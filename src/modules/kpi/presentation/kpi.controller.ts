@@ -10,6 +10,7 @@ import { parseBudgetChannelDailyQuery } from './query/budget-channel-daily.query
 import { parseBudgetChannelHourlyQuery } from './query/budget-channel-hourly.query'
 import { parseBudgetDailyQuery } from './query/budget-daily.query'
 import { parseBudgetDrilldownQuery } from './query/budget-drilldown.query'
+import { parseBudgetFollowUpSummaryQuery } from './query/budget-follow-up-summary.query'
 import { parseBudgetHourlyQuery } from './query/budget-hourly.query'
 import { parseBudgetSummaryQuery } from './query/budget-summary.query'
 
@@ -50,6 +51,16 @@ export class KpiController {
     const period = parseBudgetDailyQuery(query)
 
     return this.queryService.getDailySeries({
+      clientId: authContext.clientId,
+      ...period,
+    })
+  }
+
+  @Get('follow-up/summary')
+  getFollowUpSummary(@RequestContext() authContext: AuthContext, @Query() query: Record<string, unknown>) {
+    const period = parseBudgetFollowUpSummaryQuery(query)
+
+    return this.queryService.getFollowUpSummary({
       clientId: authContext.clientId,
       ...period,
     })

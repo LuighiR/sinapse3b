@@ -14,21 +14,26 @@
    npm --prefix frontend install
    ```
 
-3. Copy `.env.example` to `.env` and adjust the values for your environment. The sample `DATABASE_URL` targets the PostgreSQL `core` schema with `?schema=core`.
+3. Create the frontend local env file from `frontend/.env.example` and fill the development values used to call the live backend:
 
-4. Validate the Prisma schema:
+   - create `frontend/.env.local`
+   - copy the keys from `frontend/.env.example`
+
+4. Copy `.env.example` to `.env` and adjust the values for your environment. The sample `DATABASE_URL` targets the PostgreSQL `core` schema with `?schema=core`.
+
+5. Validate the Prisma schema:
 
    ```bash
    npx prisma validate
    ```
 
-5. Start the backend in development:
+6. Start the backend in development:
 
    ```bash
    npm run dev
    ```
 
-6. Start the frontend in development:
+7. Start the frontend in development:
 
    ```bash
    npm run frontend:dev
@@ -49,7 +54,9 @@ The first frontend slice is intentionally UI-first:
 
 - branded split login page
 - smooth transition into the dashboard
-- executive budget KPI cockpit powered by typed mock data
+- live executive cockpit for budgets and sales
+- shared global filters for date and seller
+- KPI-specific drilldown modals
 - route contract already shaped for a future redirect to either dashboard or admin
 
 Useful frontend commands:
@@ -71,6 +78,38 @@ Optional values:
 
 - `NODE_ENV`: defaults to `development`.
 - `PORT`: defaults to `3000`.
+- `AUTH_REFRESH_JWT_SECRET`: optional secret used only for refresh tokens. When empty, the backend reuses `AUTH_JWT_SECRET`.
+- `AUTH_ACCESS_TOKEN_TTL_MINUTES`: access token lifetime in minutes. Defaults to `60`.
+- `AUTH_REFRESH_TOKEN_TTL_DAYS`: refresh token lifetime in days. Defaults to `30`.
+- `CORS_ALLOWED_ORIGINS`: comma-separated list of allowed frontend origins. In development and test, the backend falls back to `http://localhost:3001` when this value is empty.
+
+## Backend Auth APIs
+
+The backend now supports JSON-based session bootstrap for external frontends:
+
+- `POST /auth/login` with `{ "email": "...", "password": "..." }`
+- `POST /auth/refresh` with `{ "refreshToken": "..." }`
+
+`/auth/login` returns a bearer token pair plus the authenticated user and active tenants:
+
+- `tokenType`
+- `accessToken`
+- `refreshToken`
+- `expiresInSeconds`
+- `user`
+- `tenants`
+
+`/auth/refresh` returns a new token pair in the same JSON format, without requiring cookies.
+
+## Frontend Environment
+
+The live dashboard now calls the Nest backend from the Next.js server layer using these frontend env vars:
+
+- `SINAPSE_API_BASE_URL`
+- `SINAPSE_DEV_JWT`
+- `SINAPSE_DEV_TENANT_ID`
+
+These values stay in `frontend/.env.local` and are used until real login integration replaces the temporary development bridge.
 
 The app validates the environment at bootstrap and fails fast if any required variable is missing or empty.
 

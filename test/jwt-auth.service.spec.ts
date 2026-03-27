@@ -14,6 +14,17 @@ describe('JwtAuthService', () => {
     ensureTestEnv()
   })
 
+  it('issues an access token and a refresh token for the same subject', async () => {
+    const service = new JwtAuthService()
+
+    const pair = await service.issueTokenPair('u1')
+
+    expect(pair.tokenType).toBe('Bearer')
+    expect(pair.expiresInSeconds).toBeGreaterThan(0)
+    await expect(service.verify(pair.accessToken)).resolves.toEqual({ sub: 'u1' })
+    await expect(service.verifyRefreshToken(pair.refreshToken)).resolves.toEqual({ sub: 'u1' })
+  })
+
   it('accepts a valid token with an expiration time', async () => {
     const service = new JwtAuthService()
 
@@ -32,5 +43,12 @@ describe('JwtAuthService', () => {
       .sign(secret)
 
     await expect(service.verify(token)).rejects.toBeInstanceOf(UnauthorizedException)
+  })
+
+  it('rejects a refresh token in the bearer verifier', async () => {
+    const service = new JwtAuthService()
+    const pair = await service.issueTokenPair('u1')
+
+    await expect(service.verify(pair.refreshToken)).rejects.toBeInstanceOf(UnauthorizedException)
   })
 })

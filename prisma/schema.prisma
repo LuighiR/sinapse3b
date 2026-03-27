@@ -70,7 +70,11 @@ model SinapseClient {
   updatedAt  DateTime @map("updated_at")
   branches   Branch[]
   budgetFacts BudgetFact[]
+  callFacts  CallFact[]
+  contacts   Contact[]
   saleFacts  SaleFact[]
+  tags       Tag[]
+  tickets    Ticket[]
   kpiAvailabilities KpiAvailability[]
   kpiBreakdowns KpiBreakdown[]
   kpiCalculationRuns KpiCalculationRun[]
@@ -110,6 +114,176 @@ model Employee {
 
   @@index([branchId], map: "employees_branch_id_idx")
   @@map("employees")
+  @@schema("core")
+}
+
+model Session {
+  id                       String      @id
+  ticketId                 String      @map("ticket_id")
+  externalTrackingId       Int?        @map("external_tracking_id")
+  type                     SessionType
+  startedAt                DateTime    @map("started_at")
+  endedAt                  DateTime?   @map("ended_at")
+  assignedUserName         String?     @map("assigned_user_name")
+  assignedUserEmail        String?     @map("assigned_user_email")
+  createdAt                DateTime    @default(now()) @map("created_at")
+  updatedAt                DateTime    @default(now()) @map("updated_at")
+  originImportedTrackingId String?     @map("origin_imported_tracking_id")
+  processingVersion        String?     @map("processing_version")
+  source                   String?
+  createdAtExternal        DateTime?   @map("created_at_external")
+  ticket                   Ticket      @relation(fields: [ticketId], references: [id])
+  messages                 Message[]
+
+  @@index([ticketId], map: "sessions_ticket_id_idx")
+  @@map("sessions")
+  @@schema("core")
+}
+
+model Message {
+  id                String             @id
+  ticketId          String             @map("ticket_id")
+  sessionId         String?            @map("session_id")
+  externalMessageId String             @map("external_message_id")
+  key               String?
+  body              String
+  fromMe            Boolean            @map("from_me")
+  mediaUrl          String?            @map("media_url")
+  mediaType         String?            @map("media_type")
+  createdAtExternal DateTime           @map("created_at_external")
+  updatedAtExternal DateTime           @map("updated_at_external")
+  rawJson           Json?              @map("raw_json")
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @default(now()) @map("updated_at")
+  senderType        MessageSenderType  @map("sender_type")
+  session           Session?           @relation(fields: [sessionId], references: [id])
+  ticket            Ticket             @relation(fields: [ticketId], references: [id])
+
+  @@index([ticketId], map: "messages_ticket_id_idx")
+  @@index([sessionId], map: "messages_session_id_idx")
+  @@map("messages")
+  @@schema("core")
+}
+
+model Ticket {
+  id                            String         @id
+  externalUuid                  String         @map("external_uuid")
+  externalTicketId              Int?           @map("external_ticket_id")
+  status                        String?
+  contactName                   String?        @map("contact_name")
+  contactNumber                 String?        @map("contact_number")
+  contactExternalId             Int?           @map("contact_external_id")
+  socialConnectionId            Int?           @map("social_connection_id")
+  companyId                     Int?           @map("company_id")
+  createdAtExternal             DateTime?      @map("created_at_external")
+  updatedAtExternal             DateTime?      @map("updated_at_external")
+  lastImportedMessageCreatedAt  DateTime?      @map("last_imported_message_created_at")
+  createdAt                     DateTime       @default(now()) @map("created_at")
+  updatedAt                     DateTime       @default(now()) @map("updated_at")
+  clientId                      String         @map("client_id")
+  contactId                     BigInt?        @map("contact_id")
+  isGroup                       Boolean        @default(false) @map("is_group")
+  client                        SinapseClient  @relation(fields: [clientId], references: [id])
+  contact                       Contact?       @relation(fields: [contactId], references: [id])
+  messages                      Message[]
+  sessions                      Session[]
+
+  @@index([clientId], map: "tickets_client_id_idx")
+  @@index([contactId], map: "tickets_contact_id_idx")
+  @@map("tickets")
+  @@schema("core")
+}
+
+model Contact {
+  id                 BigInt        @id
+  clientId           String        @map("client_id")
+  companyId          BigInt?       @map("company_id")
+  name               String?
+  number             String?
+  email              String?
+  isGroup            Boolean       @default(false) @map("is_group")
+  socialConnectionId BigInt?       @map("social_connection_id")
+  profilePicUrl      String?       @map("profile_pic_url")
+  createdAtRemote    DateTime?     @map("created_at_remote")
+  updatedAtRemote    DateTime?     @map("updated_at_remote")
+  createdAt          DateTime      @default(now()) @map("created_at")
+  updatedAt          DateTime      @default(now()) @map("updated_at")
+  client             SinapseClient @relation(fields: [clientId], references: [id])
+  contactTags        ContactTag[]
+  tickets            Ticket[]
+
+  @@index([clientId], map: "contacts_client_id_idx")
+  @@map("contacts")
+  @@schema("core")
+}
+
+model Tag {
+  id         BigInt        @id
+  clientId   String        @map("client_id")
+  companyId  BigInt?       @map("company_id")
+  name       String
+  color      String?
+  createdAt  DateTime      @default(now()) @map("created_at")
+  updatedAt  DateTime      @default(now()) @map("updated_at")
+  client     SinapseClient @relation(fields: [clientId], references: [id])
+  contactTags ContactTag[]
+
+  @@index([clientId], map: "tags_client_id_idx")
+  @@map("tags")
+  @@schema("core")
+}
+
+model ContactTag {
+  clientId  String    @map("client_id")
+  contactId BigInt    @map("contact_id")
+  tagId     BigInt    @map("tag_id")
+  createdAt DateTime  @default(now()) @map("created_at")
+  contact   Contact   @relation(fields: [contactId], references: [id])
+  tag       Tag       @relation(fields: [tagId], references: [id])
+
+  @@id([clientId, contactId, tagId])
+  @@index([contactId], map: "contact_tags_contact_id_idx")
+  @@index([tagId], map: "contact_tags_tag_id_idx")
+  @@map("contact_tags")
+  @@schema("core")
+}
+
+model CallFact {
+  id                 BigInt        @id @default(autoincrement())
+  clientId           String        @map("client_id")
+  sourceTable        String        @map("source_table")
+  sourceRecordId     Int           @map("source_record_id")
+  domainUuid         String?       @map("domain_uuid")
+  xmlCdrUuid         String?       @map("xml_cdr_uuid")
+  direction          String?
+  callerNumber       String?       @map("caller_number")
+  destinationNumber  String?       @map("destination_number")
+  extensionUuid      String?       @map("extension_uuid")
+  startedAt          DateTime      @map("started_at")
+  endedAt            DateTime?     @map("ended_at")
+  durationSeconds    Decimal       @map("duration_seconds") @db.Decimal(19, 4)
+  recordPath         String?       @map("record_path")
+  recordName         String?       @map("record_name")
+  hangupCause        String?       @map("hangup_cause")
+  sipHangupDisposition String?     @map("sip_hangup_disposition")
+  isInboundToCompany Boolean       @default(false) @map("is_inbound_to_company")
+  isReceived         Boolean       @default(false) @map("is_received")
+  isLost             Boolean       @default(false) @map("is_lost")
+  agentResolutionType String?      @map("agent_resolution_type")
+  agentResolutionKey String?       @map("agent_resolution_key")
+  agentExtensionNumber String?     @map("agent_extension_number")
+  payloadJson        Json          @default("{}") @map("payload_json")
+  createdAt          DateTime      @default(now()) @map("created_at")
+  updatedAt          DateTime      @default(now()) @map("updated_at")
+  client             SinapseClient @relation(fields: [clientId], references: [id])
+
+  @@unique([clientId, sourceTable, sourceRecordId], map: "call_facts_client_source_record_key")
+  @@index([clientId, startedAt], map: "call_facts_client_started_at_idx")
+  @@index([clientId, isInboundToCompany, startedAt], map: "call_facts_client_inbound_started_idx")
+  @@index([clientId, isReceived, startedAt], map: "call_facts_client_received_started_idx")
+  @@index([clientId, isLost, startedAt], map: "call_facts_client_lost_started_idx")
+  @@index([clientId, agentResolutionKey, startedAt], map: "call_facts_client_agent_started_idx")
+  @@map("call_facts")
   @@schema("core")
 }
 
@@ -329,5 +503,24 @@ enum Role {
   VIEWER
 
   @@map("role")
+  @@schema("core")
+}
+
+enum SessionType {
+  CLOSED
+  OPEN_REAL
+  OPEN_WEAK
+  UNTRACKED
+
+  @@map("session_type")
+  @@schema("core")
+}
+
+enum MessageSenderType {
+  HUMAN
+  SYSTEM
+  AI
+
+  @@map("message_sender_type")
   @@schema("core")
 }

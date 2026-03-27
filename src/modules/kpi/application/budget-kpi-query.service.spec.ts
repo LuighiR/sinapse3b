@@ -51,6 +51,50 @@ describe('BudgetKpiQueryService', () => {
     })
   })
 
+  it('falls back to canonical facts when budget summary snapshots are empty', async () => {
+    const repository: jest.Mocked<BudgetKpiQueryRepository> = {
+      getSummaryRows: jest.fn().mockResolvedValue([]),
+      getDailyRows: jest.fn(),
+      getBudgetFactRows: jest.fn().mockResolvedValue([
+        {
+          id: 1n,
+          budgetDate: utcDate(2026, 2, 5),
+          budgetDatetime: utcDate(2026, 2, 5, 10, 0),
+          sellerId: 7,
+          sellerName: 'Maria',
+          statusNormalized: 'WON',
+          channel: null,
+          valueAmount: '6406599.99',
+        },
+        {
+          id: 2n,
+          budgetDate: utcDate(2026, 2, 5),
+          budgetDatetime: utcDate(2026, 2, 5, 11, 0),
+          sellerId: 7,
+          sellerName: 'Maria',
+          statusNormalized: 'WON',
+          channel: 'Pedido Televendas',
+          valueAmount: '666087.47',
+        },
+      ]),
+      getDrilldownRows: jest.fn(),
+    }
+
+    const service = new BudgetKpiQueryService(repository)
+
+    const result = await service.getSummary({
+      clientId: 'c1',
+      from: '2026-03-01',
+      to: '2026-03-31',
+    })
+
+    expect(repository.getBudgetFactRows).toHaveBeenCalled()
+    expect(result.total).toEqual({ count: 2, value: '7072687.4600' })
+    expect(result.won).toEqual({ count: 2, value: '7072687.4600' })
+    expect(result.open).toEqual({ count: 0, value: '0.0000' })
+    expect(result.lost).toEqual({ count: 0, value: '0.0000' })
+  })
+
   it('returns budget summary cards filtered by sellerId from canonical facts', async () => {
     const repository: jest.Mocked<BudgetKpiQueryRepository> = {
       getSummaryRows: jest.fn(),
@@ -173,6 +217,50 @@ describe('BudgetKpiQueryService', () => {
         { date: '2026-01-03', count: 0, value: '0.0000' },
       ],
     })
+  })
+
+  it('falls back to canonical facts when budget daily snapshots are empty', async () => {
+    const repository: jest.Mocked<BudgetKpiQueryRepository> = {
+      getSummaryRows: jest.fn(),
+      getDailyRows: jest.fn().mockResolvedValue([]),
+      getBudgetFactRows: jest.fn().mockResolvedValue([
+        {
+          id: 1n,
+          budgetDate: utcDate(2026, 2, 5),
+          budgetDatetime: utcDate(2026, 2, 5, 10, 0),
+          sellerId: 7,
+          sellerName: 'Maria',
+          statusNormalized: 'WON',
+          channel: null,
+          valueAmount: '6406599.99',
+        },
+        {
+          id: 2n,
+          budgetDate: utcDate(2026, 2, 5),
+          budgetDatetime: utcDate(2026, 2, 5, 11, 0),
+          sellerId: 7,
+          sellerName: 'Maria',
+          statusNormalized: 'WON',
+          channel: 'Pedido Televendas',
+          valueAmount: '666087.47',
+        },
+      ]),
+      getDrilldownRows: jest.fn(),
+    }
+
+    const service = new BudgetKpiQueryService(repository)
+
+    const result = await service.getDailySeries({
+      clientId: 'c1',
+      from: '2026-03-05',
+      to: '2026-03-06',
+    })
+
+    expect(repository.getBudgetFactRows).toHaveBeenCalled()
+    expect(result.series).toEqual([
+      { date: '2026-03-05', count: 2, value: '7072687.4600' },
+      { date: '2026-03-06', count: 0, value: '0.0000' },
+    ])
   })
 
   it('returns a seller-filtered daily series from canonical facts', async () => {
@@ -490,6 +578,115 @@ describe('BudgetKpiQueryService', () => {
     expect(result.won).toEqual({ count: 1, value: '100.0000' })
     expect(result.open).toEqual({ count: 0, value: '0.0000' })
     expect(result.lost).toEqual({ count: 0, value: '0.0000' })
+  })
+
+  it('returns follow-up summary as of the frontend reference timestamp', async () => {
+    const repository: jest.Mocked<BudgetKpiQueryRepository> = {
+      getSummaryRows: jest.fn(),
+      getDailyRows: jest.fn(),
+      getBudgetFactRows: jest.fn().mockResolvedValue([
+        {
+          id: 1n,
+          budgetDate: new Date('2026-01-05T00:00:00-03:00'),
+          budgetDatetime: new Date('2026-01-05T08:00:00-03:00'),
+          closingDate: utcDate(2026, 0, 5),
+          sellerId: 7,
+          sellerName: 'Maria',
+          statusNormalized: 'WON',
+          channel: 'Balcao',
+          valueAmount: '100.00',
+          payloadJson: { closing_time: '12:00:00' },
+        },
+        {
+          id: 2n,
+          budgetDate: new Date('2026-01-05T00:00:00-03:00'),
+          budgetDatetime: new Date('2026-01-05T09:00:00-03:00'),
+          closingDate: utcDate(2026, 0, 6),
+          sellerId: 7,
+          sellerName: 'Maria',
+          statusNormalized: 'LOST',
+          channel: 'Balcao',
+          valueAmount: '50.00',
+          payloadJson: { closing_time: '08:30:00' },
+        },
+        {
+          id: 3n,
+          budgetDate: new Date('2026-01-05T00:00:00-03:00'),
+          budgetDatetime: new Date('2026-01-05T13:00:00-03:00'),
+          sellerId: 7,
+          sellerName: 'Maria',
+          statusNormalized: 'OPEN',
+          channel: 'Televendas',
+          valueAmount: '80.00',
+          payloadJson: {},
+        },
+        {
+          id: 4n,
+          budgetDate: new Date('2026-01-04T00:00:00-03:00'),
+          budgetDatetime: new Date('2026-01-04T08:00:00-03:00'),
+          closingDate: utcDate(2026, 0, 6),
+          sellerId: 7,
+          sellerName: 'Maria',
+          statusNormalized: 'WON',
+          channel: 'Televendas',
+          valueAmount: '200.00',
+          payloadJson: { closing_time: '18:00:00' },
+        },
+        {
+          id: 5n,
+          budgetDate: new Date('2026-01-04T00:00:00-03:00'),
+          budgetDatetime: new Date('2026-01-04T07:00:00-03:00'),
+          sellerId: 7,
+          sellerName: 'Maria',
+          statusNormalized: 'OPEN',
+          channel: null,
+          valueAmount: '25.00',
+          payloadJson: {},
+        },
+        {
+          id: 6n,
+          budgetDate: new Date('2026-01-06T00:00:00-03:00'),
+          budgetDatetime: new Date('2026-01-06T15:00:00-03:00'),
+          sellerId: 7,
+          sellerName: 'Maria',
+          statusNormalized: 'OPEN',
+          channel: 'Balcao',
+          valueAmount: '999.00',
+          payloadJson: {},
+        },
+      ]),
+      getDrilldownRows: jest.fn(),
+    }
+
+    const service = new BudgetKpiQueryService(repository)
+
+    const result = await service.getFollowUpSummary({
+      clientId: 'c1',
+      from: '2026-01-01',
+      to: '2026-01-06',
+      referenceAt: '2026-01-06T09:00:00-03:00',
+    })
+
+    expect(result).toEqual({
+      period: {
+        from: '2026-01-01',
+        to: '2026-01-06',
+        key: '2026-01-01_2026-01-06',
+      },
+      total: { count: 5, value: '455.0000' },
+      within24h: {
+        total: { count: 3, value: '230.0000' },
+        converted: { count: 1, value: '100.0000', percentage: '20.00' },
+        lost: { count: 1, value: '50.0000', percentage: '20.00' },
+        open: { count: 1, value: '80.0000', percentage: '20.00' },
+      },
+      after24h: {
+        total: { count: 2, value: '225.0000' },
+        converted: { count: 0, value: '0.0000', percentage: '0.00' },
+        lost: { count: 0, value: '0.0000', percentage: '0.00' },
+        open: { count: 2, value: '225.0000', percentage: '40.00' },
+      },
+    })
   })
 
   it('returns a zero-filled hourly series sorted from 00 to 23', async () => {
