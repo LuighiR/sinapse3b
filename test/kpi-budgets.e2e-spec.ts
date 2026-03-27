@@ -89,7 +89,7 @@ describe('Budget KPI endpoints', () => {
     } satisfies BudgetKpiFollowUpSummaryResponse)
     jest.spyOn(queryService, 'getDrilldown').mockResolvedValue({
       period: { from: '2026-01-01', to: '2026-01-31', key: '2026-01-01_2026-01-31' },
-      filters: { sellerId: 7, branchId: 5, branchName: 'Matriz' },
+      filters: { sellerId: 7, branchId: 5, branchName: 'Matriz', status: 'Baixado' },
       rows: [
         {
           id: '99',
@@ -303,13 +303,14 @@ describe('Budget KPI endpoints', () => {
         from: '2026-01-01',
         to: '2026-01-31',
         sellerId: '7',
+        status: 'Baixado',
         branchId: '5',
         branchName: 'Matriz',
       })
       .expect(200)
       .expect({
         period: { from: '2026-01-01', to: '2026-01-31', key: '2026-01-01_2026-01-31' },
-        filters: { sellerId: 7, branchId: 5, branchName: 'Matriz' },
+        filters: { sellerId: 7, branchId: 5, branchName: 'Matriz', status: 'Baixado' },
         rows: [
           {
             id: '99',
@@ -340,6 +341,7 @@ describe('Budget KPI endpoints', () => {
       from: '2026-01-01',
       to: '2026-01-31',
       sellerId: 7,
+      status: 'Baixado',
       branchId: 5,
       branchName: 'Matriz',
     })

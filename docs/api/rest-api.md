@@ -712,10 +712,17 @@ Query Params:
 - `from` required
 - `to` required
 - `sellerId` optional
+- `status` optional: `Cancelado`, `Baixado`, `Pendente`
 - `branchId` optional
 - `branchName` optional
 
 Quando `sellerId` e informado nas rotas de budgets, ele representa `core.employees.erp_id`.
+
+Exemplo:
+
+```text
+GET /kpis/budgets/drilldown?from=2026-01-01&to=2026-01-31&sellerId=35747&status=Baixado
+```
 
 Response `200`:
 
@@ -728,6 +735,7 @@ Response `200`:
   },
   "filters": {
     "sellerId": 7,
+    "status": "Baixado",
     "branchId": 5,
     "branchName": "Matriz"
   },
@@ -1121,14 +1129,26 @@ WhatsApp e mensageria aceitam:
 
 - `from` required
 - `to` required
+- `chatId` optional
 - `tagId` required apenas nas rotas por tag
+- `sellerId` optional apenas em `GET /kpis/whatsapp/tags/hourly/comparison`
 
 As metricas sao lidas diretamente das tabelas canonicas `core.sessions`, `core.messages`, `core.tickets`, `core.contacts`, `core.tags` e `core.contact_tags`.
+
+Quando `chatId` e informado nas rotas analiticas de WhatsApp, ele representa o email do atendente e o filtro e aplicado diretamente por `core.sessions.assigned_user_email`, com comparacao case-insensitive.
+
+Quando `sellerId` e informado em `GET /kpis/whatsapp/tags/hourly/comparison`, ele filtra somente `openBudgetsCount` pelo mesmo identificador de budgets e sales: `core.employees.erp_id` / `core.budget_facts.seller_id`.
 
 ### `GET /kpis/whatsapp/summary`
 
 Descricao:
 retorna o total de conversas e o total de mensagens recebidas no periodo.
+
+Query Params:
+
+- `from`
+- `to`
+- `chatId` optional
 
 Response `200`:
 
@@ -1152,6 +1172,12 @@ Response `200`:
 
 Descricao:
 ranking de atendentes por sessoes, com fallback `Nao atribuido` quando a sessao nao tiver atendente.
+
+Query Params:
+
+- `from`
+- `to`
+- `chatId` optional
 
 Response `200`:
 
@@ -1192,6 +1218,12 @@ Response `200`:
 Descricao:
 serie por hora de `00` a `23` com a quantidade de sessoes criadas.
 
+Query Params:
+
+- `from`
+- `to`
+- `chatId` optional
+
 Response `200`:
 
 ```json
@@ -1214,6 +1246,12 @@ Response `200`:
 
 Descricao:
 serie por dia do range com a quantidade de conversas criadas.
+
+Query Params:
+
+- `from`
+- `to`
+- `chatId` optional
 
 Response `200`:
 
@@ -1246,6 +1284,12 @@ Response `200`:
 Descricao:
 serie por hora de `00` a `23` com a quantidade de mensagens recebidas (`from_me = false` e `sender_type = HUMAN`).
 
+Query Params:
+
+- `from`
+- `to`
+- `chatId` optional
+
 Response `200`:
 
 ```json
@@ -1268,6 +1312,12 @@ Response `200`:
 
 Descricao:
 serie por dia do range com a quantidade de mensagens recebidas (`from_me = false` e `sender_type = HUMAN`).
+
+Query Params:
+
+- `from`
+- `to`
+- `chatId` optional
 
 Response `200`:
 
@@ -1324,6 +1374,7 @@ Query Params:
 - `from`
 - `to`
 - `tagId`
+- `chatId` optional
 
 Response `200`:
 
@@ -1354,6 +1405,8 @@ Query Params:
 - `from`
 - `to`
 - `tagId`
+- `chatId` optional
+- `sellerId` optional
 
 Response `200`:
 
@@ -1450,7 +1503,7 @@ curl -X POST "http://localhost:3000/kpis/calls/refresh?from=2026-01-01&to=2026-0
 ### WhatsApp Summary
 
 ```bash
-curl -X GET "http://localhost:3000/kpis/whatsapp/summary?from=2026-03-01&to=2026-03-31" ^
+curl -X GET "http://localhost:3000/kpis/whatsapp/summary?from=2026-03-01&to=2026-03-31&chatId=maria@empresa.com" ^
   -H "Authorization: Bearer <jwt>" ^
   -H "X-Tenant-Id: tenant-ferracosul-kpi-dev"
 ```
@@ -1458,7 +1511,7 @@ curl -X GET "http://localhost:3000/kpis/whatsapp/summary?from=2026-03-01&to=2026
 ### WhatsApp Sessions Daily
 
 ```bash
-curl -X GET "http://localhost:3000/kpis/whatsapp/sessions/daily?from=2026-03-01&to=2026-03-03" ^
+curl -X GET "http://localhost:3000/kpis/whatsapp/sessions/daily?from=2026-03-01&to=2026-03-03&chatId=maria@empresa.com" ^
   -H "Authorization: Bearer <jwt>" ^
   -H "X-Tenant-Id: tenant-ferracosul-kpi-dev"
 ```
@@ -1466,7 +1519,7 @@ curl -X GET "http://localhost:3000/kpis/whatsapp/sessions/daily?from=2026-03-01&
 ### WhatsApp Tag Comparison
 
 ```bash
-curl -X GET "http://localhost:3000/kpis/whatsapp/tags/hourly/comparison?from=2026-03-01&to=2026-03-31&tagId=21830" ^
+curl -X GET "http://localhost:3000/kpis/whatsapp/tags/hourly/comparison?from=2026-03-01&to=2026-03-31&tagId=21830&chatId=maria@empresa.com&sellerId=35747" ^
   -H "Authorization: Bearer <jwt>" ^
   -H "X-Tenant-Id: tenant-ferracosul-kpi-dev"
 ```

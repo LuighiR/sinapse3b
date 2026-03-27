@@ -67,6 +67,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
   async getSummaryCounts(input: {
     clientId: string
     period: KpiPeriod
+    chatId?: string
   }): Promise<WhatsAppKpiSummaryCountsRow> {
     const [row] = await this.prisma.$queryRaw<SummarySqlRow[]>(Prisma.sql`
       select
@@ -77,16 +78,23 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
           where t.client_id = ${input.clientId}
             and s.started_at >= ${input.period.from}
             and s.started_at < ${this.toExclusivePeriodEnd(input.period)}
+            ${input.chatId === undefined
+              ? Prisma.empty
+              : Prisma.sql`and lower(btrim(s.assigned_user_email)) = ${input.chatId}`}
         ) as total_conversations_count,
         (
           select count(*)::bigint
           from core.messages m
+          left join core.sessions s on s.id = m.session_id
           join core.tickets t on t.id = m.ticket_id
           where t.client_id = ${input.clientId}
             and m.created_at_external >= ${input.period.from}
             and m.created_at_external < ${this.toExclusivePeriodEnd(input.period)}
             and m.from_me = false
             and m.sender_type = 'HUMAN'::core.message_sender_type
+            ${input.chatId === undefined
+              ? Prisma.empty
+              : Prisma.sql`and lower(btrim(s.assigned_user_email)) = ${input.chatId}`}
         ) as received_messages_count
     `)
 
@@ -99,6 +107,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
   async getAgentRankingRows(input: {
     clientId: string
     period: KpiPeriod
+    chatId?: string
   }): Promise<WhatsAppKpiAgentRankingSourceRow[]> {
     const rows = await this.prisma.$queryRaw<RankingSqlRow[]>(Prisma.sql`
       with session_ranking as (
@@ -111,6 +120,9 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
         where t.client_id = ${input.clientId}
           and s.started_at >= ${input.period.from}
           and s.started_at < ${this.toExclusivePeriodEnd(input.period)}
+          ${input.chatId === undefined
+            ? Prisma.empty
+            : Prisma.sql`and lower(btrim(s.assigned_user_email)) = ${input.chatId}`}
         group by 1, 2
       ),
       employee_lookup as (
@@ -161,6 +173,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
   async getSessionsHourlyRows(input: {
     clientId: string
     period: KpiPeriod
+    chatId?: string
   }): Promise<WhatsAppKpiSessionsHourlySourceRow[]> {
     const rows = await this.prisma.$queryRaw<SessionsHourlySqlRow[]>(Prisma.sql`
       select
@@ -171,6 +184,9 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
       where t.client_id = ${input.clientId}
         and s.started_at >= ${input.period.from}
         and s.started_at < ${this.toExclusivePeriodEnd(input.period)}
+        ${input.chatId === undefined
+          ? Prisma.empty
+          : Prisma.sql`and lower(btrim(s.assigned_user_email)) = ${input.chatId}`}
       group by 1
       order by 1 asc
     `)
@@ -184,18 +200,23 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
   async getMessagesHourlyRows(input: {
     clientId: string
     period: KpiPeriod
+    chatId?: string
   }): Promise<WhatsAppKpiMessagesHourlySourceRow[]> {
     const rows = await this.prisma.$queryRaw<MessagesHourlySqlRow[]>(Prisma.sql`
       select
         lpad(extract(hour from m.created_at_external)::int::text, 2, '0') as hour,
         count(*)::bigint as received_messages_count
       from core.messages m
+      left join core.sessions s on s.id = m.session_id
       join core.tickets t on t.id = m.ticket_id
       where t.client_id = ${input.clientId}
         and m.created_at_external >= ${input.period.from}
         and m.created_at_external < ${this.toExclusivePeriodEnd(input.period)}
         and m.from_me = false
         and m.sender_type = 'HUMAN'::core.message_sender_type
+        ${input.chatId === undefined
+          ? Prisma.empty
+          : Prisma.sql`and lower(btrim(s.assigned_user_email)) = ${input.chatId}`}
       group by 1
       order by 1 asc
     `)
@@ -209,6 +230,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
   async getSessionsDailyRows(input: {
     clientId: string
     period: KpiPeriod
+    chatId?: string
   }): Promise<WhatsAppKpiSessionsDailySourceRow[]> {
     const rows = await this.prisma.$queryRaw<SessionsDailySqlRow[]>(Prisma.sql`
       select
@@ -222,6 +244,9 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
       where t.client_id = ${input.clientId}
         and s.started_at >= ${input.period.from}
         and s.started_at < ${this.toExclusivePeriodEnd(input.period)}
+        ${input.chatId === undefined
+          ? Prisma.empty
+          : Prisma.sql`and lower(btrim(s.assigned_user_email)) = ${input.chatId}`}
       group by 1
       order by 1 asc
     `)
@@ -235,6 +260,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
   async getMessagesDailyRows(input: {
     clientId: string
     period: KpiPeriod
+    chatId?: string
   }): Promise<WhatsAppKpiMessagesDailySourceRow[]> {
     const rows = await this.prisma.$queryRaw<MessagesDailySqlRow[]>(Prisma.sql`
       select
@@ -244,12 +270,16 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
         ) as date,
         count(*)::bigint as received_messages_count
       from core.messages m
+      left join core.sessions s on s.id = m.session_id
       join core.tickets t on t.id = m.ticket_id
       where t.client_id = ${input.clientId}
         and m.created_at_external >= ${input.period.from}
         and m.created_at_external < ${this.toExclusivePeriodEnd(input.period)}
         and m.from_me = false
         and m.sender_type = 'HUMAN'::core.message_sender_type
+        ${input.chatId === undefined
+          ? Prisma.empty
+          : Prisma.sql`and lower(btrim(s.assigned_user_email)) = ${input.chatId}`}
       group by 1
       order by 1 asc
     `)
@@ -285,6 +315,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
     clientId: string
     period: KpiPeriod
     tagId: bigint
+    chatId?: string
   }): Promise<WhatsAppKpiTagHourlySourceRow[]> {
     const rows = await this.prisma.$queryRaw<TagHourlySqlRow[]>(Prisma.sql`
       select
@@ -297,6 +328,9 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
         and ct.tag_id = ${input.tagId}
         and s.started_at >= ${input.period.from}
         and s.started_at < ${this.toExclusivePeriodEnd(input.period)}
+        ${input.chatId === undefined
+          ? Prisma.empty
+          : Prisma.sql`and lower(btrim(s.assigned_user_email)) = ${input.chatId}`}
       group by 1
       order by 1 asc
     `)
@@ -311,6 +345,8 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
     clientId: string
     period: KpiPeriod
     tagId: bigint
+    chatId?: string
+    sellerId?: number
   }): Promise<WhatsAppKpiTagComparisonSourceRow[]> {
     const rows = await this.prisma.$queryRaw<TagComparisonSqlRow[]>(Prisma.sql`
       with tag_sessions as (
@@ -324,6 +360,9 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
           and ct.tag_id = ${input.tagId}
           and s.started_at >= ${input.period.from}
           and s.started_at < ${this.toExclusivePeriodEnd(input.period)}
+          ${input.chatId === undefined
+            ? Prisma.empty
+            : Prisma.sql`and lower(btrim(s.assigned_user_email)) = ${input.chatId}`}
         group by 1
       ),
       open_budgets as (
@@ -335,6 +374,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
           and bf.status_normalized = 'OPEN'
           and bf.budget_datetime >= ${input.period.from}
           and bf.budget_datetime < ${this.toExclusivePeriodEnd(input.period)}
+          ${input.sellerId === undefined ? Prisma.empty : Prisma.sql`and bf.seller_id = ${input.sellerId}`}
         group by 1
       )
       select

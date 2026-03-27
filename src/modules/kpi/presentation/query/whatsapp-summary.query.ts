@@ -5,17 +5,26 @@ import { KpiPeriod } from '../../domain/kpi-period'
 export type WhatsAppSummaryQuery = {
   from: string
   to: string
+  chatId?: string
 }
+
+const optionalFilterTextSchema = z
+  .string()
+  .trim()
+  .transform((value) => (value === '' ? undefined : value))
+  .optional()
 
 const whatsappSummaryQuerySchema = z.object({
   from: z.string().trim().min(1),
   to: z.string().trim().min(1),
+  chatId: optionalFilterTextSchema,
 })
 
 export function parseWhatsAppSummaryQuery(query: Record<string, unknown>): WhatsAppSummaryQuery {
   const parsed = whatsappSummaryQuerySchema.safeParse({
     from: query.from,
     to: query.to,
+    chatId: query.chatId,
   })
 
   if (!parsed.success || !isValidPeriod(parsed.data)) {

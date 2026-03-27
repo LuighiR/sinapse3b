@@ -125,6 +125,7 @@ export type BudgetKpiDrilldownInput = BudgetKpiQueryPeriodInput & {
 
 export type BudgetKpiDrilldownFilters = {
   sellerId?: number
+  status?: BudgetStatusFilter
   branchId?: number
   branchName?: string
 }
@@ -454,6 +455,7 @@ export class BudgetKpiQueryService {
     const period = this.toPeriod(input)
     const sellerId = this.normalizeSellerId(input.sellerId)
     const branchId = this.normalizeBranchId(input.branchId)
+    const status = input.status
     const rows = await this.repository.getDrilldownRows({
       clientId: input.clientId,
       period,
@@ -461,11 +463,18 @@ export class BudgetKpiQueryService {
       branchId,
       branchName: input.branchName,
     })
+    const filteredRows = rows.filter((row) => {
+      if (status !== undefined && this.normalizeStatusFilter(status) !== this.normalizeStatus(row.statusNormalized)) {
+        return false
+      }
+
+      return true
+    })
 
     return {
       period: this.toPeriodView(period),
       filters: this.buildFilters({ ...input, sellerId, branchId }),
-      rows: rows.map((row) => this.toDrilldownRow(row)),
+      rows: filteredRows.map((row) => this.toDrilldownRow(row)),
     }
   }
 
@@ -660,11 +669,20 @@ export class BudgetKpiQueryService {
     })
   }
 
-  private buildFilters(input: { sellerId?: number; branchId?: number; branchName?: string }): BudgetKpiDrilldownFilters {
+  private buildFilters(input: {
+    sellerId?: number
+    status?: BudgetStatusFilter
+    branchId?: number
+    branchName?: string
+  }): BudgetKpiDrilldownFilters {
     const filters: BudgetKpiDrilldownFilters = {}
 
     if (input.sellerId !== undefined) {
       filters.sellerId = input.sellerId
+    }
+
+    if (input.status !== undefined) {
+      filters.status = input.status
     }
 
     if (input.branchId !== undefined) {

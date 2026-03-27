@@ -481,6 +481,87 @@ describe('BudgetKpiQueryService', () => {
     ])
   })
 
+  it('filters drilldown rows by status using the budget status query contract', async () => {
+    const repository: jest.Mocked<BudgetKpiQueryRepository> = {
+      getSummaryRows: jest.fn(),
+      getDailyRows: jest.fn(),
+      getBudgetFactRows: jest.fn(),
+      getDrilldownRows: jest.fn().mockResolvedValue([
+        {
+          id: 99n,
+          clientId: 'c1',
+          sourceTable: 'ferraco_budgets',
+          sourceRecordId: 123,
+          branchName: 'Matriz',
+          branchId: 5,
+          sellerId: 7,
+          sellerName: 'Maria',
+          budgetDate: utcDate(2026, 0, 2),
+          budgetDatetime: utcDate(2026, 0, 2, 9, 30),
+          closingDate: null,
+          statusNormalized: 'WON',
+          channel: null,
+          customerName: 'ACME LTDA',
+          cpfCnpj: null,
+          valueAmount: '200.5000',
+          sequential: null,
+          davId: 777n,
+          sequentialLinkedSale: null,
+          payloadJson: { family: 'budgets' },
+        },
+        {
+          id: 100n,
+          clientId: 'c1',
+          sourceTable: 'ferraco_budgets',
+          sourceRecordId: 124,
+          branchName: 'Matriz',
+          branchId: 5,
+          sellerId: 7,
+          sellerName: 'Maria',
+          budgetDate: utcDate(2026, 0, 2),
+          budgetDatetime: utcDate(2026, 0, 2, 10, 0),
+          closingDate: null,
+          statusNormalized: 'OPEN',
+          channel: null,
+          customerName: 'ACME LTDA',
+          cpfCnpj: null,
+          valueAmount: '80.0000',
+          sequential: null,
+          davId: 778n,
+          sequentialLinkedSale: null,
+          payloadJson: { family: 'budgets' },
+        },
+      ]),
+    }
+
+    const service = new BudgetKpiQueryService(repository)
+
+    const result = await service.getDrilldown({
+      clientId: 'c1',
+      from: '2026-01-01',
+      to: '2026-01-31',
+      sellerId: '7',
+      status: 'Baixado',
+    })
+
+    expect(repository.getDrilldownRows).toHaveBeenCalledWith({
+      clientId: 'c1',
+      period: expect.objectContaining({
+        from: saoPauloPeriodDate(2026, 0, 1),
+        to: saoPauloPeriodDate(2026, 0, 31),
+      }),
+      sellerId: 7,
+      branchId: undefined,
+      branchName: undefined,
+    })
+    expect(result.filters).toEqual({
+      sellerId: 7,
+      status: 'Baixado',
+    })
+    expect(result.rows).toHaveLength(1)
+    expect(result.rows[0]?.statusNormalized).toBe('WON')
+  })
+
   it('rejects invalid sellerId values before querying drilldown rows', async () => {
     const repository: jest.Mocked<BudgetKpiQueryRepository> = {
       getSummaryRows: jest.fn(),

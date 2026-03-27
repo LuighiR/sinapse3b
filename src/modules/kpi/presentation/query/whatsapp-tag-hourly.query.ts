@@ -6,12 +6,20 @@ export type WhatsAppTagHourlyQuery = {
   from: string
   to: string
   tagId: string
+  chatId?: string
 }
+
+const optionalFilterTextSchema = z
+  .string()
+  .trim()
+  .transform((value) => (value === '' ? undefined : value))
+  .optional()
 
 const whatsappTagHourlyQuerySchema = z.object({
   from: z.string().trim().min(1),
   to: z.string().trim().min(1),
   tagId: z.string().trim().min(1),
+  chatId: optionalFilterTextSchema,
 })
 
 export function parseWhatsAppTagHourlyQuery(query: Record<string, unknown>): WhatsAppTagHourlyQuery {
@@ -19,6 +27,7 @@ export function parseWhatsAppTagHourlyQuery(query: Record<string, unknown>): Wha
     from: query.from,
     to: query.to,
     tagId: query.tagId,
+    chatId: query.chatId,
   })
 
   if (!parsed.success || !isValidPeriod(parsed.data) || !isValidTagId(parsed.data.tagId)) {

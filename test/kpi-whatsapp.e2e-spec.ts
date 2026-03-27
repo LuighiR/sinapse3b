@@ -125,7 +125,7 @@ describe('WhatsApp KPI endpoints', () => {
       .get('/kpis/whatsapp/summary')
       .set('Authorization', `Bearer ${token}`)
       .set('X-Tenant-Id', 'tenant-2')
-      .query({ from: '2026-03-01', to: '2026-03-31' })
+      .query({ from: '2026-03-01', to: '2026-03-31', chatId: 'maria@empresa.com' })
       .expect(200)
       .expect({
         period: { from: '2026-03-01', to: '2026-03-31', key: '2026-03-01_2026-03-31' },
@@ -137,6 +137,7 @@ describe('WhatsApp KPI endpoints', () => {
       clientId: 'client-2',
       from: '2026-03-01',
       to: '2026-03-31',
+      chatId: 'maria@empresa.com',
     })
   })
 
@@ -262,7 +263,7 @@ describe('WhatsApp KPI endpoints', () => {
       .get('/kpis/whatsapp/tags/hourly')
       .set('Authorization', `Bearer ${token}`)
       .set('X-Tenant-Id', 'tenant-1')
-      .query({ from: '2026-03-01', to: '2026-03-31', tagId: '21830' })
+      .query({ from: '2026-03-01', to: '2026-03-31', tagId: '21830', chatId: 'maria@empresa.com' })
       .expect(200)
       .expect({
         period: { from: '2026-03-01', to: '2026-03-31', key: '2026-03-01_2026-03-31' },
@@ -275,6 +276,7 @@ describe('WhatsApp KPI endpoints', () => {
       from: '2026-03-01',
       to: '2026-03-31',
       tagId: '21830',
+      chatId: 'maria@empresa.com',
     })
   })
 
@@ -283,7 +285,13 @@ describe('WhatsApp KPI endpoints', () => {
       .get('/kpis/whatsapp/tags/hourly/comparison')
       .set('Authorization', `Bearer ${token}`)
       .set('X-Tenant-Id', 'tenant-1')
-      .query({ from: '2026-03-01', to: '2026-03-31', tagId: '21830' })
+      .query({
+        from: '2026-03-01',
+        to: '2026-03-31',
+        tagId: '21830',
+        chatId: 'maria@empresa.com',
+        sellerId: '35747',
+      })
       .expect(200)
       .expect({
         period: { from: '2026-03-01', to: '2026-03-31', key: '2026-03-01_2026-03-31' },
@@ -296,6 +304,8 @@ describe('WhatsApp KPI endpoints', () => {
       from: '2026-03-01',
       to: '2026-03-31',
       tagId: '21830',
+      chatId: 'maria@empresa.com',
+      sellerId: 35747,
     })
   })
 

@@ -26,10 +26,12 @@ describe('WhatsAppKpiQueryService', () => {
       clientId: 'client-1',
       from: '2026-03-01',
       to: '2026-03-31',
+      chatId: ' maria@empresa.com ',
     })
 
     expect(repository.getSummaryCounts).toHaveBeenCalledWith({
       clientId: 'client-1',
+      chatId: 'maria@empresa.com',
       period: expect.objectContaining({
         from: saoPauloPeriodDate(2026, 2, 1),
         to: saoPauloPeriodDate(2026, 2, 31),
@@ -302,10 +304,12 @@ describe('WhatsAppKpiQueryService', () => {
       from: '2026-03-05',
       to: '2026-03-05',
       tagId: '21830',
+      chatId: ' maria@empresa.com ',
     })
 
     expect(repository.getTagHourlyRows).toHaveBeenCalledWith({
       clientId: 'client-1',
+      chatId: 'maria@empresa.com',
       period: expect.objectContaining({
         from: saoPauloPeriodDate(2026, 2, 5),
         to: saoPauloPeriodDate(2026, 2, 5),
@@ -337,8 +341,20 @@ describe('WhatsAppKpiQueryService', () => {
       from: '2026-03-05',
       to: '2026-03-05',
       tagId: '21830',
+      chatId: ' maria@empresa.com ',
+      sellerId: '35747',
     })
 
+    expect(repository.getTagHourlyComparisonRows).toHaveBeenCalledWith({
+      clientId: 'client-1',
+      chatId: 'maria@empresa.com',
+      sellerId: 35747,
+      period: expect.objectContaining({
+        from: saoPauloPeriodDate(2026, 2, 5),
+        to: saoPauloPeriodDate(2026, 2, 5),
+      }),
+      tagId: 21830n,
+    })
     expect(result.rows).toHaveLength(24)
     expect(result.rows[14]).toEqual({
       hour: '14',

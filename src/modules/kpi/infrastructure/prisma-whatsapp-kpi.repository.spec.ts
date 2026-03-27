@@ -25,6 +25,33 @@ describe('PrismaWhatsAppKpiRepository', () => {
     })
   })
 
+  it('adds the direct chatId filter to summary queries when provided', async () => {
+    const prisma = {
+      $queryRaw: jest.fn().mockResolvedValue([
+        {
+          total_conversations_count: 12n,
+          received_messages_count: 34n,
+        },
+      ]),
+    }
+
+    const repository = new PrismaWhatsAppKpiRepository(prisma as any)
+
+    await repository.getSummaryCounts({
+      clientId: 'client-1',
+      period: KpiPeriod.between({ from: '2026-03-01', to: '2026-03-31' }),
+      chatId: 'maria@empresa.com',
+    } as any)
+
+    const sql = prisma.$queryRaw.mock.calls[0]?.[0]
+    const sqlText = sql?.strings?.join(' ')
+
+    expect(sql.values).toContain('maria@empresa.com')
+    expect(sqlText).toContain('assigned_user_email')
+    expect(sqlText).toContain('join core.sessions s on s.id = m.session_id')
+    expect(sqlText).toContain('join core.tickets t on t.id = m.ticket_id')
+  })
+
   it('reads ranking counts grouped by assigned user identity', async () => {
     const prisma = {
       $queryRaw: jest.fn().mockResolvedValue([
@@ -169,5 +196,34 @@ describe('PrismaWhatsAppKpiRepository', () => {
         openBudgetsCount: 20n,
       },
     ])
+  })
+
+  it('adds chatId and sellerId filters to the tag comparison query when provided', async () => {
+    const prisma = {
+      $queryRaw: jest.fn().mockResolvedValue([
+        {
+          hour: '14',
+          tag_sessions_count: 30n,
+          open_budgets_count: 20n,
+        },
+      ]),
+    }
+
+    const repository = new PrismaWhatsAppKpiRepository(prisma as any)
+
+    await repository.getTagHourlyComparisonRows({
+      clientId: 'client-1',
+      period: KpiPeriod.between({ from: '2026-03-05', to: '2026-03-05' }),
+      tagId: 21830n,
+      chatId: 'maria@empresa.com',
+      sellerId: 35747,
+    } as any)
+
+    const sql = prisma.$queryRaw.mock.calls[0]?.[0]
+    const sqlText = sql?.strings?.join(' ')
+
+    expect(sql.values).toEqual(expect.arrayContaining(['client-1', 21830n, 'maria@empresa.com', 35747]))
+    expect(sqlText).toContain('assigned_user_email')
+    expect(sqlText).toContain('bf.seller_id')
   })
 })
