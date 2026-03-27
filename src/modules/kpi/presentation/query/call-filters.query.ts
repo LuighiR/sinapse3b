@@ -1,7 +1,6 @@
 import { BadRequestException } from '@nestjs/common'
 import { z } from 'zod'
 import { KpiPeriod } from '../../domain/kpi-period'
-import { numericIdSchema } from './budget-filters.query'
 
 export type CallBasePeriodQuery = {
   from: string
@@ -9,8 +8,15 @@ export type CallBasePeriodQuery = {
 }
 
 export type CallFactFiltersQuery = CallBasePeriodQuery & {
-  sellerId?: number
+  extensionUuid?: string
+  extensionNumber?: string
 }
+
+const optionalFilterTextSchema = z
+  .string()
+  .trim()
+  .transform((value) => (value === '' ? undefined : value))
+  .optional()
 
 const callBasePeriodSchema = z.object({
   from: z.string().trim().min(1),
@@ -18,17 +24,23 @@ const callBasePeriodSchema = z.object({
 })
 
 const callFactFiltersSchema = callBasePeriodSchema.extend({
-  sellerId: numericIdSchema.optional(),
+  extensionUuid: optionalFilterTextSchema,
+  extensionNumber: optionalFilterTextSchema,
 })
 
 export function parseCallFactFiltersQuery(
   query: Record<string, unknown>,
   errorMessage: string,
 ): CallFactFiltersQuery {
+  if (query.sellerId !== undefined) {
+    throw new BadRequestException(errorMessage)
+  }
+
   const parsed = callFactFiltersSchema.safeParse({
     from: query.from,
     to: query.to,
-    sellerId: query.sellerId,
+    extensionUuid: query.extensionUuid,
+    extensionNumber: query.extensionNumber,
   })
 
   if (!parsed.success || !isValidPeriod(parsed.data)) {

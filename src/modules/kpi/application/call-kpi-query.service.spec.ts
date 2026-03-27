@@ -28,7 +28,6 @@ describe('CallKpiQueryService', () => {
       getHourlyComparisonRows: jest.fn(),
       getCallFactRows: jest.fn(),
       getTelemarketingBudgetRows: jest.fn(),
-      getEmployeeBySellerId: jest.fn(),
     }
 
     const service = new CallKpiQueryService(repository)
@@ -95,7 +94,6 @@ describe('CallKpiQueryService', () => {
       getTelemarketingBudgetRows: jest.fn().mockResolvedValue([
         { budgetDatetime: utcDate(2026, 0, 5, 8, 30), statusNormalized: 'OPEN' },
       ]),
-      getEmployeeBySellerId: jest.fn(),
     }
 
     const service = new CallKpiQueryService(repository)
@@ -178,7 +176,6 @@ describe('CallKpiQueryService', () => {
       getHourlyComparisonRows: jest.fn(),
       getCallFactRows: jest.fn(),
       getTelemarketingBudgetRows: jest.fn(),
-      getEmployeeBySellerId: jest.fn(),
     }
 
     const service = new CallKpiQueryService(repository)
@@ -257,7 +254,6 @@ describe('CallKpiQueryService', () => {
       ]),
       getCallFactRows: jest.fn(),
       getTelemarketingBudgetRows: jest.fn(),
-      getEmployeeBySellerId: jest.fn(),
     }
 
     const service = new CallKpiQueryService(repository)
@@ -289,7 +285,7 @@ describe('CallKpiQueryService', () => {
     })
   })
 
-  it('filters summary facts by sellerId using the employee extension uuid and number', async () => {
+  it('filters summary facts by extensionUuid with extensionNumber fallback for lost calls', async () => {
     const repository: jest.Mocked<CallKpiQueryRepository> = {
       getSummaryRows: jest.fn(),
       getHourlyRows: jest.fn(),
@@ -318,7 +314,7 @@ describe('CallKpiQueryService', () => {
           agentResolutionKey: '104',
           agentExtensionNumber: '104',
           extensionUuid: null,
-          employeeName: null,
+          employeeName: 'Maria',
         },
         {
           id: 3n,
@@ -336,12 +332,6 @@ describe('CallKpiQueryService', () => {
       getTelemarketingBudgetRows: jest.fn().mockResolvedValue([
         { budgetDatetime: utcDate(2026, 0, 5, 8, 30), statusNormalized: 'OPEN' },
       ]),
-      getEmployeeBySellerId: jest.fn().mockResolvedValue({
-        id: 7,
-        name: 'Maria',
-        extensionNumber: '104',
-        extensionUuid: 'ext-1',
-      }),
     }
 
     const service = new CallKpiQueryService(repository)
@@ -350,14 +340,11 @@ describe('CallKpiQueryService', () => {
       clientId: 'c1',
       from: '2026-01-05',
       to: '2026-01-05',
-      sellerId: 7,
+      extensionUuid: 'ext-1',
+      extensionNumber: '104',
     })
 
     expect(repository.getSummaryRows).not.toHaveBeenCalled()
-    expect(repository.getEmployeeBySellerId).toHaveBeenCalledWith({
-      clientId: 'c1',
-      sellerId: 7,
-    })
     expect(result).toEqual({
       period: {
         from: '2026-01-05',
@@ -372,7 +359,7 @@ describe('CallKpiQueryService', () => {
     })
   })
 
-  it('filters ranking facts by sellerId before grouping', async () => {
+  it('filters ranking facts by extensionUuid with extensionNumber fallback before grouping', async () => {
     const repository: jest.Mocked<CallKpiQueryRepository> = {
       getSummaryRows: jest.fn(),
       getHourlyRows: jest.fn(),
@@ -401,7 +388,7 @@ describe('CallKpiQueryService', () => {
           agentResolutionKey: '104',
           agentExtensionNumber: '104',
           extensionUuid: null,
-          employeeName: null,
+          employeeName: 'Maria',
         },
         {
           id: 3n,
@@ -417,12 +404,6 @@ describe('CallKpiQueryService', () => {
         },
       ]),
       getTelemarketingBudgetRows: jest.fn(),
-      getEmployeeBySellerId: jest.fn().mockResolvedValue({
-        id: 7,
-        name: 'Maria',
-        extensionNumber: '104',
-        extensionUuid: 'ext-1',
-      }),
     }
 
     const service = new CallKpiQueryService(repository)
@@ -431,7 +412,8 @@ describe('CallKpiQueryService', () => {
       clientId: 'c1',
       from: '2026-01-05',
       to: '2026-01-05',
-      sellerId: '7',
+      extensionUuid: 'ext-1',
+      extensionNumber: '104',
     })
 
     expect(repository.getAgentRankingRows).not.toHaveBeenCalled()

@@ -11,14 +11,8 @@ export type CallKpiQueryPeriodInput = {
   clientId: string
   from: string | Date
   to: string | Date
-  sellerId?: string | number | bigint
-}
-
-export type CallSellerFilterEmployee = {
-  id: number
-  name: string
-  extensionNumber: string | null
-  extensionUuid: string | null
+  extensionUuid?: string
+  extensionNumber?: string
 }
 
 export type CallKpiPeriodView = {
@@ -86,7 +80,6 @@ export type CallKpiQueryRepository = {
     clientId: string
     period: KpiPeriod
   }): Promise<TelemarketingBudgetFactRecord[]>
-  getEmployeeBySellerId(input: { clientId: string; sellerId: number }): Promise<CallSellerFilterEmployee | null>
 }
 
 type RankingBucket = {
@@ -533,27 +526,21 @@ export class CallKpiQueryService {
       period,
     })
 
-    const sellerId = this.normalizeSellerId(input.sellerId)
+    const extensionUuid = this.normalizeOptionalText(input.extensionUuid)
+    const extensionNumber = this.normalizeOptionalText(input.extensionNumber)
 
-    if (sellerId === undefined) {
+    if (extensionUuid === null && extensionNumber === null) {
       return callFacts
     }
 
-    const employee = await this.repository.getEmployeeBySellerId({
-      clientId: input.clientId,
-      sellerId,
-    })
-
-    if (employee === null) {
-      return []
-    }
-
     return callFacts
-      .filter((fact) => this.matchesSellerFilter(fact, employee))
+      .filter((fact) => this.matchesCallFilter(fact, { extensionUuid, extensionNumber }))
       .map((fact) => ({
         ...fact,
-        employeeName: fact.employeeName ?? employee.name,
-        extensionUuid: fact.extensionUuid ?? this.normalizeOptionalText(employee.extensionUuid),
+        extensionUuid:
+          extensionUuid !== null && fact.extensionUuid === null && this.matchesExtensionNumber(fact, extensionNumber)
+            ? extensionUuid
+            : fact.extensionUuid,
       }))
   }
 
@@ -581,17 +568,21 @@ export class CallKpiQueryService {
   }
 
   private hasFactFilters(input: CallKpiQueryPeriodInput): boolean {
-    return input.sellerId !== undefined
+    return input.extensionUuid !== undefined || input.extensionNumber !== undefined
   }
 
-  private matchesSellerFilter(fact: CallFactRecord, employee: CallSellerFilterEmployee): boolean {
-    const extensionUuid = this.normalizeOptionalText(employee.extensionUuid)
-    const extensionNumber = this.normalizeOptionalText(employee.extensionNumber)
+  private matchesCallFilter(
+    fact: CallFactRecord,
+    filter: { extensionUuid: string | null; extensionNumber: string | null },
+  ): boolean {
+    return this.matchesExtensionUuid(fact, filter.extensionUuid) || this.matchesExtensionNumber(fact, filter.extensionNumber)
+  }
 
-    if (extensionUuid !== null && fact.extensionUuid === extensionUuid) {
-      return true
-    }
+  private matchesExtensionUuid(fact: CallFactRecord, extensionUuid: string | null): boolean {
+    return extensionUuid !== null && fact.extensionUuid === extensionUuid
+  }
 
+  private matchesExtensionNumber(fact: CallFactRecord, extensionNumber: string | null): boolean {
     if (extensionNumber === null) {
       return false
     }
@@ -628,59 +619,7 @@ export class CallKpiQueryService {
     return Number.isFinite(parsed) ? parsed : 0
   }
 
-  private normalizeSellerId(value: CallKpiQueryPeriodInput['sellerId']): number | undefined {
-    return this.normalizeOptionalSafeInteger(value, 'sellerId')
-  }
-
-  private normalizeOptionalSafeInteger(
-    value: string | number | bigint | undefined,
-    fieldName: 'sellerId',
-  ): number | undefined {
-    if (value === undefined) {
-      return undefined
-    }
-
-    if (typeof value === 'number') {
-      if (Number.isInteger(value) && Number.isSafeInteger(value)) {
-        return value
-      }
-
-      throw new Error(`Invalid ${fieldName}: ${value}`)
-    }
-
-    if (typeof value === 'bigint') {
-      const max = BigInt(Number.MAX_SAFE_INTEGER)
-      const min = BigInt(Number.MIN_SAFE_INTEGER)
-
-      if (value >= min && value <= max) {
-        return Number(value)
-      }
-
-      throw new Error(`Invalid ${fieldName}: ${value.toString()}`)
-    }
-
-    const trimmed = value.trim()
-
-    if (trimmed.length === 0) {
-      throw new Error(`Invalid ${fieldName}: empty value`)
-    }
-
-    try {
-      const parsed = BigInt(trimmed)
-      const max = BigInt(Number.MAX_SAFE_INTEGER)
-      const min = BigInt(Number.MIN_SAFE_INTEGER)
-
-      if (parsed >= min && parsed <= max) {
-        return Number(parsed)
-      }
-    } catch {
-      // Fall through to the error below.
-    }
-
-    throw new Error(`Invalid ${fieldName}: ${value}`)
-  }
-
-  private normalizeOptionalText(value: string | null): string | null {
+  private normalizeOptionalText(value: string | null | undefined): string | null {
     if (value == null) {
       return null
     }

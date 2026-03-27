@@ -16,7 +16,7 @@ import {
   CallKpiSnapshotRow,
   TelemarketingBudgetFactRecord,
 } from '../application/call-kpi-refresh.service'
-import { CallKpiQueryRepository, CallSellerFilterEmployee } from '../application/call-kpi-query.service'
+import { CallKpiQueryRepository } from '../application/call-kpi-query.service'
 
 type EmployeeLookupRow = {
   name: string
@@ -175,40 +175,6 @@ export class PrismaCallKpiRepository
         statusNormalized: true,
       },
     })
-  }
-
-  async getEmployeeBySellerId(input: {
-    clientId: string
-    sellerId: number
-  }): Promise<CallSellerFilterEmployee | null> {
-    const prisma = this.prisma as any
-    const employee = await prisma.employee.findFirst({
-      where: {
-        id: input.sellerId,
-        branch: {
-          is: {
-            clientId: input.clientId,
-          },
-        },
-      },
-      select: {
-        id: true,
-        name: true,
-        extensionNumber: true,
-        extensionUuid: true,
-      },
-    })
-
-    if (employee === null) {
-      return null
-    }
-
-    return {
-      id: employee.id,
-      name: employee.name,
-      extensionNumber: this.normalizeOptionalText(employee.extensionNumber),
-      extensionUuid: this.normalizeOptionalText(employee.extensionUuid),
-    }
   }
 
   async createCalculationRun(input: CallKpiCalculationRunInput): Promise<{ id: bigint }> {

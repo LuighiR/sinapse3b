@@ -136,19 +136,20 @@ describe('Call KPI endpoints', () => {
     })
   })
 
-  it('passes sellerId through the call summary endpoint', async () => {
+  it('passes extensionUuid and extensionNumber through the call summary endpoint', async () => {
     await request(app.getHttpServer())
       .get('/kpis/calls/summary')
       .set('Authorization', `Bearer ${token}`)
       .set('X-Tenant-Id', 'tenant-1')
-      .query({ from: '2026-01-01', to: '2026-01-31', sellerId: '7' })
+      .query({ from: '2026-01-01', to: '2026-01-31', extensionUuid: 'ext-1', extensionNumber: '104' })
       .expect(200)
 
     expect(queryService.getSummary).toHaveBeenCalledWith({
       clientId: 'client-1',
       from: '2026-01-01',
       to: '2026-01-31',
-      sellerId: 7,
+      extensionUuid: 'ext-1',
+      extensionNumber: '104',
     })
   })
 

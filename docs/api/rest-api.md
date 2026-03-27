@@ -365,11 +365,17 @@ Response `200`:
 [
   {
     "id": 35747,
+    "erpId": 35747,
     "name": "Fabiano Pereira da Silva",
-    "branchId": 1
+    "branchId": 1,
+    "extensionNumber": "101",
+    "extensionUuid": "3c5f7f91-6b21-4b4d-a7a0-2d5f8e7a1234",
+    "chatId": "fabiano@empresa.com"
   }
 ]
 ```
+
+`erpId` e o identificador usado como `sellerId` nas rotas de `budgets` e `sales`.
 
 ## Budgets KPI
 
@@ -382,6 +388,8 @@ Budgets aceitam:
 - `sellerId` optional
 - `status` optional: `Cancelado`, `Baixado`, `Pendente`
 - `orderType` optional
+
+Quando `sellerId` e informado nas rotas de budgets, ele representa `core.employees.erp_id`.
 
 `orderType` vem de `raw.ferraco_budgets.order_type`.
 
@@ -504,6 +512,8 @@ Query Params:
 - `referenceAt` required: data e hora de referencia enviada pelo frontend
 - `sellerId` optional
 - `orderType` optional
+
+Quando `sellerId` e informado nas rotas de budgets, ele representa `core.employees.erp_id`.
 
 Regra:
 
@@ -705,6 +715,8 @@ Query Params:
 - `branchId` optional
 - `branchName` optional
 
+Quando `sellerId` e informado nas rotas de budgets, ele representa `core.employees.erp_id`.
+
 Response `200`:
 
 ```json
@@ -758,6 +770,8 @@ Sales aceitam:
 - `sellerId` optional
 - `status` optional: `Ativa`, `Cancelada`
 - `orderType` optional
+
+Quando `sellerId` e informado nas rotas de sales, ele representa `core.employees.erp_id`.
 
 Em vendas, `orderType` vem do budget vinculado por:
 
@@ -938,10 +952,12 @@ Calls aceitam:
 
 - `from` required
 - `to` required
-- `sellerId` optional
+- `extensionUuid` optional
+- `extensionNumber` optional
 
 As ligacoes sao calculadas a partir de `raw.ferraco_calls`, considerando somente chamadas `inbound` para ramais numericos curtos.
-Quando `sellerId` e informado nas rotas de calls, ele representa `core.employees.id` e o filtro e resolvido via `employees.extension_number` / `employees.extension_uuid`.
+Quando `extensionUuid` e informado, a API filtra diretamente por `call_facts.extension_uuid`.
+Quando `extensionNumber` e informado, a API tambem inclui chamadas perdidas sem `extension_uuid`, desde que o ramal resolvido em `agent_extension_number` / `agent_resolution_key` bata com o valor enviado.
 
 ### `POST /kpis/calls/refresh`
 
@@ -1418,7 +1434,7 @@ curl -X POST "http://localhost:3000/kpis/sales/refresh?from=2026-03-01&to=2026-0
 ### Calls Summary
 
 ```bash
-curl -X GET "http://localhost:3000/kpis/calls/summary?from=2026-01-01&to=2026-01-31" ^
+curl -X GET "http://localhost:3000/kpis/calls/summary?from=2026-01-01&to=2026-01-31&extensionUuid=ext-101&extensionNumber=101" ^
   -H "Authorization: Bearer <jwt>" ^
   -H "X-Tenant-Id: tenant-ferracosul-kpi-dev"
 ```

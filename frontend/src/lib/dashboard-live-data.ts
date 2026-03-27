@@ -63,6 +63,7 @@ type SalesTicketAverageResponse = {
 
 type EmployeeSummary = {
   id: number;
+  erpId: number;
   name: string;
   branchId: number;
   extensionNumber: string;
@@ -391,7 +392,7 @@ function collapseChannelRows(
 function toEmployeeOption(employee: EmployeeSummary): EmployeeOption {
   return {
     label: employee.name,
-    value: String(employee.id),
+    value: String(employee.erpId),
   };
 }
 
@@ -400,7 +401,7 @@ function buildSellerLabel(filters: DashboardFilters, employees: EmployeeSummary[
     return "Todos os vendedores";
   }
 
-  return employees.find((employee) => employee.id === filters.sellerId)?.name ?? `Seller ${filters.sellerId}`;
+  return employees.find((employee) => employee.erpId === filters.sellerId)?.name ?? `Seller ${filters.sellerId}`;
 }
 
 function buildPeriodLabel(filters: DashboardFilters) {

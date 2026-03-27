@@ -7,6 +7,7 @@ type EmployeeFixture = {
   name: string
   extensionNumber?: string
   extensionUuid?: string
+  erpId?: bigint
   chatId?: string
   branchId: number
 }
@@ -31,6 +32,7 @@ type PrismaEmployeeReader = {
         name: string
         extensionNumber: string
         extensionUuid: string
+        erpId: bigint
         chatId: string
         branchId: number
       }>>
@@ -44,6 +46,7 @@ export type EmployeeFilters = {
 
 export type EmployeeSummary = {
   id: number
+  erpId: number
   name: string
   branchId: number
   extensionNumber: string
@@ -116,6 +119,7 @@ export class EmployeesService {
       .sort((left, right) => left.id - right.id)
       .map((employee) => ({
         id: employee.id,
+        erpId: serializeErpId(employee.erpId ?? BigInt(employee.id)),
         name: employee.name,
         branchId: employee.branchId,
         extensionNumber: employee.extensionNumber ?? '',
@@ -130,7 +134,7 @@ export class EmployeesService {
     }
 
     const prisma = this.prisma as unknown as PrismaEmployeeReader
-    return prisma.employee.findMany({
+    const employees = await prisma.employee.findMany({
       where: {
         branch: { clientId },
         ...(filters.branchId === undefined ? {} : { branchId: filters.branchId }),
@@ -141,10 +145,26 @@ export class EmployeesService {
         name: true,
         extensionNumber: true,
         extensionUuid: true,
+        erpId: true,
         chatId: true,
         branchId: true,
       },
       orderBy: { id: 'asc' },
     })
+
+    return employees.map((employee) => ({
+      ...employee,
+      erpId: serializeErpId(employee.erpId),
+    }))
   }
+}
+
+function serializeErpId(value: bigint): number {
+  const serialized = Number(value)
+
+  if (!Number.isSafeInteger(serialized)) {
+    throw new RangeError('Employee erpId exceeds JavaScript safe integer range')
+  }
+
+  return serialized
 }

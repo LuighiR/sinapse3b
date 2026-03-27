@@ -7,7 +7,7 @@ describe("buildLiveDashboardViewModel", () => {
       mode: "month",
       month: 1,
       year: 2026,
-      sellerId: undefined,
+      sellerId: 500,
     };
 
     const viewModel = buildLiveDashboardViewModel({
@@ -15,6 +15,7 @@ describe("buildLiveDashboardViewModel", () => {
       employees: [
         {
           id: 7,
+          erpId: 500,
           name: "Maria",
           branchId: 1,
           extensionNumber: "",
@@ -86,6 +87,7 @@ describe("buildLiveDashboardViewModel", () => {
     expect(viewModel.sections.sales.cards.length).toBeGreaterThanOrEqual(3);
     expect(viewModel.sections.budgets.cards[0]?.label).toMatch(/orcamento/i);
     expect(viewModel.sections.sales.cards[0]?.label).toMatch(/vendas/i);
-    expect(viewModel.sellerOptions).toEqual([{ label: "Maria", value: "7" }]);
+    expect(viewModel.sellerOptions).toEqual([{ label: "Maria", value: "500" }]);
+    expect(viewModel.sections.budgets.cards[0]?.modal.sellerLabel).toBe("Maria");
   });
 });

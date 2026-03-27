@@ -141,6 +141,7 @@ describe('companies', () => {
         .expect([
           {
             id: 20,
+            erpId: 500,
             name: 'Maria Silva',
             branchId: 10,
             extensionNumber: '101',
