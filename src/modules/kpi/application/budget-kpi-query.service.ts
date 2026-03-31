@@ -6,6 +6,13 @@ import {
   BudgetKpiBreakdownRow,
   BudgetKpiSnapshotRow,
 } from './budget-kpi-refresh.service'
+import {
+  classifyBudgetFollowUpRecord,
+  followUpStatus,
+  followUpWindow,
+  type FollowUpStatus,
+  type FollowUpWindow,
+} from './budget-follow-up-classifier'
 
 export type BudgetStatusFilter = 'Cancelado' | 'Baixado' | 'Pendente'
 
@@ -21,6 +28,8 @@ export type BudgetKpiQueryPeriodInput = {
 export type BudgetKpiFollowUpSummaryInput = Omit<BudgetKpiQueryPeriodInput, 'status'> & {
   referenceAt: string | Date
 }
+
+export type BudgetKpiFollowUpDailyInput = BudgetKpiFollowUpSummaryInput
 
 export type BudgetKpiPeriodView = {
   from: string
@@ -59,6 +68,19 @@ export type BudgetKpiFollowUpSummaryResponse = {
   total: BudgetKpiSummaryCard
   within24h: BudgetKpiFollowUpWindow
   after24h: BudgetKpiFollowUpWindow
+}
+
+export type BudgetKpiFollowUpDailyRow = {
+  date: string
+  window: FollowUpWindow
+  status: FollowUpStatus
+  count: number
+  value: string
+}
+
+export type BudgetKpiFollowUpDailyResponse = {
+  period: BudgetKpiPeriodView
+  rows: BudgetKpiFollowUpDailyRow[]
 }
 
 export type BudgetKpiDailySeriesItem = {
@@ -142,6 +164,8 @@ export type BudgetKpiDrilldownFactRow = {
   budgetDate: Date | string
   budgetDatetime: Date | string
   closingDate: Date | string | null
+  cancellationDate: Date | string | null
+  cancelationTime: string | null
   statusNormalized: string
   channel: string | null
   customerName: string
@@ -160,6 +184,8 @@ export type BudgetKpiDrilldownRow = {
   budgetDate: string
   budgetDatetime: string
   closingDate: string | null
+  cancellationDate: string | null
+  cancelationTime: string | null
   branchId: number | null
   branchName: string
   sellerId: number
@@ -181,6 +207,32 @@ export type BudgetKpiDrilldownResponse = {
   rows: BudgetKpiDrilldownRow[]
 }
 
+export type BudgetKpiFollowUpDrilldownInput = BudgetKpiFollowUpSummaryInput & {
+  date?: string
+  followUpWindow?: FollowUpWindow
+  followUpStatus?: FollowUpStatus
+}
+
+export type BudgetKpiFollowUpDrilldownFilters = {
+  referenceAt: string
+  date?: string
+  followUpWindow?: FollowUpWindow
+  followUpStatus?: FollowUpStatus
+  sellerId?: number
+  orderType?: string
+}
+
+export type BudgetKpiFollowUpDrilldownRow = BudgetKpiDrilldownRow & {
+  followUpWindow: FollowUpWindow
+  followUpStatus: FollowUpStatus
+}
+
+export type BudgetKpiFollowUpDrilldownResponse = {
+  period: BudgetKpiPeriodView
+  filters: BudgetKpiFollowUpDrilldownFilters
+  rows: BudgetKpiFollowUpDrilldownRow[]
+}
+
 export type BudgetKpiQueryRepository = {
   getSummaryRows(input: { clientId: string; period: KpiPeriod }): Promise<BudgetKpiSnapshotRow[]>
   getDailyRows(input: { clientId: string; period: KpiPeriod }): Promise<BudgetKpiBreakdownRow[]>
@@ -200,11 +252,8 @@ export type BudgetKpiQueryRepository = {
 
 type SummaryBucket = 'total' | 'open' | 'won' | 'lost'
 type NormalizedBudgetStatus = 'OPEN' | 'WON' | 'LOST' | 'UNKNOWN'
-type FollowUpStatusBucket = 'converted' | 'lost' | 'open'
-type FollowUpWindowBucket = 'within24h' | 'after24h'
 
 const MISSING_ORDER_TYPE_LABEL = 'Nao identificado'
-const FOLLOW_UP_WINDOW_LIMIT_MS = 24 * 60 * 60 * 1000
 
 @Injectable()
 export class BudgetKpiQueryService {
@@ -335,23 +384,22 @@ export class BudgetKpiQueryService {
   async getFollowUpSummary(input: BudgetKpiFollowUpSummaryInput): Promise<BudgetKpiFollowUpSummaryResponse> {
     const period = this.toPeriod(input)
     const referenceAt = this.parseReferenceAt(input.referenceAt)
-    const sellerId = this.normalizeSellerId(input.sellerId)
-    const facts = await this.repository.getBudgetFactRows({
-      clientId: input.clientId,
-      period,
-      sellerId,
-    })
-    const filteredFacts = facts.filter((fact) => {
-      if (input.orderType !== undefined && !this.matchesOrderTypeFilter(fact.channel ?? null, input.orderType)) {
-        return false
-      }
-
-      return true
-    })
+    const facts = await this.getFollowUpFacts(input, period)
 
     return {
       period: this.toPeriodView(period),
-      ...this.buildFollowUpSummaryFromFacts(filteredFacts, referenceAt),
+      ...this.buildFollowUpSummaryFromFacts(facts, referenceAt),
+    }
+  }
+
+  async getFollowUpDaily(input: BudgetKpiFollowUpDailyInput): Promise<BudgetKpiFollowUpDailyResponse> {
+    const period = this.toPeriod(input)
+    const referenceAt = this.parseReferenceAt(input.referenceAt)
+    const facts = await this.getFollowUpFacts(input, period)
+
+    return {
+      period: this.toPeriodView(period),
+      rows: this.buildFollowUpDailyFromFacts(period, facts, referenceAt),
     }
   }
 
@@ -478,6 +526,66 @@ export class BudgetKpiQueryService {
     }
   }
 
+  async getFollowUpDrilldown(input: BudgetKpiFollowUpDrilldownInput): Promise<BudgetKpiFollowUpDrilldownResponse> {
+    const period = this.toPeriod(input)
+    const referenceAt = this.parseReferenceAt(input.referenceAt)
+    const sellerId = this.normalizeSellerId(input.sellerId)
+    const rows = await this.repository.getDrilldownRows({
+      clientId: input.clientId,
+      period,
+      sellerId,
+    })
+    const filteredRows = rows
+      .map((row) => ({
+        row,
+        classification: classifyBudgetFollowUpRecord(
+          {
+            statusNormalized: row.statusNormalized,
+            budgetDatetime: row.budgetDatetime,
+            closingDate: row.closingDate,
+            cancellationDate: row.cancellationDate,
+            cancelationTime: row.cancelationTime,
+            payloadJson: row.payloadJson,
+          },
+          referenceAt,
+        ),
+      }))
+      .filter(({ row, classification }) => {
+        if (input.orderType !== undefined && !this.matchesOrderTypeFilter(row.channel ?? null, input.orderType)) {
+          return false
+        }
+
+        if (classification === null) {
+          return false
+        }
+
+        if (input.date !== undefined && this.toDateKey(row.budgetDate) !== input.date) {
+          return false
+        }
+
+        if (input.followUpWindow !== undefined && classification.window !== input.followUpWindow) {
+          return false
+        }
+
+        if (input.followUpStatus !== undefined && classification.status !== input.followUpStatus) {
+          return false
+        }
+
+        return true
+      })
+      .sort((left, right) => this.compareFollowUpDrilldownRows(left.row, right.row))
+
+    return {
+      period: this.toPeriodView(period),
+      filters: this.buildFollowUpDrilldownFilters({ ...input, sellerId }),
+      rows: filteredRows.map(({ row, classification }) => ({
+        ...this.toDrilldownRow(row),
+        followUpWindow: classification!.window,
+        followUpStatus: classification!.status,
+      })),
+    }
+  }
+
   private async getFilteredFacts(input: BudgetKpiQueryPeriodInput, period: KpiPeriod): Promise<BudgetFactRecord[]> {
     const sellerId = this.normalizeSellerId(input.sellerId)
     const facts = await this.repository.getBudgetFactRows({
@@ -548,39 +656,37 @@ export class BudgetKpiQueryService {
     facts: BudgetFactRecord[],
     referenceAt: Date,
   ): Omit<BudgetKpiFollowUpSummaryResponse, 'period'> {
-    const grouped = {
-      within24h: {
-        converted: [] as BudgetFactRecord[],
-        lost: [] as BudgetFactRecord[],
-        open: [] as BudgetFactRecord[],
+    const grouped: Record<FollowUpWindow, Record<FollowUpStatus, BudgetFactRecord[]>> = {
+      [followUpWindow.within24h]: {
+        [followUpStatus.converted]: [] as BudgetFactRecord[],
+        [followUpStatus.lost]: [] as BudgetFactRecord[],
+        [followUpStatus.open]: [] as BudgetFactRecord[],
       },
-      after24h: {
-        converted: [] as BudgetFactRecord[],
-        lost: [] as BudgetFactRecord[],
-        open: [] as BudgetFactRecord[],
+      [followUpWindow.after24h]: {
+        [followUpStatus.converted]: [] as BudgetFactRecord[],
+        [followUpStatus.lost]: [] as BudgetFactRecord[],
+        [followUpStatus.open]: [] as BudgetFactRecord[],
       },
     }
 
     for (const fact of facts) {
-      const status = this.normalizeStatus(fact.statusNormalized)
+      const classification = classifyBudgetFollowUpRecord(
+        {
+          statusNormalized: fact.statusNormalized,
+          budgetDatetime: fact.budgetDatetime,
+          closingDate: fact.closingDate,
+          cancellationDate: fact.cancellationDate,
+          cancelationTime: fact.cancelationTime,
+          payloadJson: fact.payloadJson,
+        },
+        referenceAt,
+      )
 
-      if (status === 'UNKNOWN') {
+      if (classification === null) {
         continue
       }
 
-      const openedAt = this.toTimestamp(fact.budgetDatetime)
-
-      if (openedAt === null) {
-        continue
-      }
-
-      if (openedAt.getTime() > referenceAt.getTime()) {
-        continue
-      }
-
-      const { bucket, statusBucket } = this.resolveFollowUpClassification(fact, status, openedAt, referenceAt)
-
-      grouped[bucket][statusBucket].push(fact)
+      grouped[classification.window][classification.status].push(fact)
     }
 
     const within24hFacts = [
@@ -594,9 +700,105 @@ export class BudgetKpiQueryService {
 
     return {
       total: this.toSummaryCardFromFacts(allFacts),
-      within24h: this.toFollowUpWindow(grouped.within24h, overallCount),
-      after24h: this.toFollowUpWindow(grouped.after24h, overallCount),
+      within24h: this.toFollowUpWindow(grouped[followUpWindow.within24h], overallCount),
+      after24h: this.toFollowUpWindow(grouped[followUpWindow.after24h], overallCount),
     }
+  }
+
+  private buildFollowUpDailyFromFacts(
+    period: KpiPeriod,
+    facts: BudgetFactRecord[],
+    referenceAt: Date,
+  ): BudgetKpiFollowUpDailyRow[] {
+    const order: Array<[FollowUpWindow, FollowUpStatus]> = [
+      [followUpWindow.within24h, followUpStatus.converted],
+      [followUpWindow.within24h, followUpStatus.lost],
+      [followUpWindow.within24h, followUpStatus.open],
+      [followUpWindow.after24h, followUpStatus.converted],
+      [followUpWindow.after24h, followUpStatus.lost],
+      [followUpWindow.after24h, followUpStatus.open],
+    ]
+    const grouped = new Map<string, BudgetKpiFollowUpDailyRow>()
+
+    for (const day of period.eachDay()) {
+      const date = this.toDateKey(day)
+
+      for (const [window, status] of order) {
+        const key = `${date}|${window}|${status}`
+        grouped.set(key, {
+          date,
+          window,
+          status,
+          count: 0,
+          value: '0.0000',
+        })
+      }
+    }
+
+    for (const fact of facts) {
+      const classification = classifyBudgetFollowUpRecord(
+        {
+          statusNormalized: fact.statusNormalized,
+          budgetDatetime: fact.budgetDatetime,
+          closingDate: fact.closingDate,
+          cancellationDate: fact.cancellationDate,
+          cancelationTime: fact.cancelationTime,
+          payloadJson: fact.payloadJson,
+        },
+        referenceAt,
+      )
+
+      if (classification === null) {
+        continue
+      }
+
+      const date = this.toDateKey(fact.budgetDate)
+      const key = `${date}|${classification.window}|${classification.status}`
+      const current = grouped.get(key) ?? {
+        date,
+        window: classification.window,
+        status: classification.status,
+        count: 0,
+        value: '0.0000',
+      }
+
+      current.count += 1
+      current.value = this.addValue(current.value, fact.valueAmount)
+      grouped.set(key, current)
+    }
+
+    return [...grouped.values()].sort((left, right) => {
+      if (left.date !== right.date) {
+        return left.date.localeCompare(right.date)
+      }
+
+      const windowOrder = this.compareFollowUpWindow(left.window, right.window)
+      if (windowOrder !== 0) {
+        return windowOrder
+      }
+
+      return this.compareFollowUpStatus(left.status, right.status)
+    })
+  }
+
+  private async getFollowUpFacts(
+    input: BudgetKpiFollowUpSummaryInput,
+    period: KpiPeriod,
+  ): Promise<BudgetFactRecord[]> {
+    const sellerId = this.normalizeSellerId(input.sellerId)
+    const facts = await this.repository.getBudgetFactRows({
+      clientId: input.clientId,
+      period,
+      sellerId,
+    })
+
+    return facts.filter((fact) => {
+      if (input.orderType !== undefined && !this.matchesOrderTypeFilter(fact.channel ?? null, input.orderType)) {
+        return false
+      }
+
+      return true
+    })
   }
 
   private buildDailySeriesFromFacts(period: KpiPeriod, facts: BudgetFactRecord[]): BudgetKpiDailySeriesItem[] {
@@ -696,6 +898,34 @@ export class BudgetKpiQueryService {
     return filters
   }
 
+  private buildFollowUpDrilldownFilters(input: BudgetKpiFollowUpDrilldownInput & { sellerId?: number }): BudgetKpiFollowUpDrilldownFilters {
+    const filters: BudgetKpiFollowUpDrilldownFilters = {
+      referenceAt: this.toReferenceAtFilterValue(input.referenceAt),
+    }
+
+    if (input.date !== undefined) {
+      filters.date = input.date
+    }
+
+    if (input.followUpWindow !== undefined) {
+      filters.followUpWindow = input.followUpWindow
+    }
+
+    if (input.followUpStatus !== undefined) {
+      filters.followUpStatus = input.followUpStatus
+    }
+
+    if (input.sellerId !== undefined) {
+      filters.sellerId = input.sellerId
+    }
+
+    if (input.orderType !== undefined) {
+      filters.orderType = input.orderType
+    }
+
+    return filters
+  }
+
   private toDrilldownRow(row: BudgetKpiDrilldownFactRow): BudgetKpiDrilldownRow {
     return {
       id: String(row.id),
@@ -704,6 +934,8 @@ export class BudgetKpiQueryService {
       budgetDate: this.toDateKey(row.budgetDate),
       budgetDatetime: this.toTimestampText(row.budgetDatetime),
       closingDate: row.closingDate ? this.toDateKey(row.closingDate) : null,
+      cancellationDate: row.cancellationDate ? this.toDateKey(row.cancellationDate) : null,
+      cancelationTime: row.cancelationTime ?? null,
       branchId: row.branchId,
       branchName: row.branchName,
       sellerId: this.toCount(row.sellerId),
@@ -718,6 +950,25 @@ export class BudgetKpiQueryService {
       sequentialLinkedSale: row.sequentialLinkedSale === null ? null : String(row.sequentialLinkedSale),
       payloadJson: row.payloadJson,
     }
+  }
+
+  private compareFollowUpDrilldownRows(
+    left: BudgetKpiDrilldownFactRow,
+    right: BudgetKpiDrilldownFactRow,
+  ): number {
+    const budgetDatetimeDiff = this.toComparableTimestamp(right.budgetDatetime) - this.toComparableTimestamp(left.budgetDatetime)
+
+    if (budgetDatetimeDiff !== 0) {
+      return budgetDatetimeDiff
+    }
+
+    const budgetDateDiff = this.toComparableTimestamp(right.budgetDate) - this.toComparableTimestamp(left.budgetDate)
+
+    if (budgetDateDiff !== 0) {
+      return budgetDateDiff
+    }
+
+    return this.compareRecordIds(right.id, left.id)
   }
 
   private toPeriod(input: BudgetKpiQueryPeriodInput): KpiPeriod {
@@ -769,119 +1020,32 @@ export class BudgetKpiQueryService {
     return 'UNKNOWN'
   }
 
-  private toFollowUpStatusBucket(status: Exclude<NormalizedBudgetStatus, 'UNKNOWN'>): FollowUpStatusBucket {
-    if (status === 'WON') {
-      return 'converted'
-    }
-
-    if (status === 'LOST') {
-      return 'lost'
-    }
-
-    return 'open'
+  private compareFollowUpWindow(left: FollowUpWindow, right: FollowUpWindow): number {
+    return this.followUpWindowOrder(left) - this.followUpWindowOrder(right)
   }
 
-  private resolveFollowUpClassification(
-    fact: BudgetFactRecord,
-    status: Exclude<NormalizedBudgetStatus, 'UNKNOWN'>,
-    openedAt: Date,
-    referenceAt: Date,
-  ): { bucket: FollowUpWindowBucket; statusBucket: FollowUpStatusBucket } {
-    const closingAt = this.resolveClosingTimestamp(fact)
-
-    if ((status === 'WON' || status === 'LOST') && closingAt !== null && closingAt.getTime() <= referenceAt.getTime()) {
-      return {
-        bucket: this.toFollowUpWindowBucket(closingAt, openedAt),
-        statusBucket: this.toFollowUpStatusBucket(status),
-      }
+  private followUpWindowOrder(value: FollowUpWindow): number {
+    if (value === followUpWindow.within24h) {
+      return 0
     }
 
-    return {
-      bucket: this.toFollowUpWindowBucket(referenceAt, openedAt),
-      statusBucket: 'open',
-    }
+    return 1
   }
 
-  private toFollowUpWindowBucket(reference: Date, openedAt: Date): FollowUpWindowBucket {
-    const elapsedMs = Math.max(0, reference.getTime() - openedAt.getTime())
-
-    return elapsedMs <= FOLLOW_UP_WINDOW_LIMIT_MS ? 'within24h' : 'after24h'
+  private compareFollowUpStatus(left: FollowUpStatus, right: FollowUpStatus): number {
+    return this.followUpStatusOrder(left) - this.followUpStatusOrder(right)
   }
 
-  private resolveClosingTimestamp(fact: BudgetFactRecord): Date | null {
-    if (fact.closingDate == null) {
-      return null
+  private followUpStatusOrder(value: FollowUpStatus): number {
+    if (value === followUpStatus.converted) {
+      return 0
     }
 
-    const closingDate = this.toSaoPauloDayStart(fact.closingDate)
-    const closingTime = this.readClosingTimeValue(fact.payloadJson ?? null)
-
-    if (closingTime === null) {
-      return null
+    if (value === followUpStatus.lost) {
+      return 1
     }
 
-    const timeParts = this.parseTimeParts(closingTime)
-
-    if (timeParts === null) {
-      return null
-    }
-
-    const [hours, minutes, seconds] = timeParts
-    return new Date(
-      Date.UTC(
-        closingDate.getUTCFullYear(),
-        closingDate.getUTCMonth(),
-        closingDate.getUTCDate(),
-        hours + KpiPeriod.saoPauloUtcOffsetHours,
-        minutes,
-        seconds,
-      ),
-    )
-  }
-
-  private readClosingTimeValue(payloadJson: Record<string, unknown> | null): string | null {
-    if (payloadJson === null) {
-      return null
-    }
-
-    const value = payloadJson.closing_time ?? payloadJson.closingTime
-
-    if (typeof value === 'string' && value.trim() !== '') {
-      return value.trim()
-    }
-
-    return null
-  }
-
-  private parseTimeParts(value: string): [number, number, number] | null {
-    const match = value.match(/^(\d{2}):(\d{2})(?::(\d{2}))?$/)
-
-    if (!match) {
-      return null
-    }
-
-    return [Number(match[1]), Number(match[2]), Number(match[3] ?? '0')]
-  }
-
-  private toSaoPauloDayStart(value: Date | string): Date {
-    if (typeof value === 'string') {
-      const [year, month, day] = value.slice(0, 10).split('-').map((part) => Number(part))
-
-      return new Date(Date.UTC(year, month - 1, day, KpiPeriod.saoPauloUtcOffsetHours))
-    }
-
-    return new Date(
-      Date.UTC(
-        value.getUTCFullYear(),
-        value.getUTCMonth(),
-        value.getUTCDate(),
-        KpiPeriod.saoPauloUtcOffsetHours,
-      ),
-    )
-  }
-
-  private endOfSaoPauloDay(value: Date): Date {
-    return new Date(value.getTime() + FOLLOW_UP_WINDOW_LIMIT_MS - 1)
+    return 2
   }
 
   private parseReferenceAt(value: string | Date): Date {
@@ -924,7 +1088,7 @@ export class BudgetKpiQueryService {
   }
 
   private toFollowUpWindow(
-    input: Record<FollowUpStatusBucket, BudgetFactRecord[]>,
+    input: Record<FollowUpStatus, BudgetFactRecord[]>,
     overallCount: number,
   ): BudgetKpiFollowUpWindow {
     const windowFacts = [...input.converted, ...input.lost, ...input.open]
@@ -1013,6 +1177,41 @@ export class BudgetKpiQueryService {
     return value.toISOString()
   }
 
+  private toComparableTimestamp(value: Date | string): number {
+    if (value instanceof Date) {
+      return value.getTime()
+    }
+
+    return new Date(value).getTime()
+  }
+
+  private compareRecordIds(left: string | number | bigint, right: string | number | bigint): number {
+    const leftBigInt = this.toComparableBigInt(left)
+    const rightBigInt = this.toComparableBigInt(right)
+
+    if (leftBigInt !== null && rightBigInt !== null) {
+      if (leftBigInt > rightBigInt) {
+        return 1
+      }
+
+      if (leftBigInt < rightBigInt) {
+        return -1
+      }
+
+      return 0
+    }
+
+    return String(left).localeCompare(String(right))
+  }
+
+  private toComparableBigInt(value: string | number | bigint): bigint | null {
+    try {
+      return BigInt(value)
+    } catch {
+      return null
+    }
+  }
+
   private toCount(value: string | number | bigint): number {
     const parsed = Number(value)
 
@@ -1037,6 +1236,10 @@ export class BudgetKpiQueryService {
 
   private normalizeBranchId(value: BudgetKpiDrilldownInput['branchId']): number | undefined {
     return this.normalizeOptionalSafeInteger(value, 'branchId')
+  }
+
+  private toReferenceAtFilterValue(value: string | Date): string {
+    return value instanceof Date ? value.toISOString() : value
   }
 
   private normalizeOptionalSafeInteger(

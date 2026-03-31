@@ -36,7 +36,11 @@ import {
   SaleKpiAvailabilityService,
   SaleKpiAvailabilityUpdate,
 } from './application/sale-kpi-availability.service'
-import { SaleKpiQueryRepository, SaleKpiQueryService } from './application/sale-kpi-query.service'
+import {
+  SaleKpiDrilldownFactRow,
+  SaleKpiQueryRepository,
+  SaleKpiQueryService,
+} from './application/sale-kpi-query.service'
 import {
   SaleFactRecord,
   SaleKpiBreakdownRow as SaleKpiBreakdownMaterializationRow,
@@ -157,10 +161,16 @@ class PrismaBudgetKpiRepository
       select: {
         id: true,
         budgetDate: true,
+        budgetDatetime: true,
+        closingDate: true,
+        cancellationDate: true,
+        cancelationTime: true,
         sellerId: true,
         sellerName: true,
         statusNormalized: true,
+        channel: true,
         valueAmount: true,
+        payloadJson: true,
       },
     })
   }
@@ -461,6 +471,8 @@ class PrismaBudgetKpiRepository
         budgetDate: true,
         budgetDatetime: true,
         closingDate: true,
+        cancellationDate: true,
+        cancelationTime: true,
         sellerId: true,
         sellerName: true,
         statusNormalized: true,
@@ -506,6 +518,8 @@ class PrismaBudgetKpiRepository
         budgetDate: true,
         budgetDatetime: true,
         closingDate: true,
+        cancellationDate: true,
+        cancelationTime: true,
         statusNormalized: true,
         channel: true,
         customerName: true,
@@ -531,6 +545,8 @@ class PrismaBudgetKpiRepository
         budgetDate: Date | string
         budgetDatetime: Date | string
         closingDate: Date | string | null
+        cancellationDate: Date | string | null
+        cancelationTime: string | null
         statusNormalized: string
         channel: string | null
         customerName: string
@@ -552,6 +568,8 @@ class PrismaBudgetKpiRepository
         budgetDate: this.toDateKey(row.budgetDate),
         budgetDatetime: this.toTimestampText(row.budgetDatetime),
         closingDate: row.closingDate === null ? null : this.toDateKey(row.closingDate),
+        cancellationDate: row.cancellationDate === null ? null : this.toDateKey(row.cancellationDate),
+        cancelationTime: row.cancelationTime,
         statusNormalized: row.statusNormalized,
         channel: row.channel,
         customerName: row.customerName,
@@ -667,6 +685,7 @@ class PrismaSaleKpiRepository
         sellerName: true,
         statusNormalized: true,
         channel: true,
+        hasLinkedBudget: true,
         valueAmount: true,
       },
     })
@@ -936,9 +955,122 @@ class PrismaSaleKpiRepository
         sellerName: true,
         statusNormalized: true,
         channel: true,
+        hasLinkedBudget: true,
         valueAmount: true,
       },
     })
+  }
+
+  async getDrilldownRows(input: {
+    clientId: string
+    period: KpiPeriod
+    sellerId?: number
+  }): Promise<SaleKpiDrilldownFactRow[]> {
+    const prisma = this.prisma as any
+    const from = KpiPeriod.toDatabaseDate(input.period.from)
+    const to = KpiPeriod.toDatabaseDate(input.period.to)
+
+    const rows = await prisma.saleFact.findMany({
+      where: {
+        clientId: input.clientId,
+        saleDate: {
+          gte: from,
+          lte: to,
+        },
+        ...(input.sellerId !== undefined ? { sellerId: input.sellerId } : {}),
+      },
+      orderBy: [{ saleDate: 'desc' }, { saleDatetime: 'desc' }, { id: 'desc' }],
+      select: {
+        id: true,
+        clientId: true,
+        sourceTable: true,
+        sourceRecordId: true,
+        branchName: true,
+        branchId: true,
+        sellerId: true,
+        sellerName: true,
+        saleDate: true,
+        saleDatetime: true,
+        statusNormalized: true,
+        channel: true,
+        hasLinkedBudget: true,
+        linkedBudgetSourceRecordId: true,
+        customerName: true,
+        cpfCnpj: true,
+        valueAmount: true,
+        sequential: true,
+        invoiceSerie: true,
+        invoiceNumeric: true,
+        listDavsId: true,
+        payloadJson: true,
+      },
+    })
+
+    return rows.map(
+      (row: {
+        id: bigint
+        clientId: string
+        sourceTable: string
+        sourceRecordId: number
+        branchName: string
+        branchId: number | null
+        sellerId: number
+        sellerName: string
+        saleDate: Date | string
+        saleDatetime: Date | string
+        statusNormalized: string
+        channel: string | null
+        hasLinkedBudget: boolean
+        linkedBudgetSourceRecordId: number | null
+        customerName: string
+        cpfCnpj: string | null
+        valueAmount: { toString(): string }
+        sequential: bigint | number | null
+        invoiceSerie: bigint | number | null
+        invoiceNumeric: bigint | number | null
+        listDavsId: string | null
+        payloadJson: unknown
+      }) => ({
+        id: row.id,
+        clientId: row.clientId,
+        sourceTable: row.sourceTable,
+        sourceRecordId: row.sourceRecordId,
+        branchName: row.branchName,
+        branchId: row.branchId,
+        sellerId: row.sellerId,
+        sellerName: row.sellerName,
+        saleDate: this.toDateKey(row.saleDate),
+        saleDatetime: this.toTimestampText(row.saleDatetime),
+        statusNormalized: row.statusNormalized,
+        channel: row.channel,
+        hasLinkedBudget: row.hasLinkedBudget,
+        linkedBudgetSourceRecordId: row.linkedBudgetSourceRecordId,
+        customerName: row.customerName,
+        cpfCnpj: row.cpfCnpj,
+        valueAmount: row.valueAmount.toString(),
+        sequential: row.sequential,
+        invoiceSerie: row.invoiceSerie,
+        invoiceNumeric: row.invoiceNumeric,
+        listDavsId: row.listDavsId,
+        payloadJson: (row.payloadJson ?? null) as Record<string, unknown> | null,
+      }),
+    )
+  }
+
+  private toDateKey(value: Date | string): string {
+    if (typeof value === 'string') {
+      return value.slice(0, 10)
+    }
+
+    return value.toISOString().slice(0, 10)
+  }
+
+  private toTimestampText(value: Date | string): string {
+    if (typeof value === 'string') {
+      return value
+    }
+
+    return value.toISOString()
   }
 }
 

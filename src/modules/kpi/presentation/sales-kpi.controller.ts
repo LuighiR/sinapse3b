@@ -7,6 +7,7 @@ import { SaleKpiQueryService } from '../application/sale-kpi-query.service'
 import { SaleKpiRefreshService } from '../application/sale-kpi-refresh.service'
 import { parseSaleChannelDailyQuery } from './query/sale-channel-daily.query'
 import { parseSaleDailyQuery } from './query/sale-daily.query'
+import { parseSaleDrilldownQuery } from './query/sale-drilldown.query'
 import { parseSaleSummaryQuery } from './query/sale-summary.query'
 import { parseSaleTicketAverageQuery } from './query/sale-ticket-average.query'
 
@@ -64,6 +65,16 @@ export class SalesKpiController {
     const period = parseSaleTicketAverageQuery(query)
 
     return this.queryService.getTicketAverage({
+      clientId: authContext.clientId,
+      ...period,
+    })
+  }
+
+  @Get('drilldown')
+  getDrilldown(@RequestContext() authContext: AuthContext, @Query() query: Record<string, unknown>) {
+    const period = parseSaleDrilldownQuery(query)
+
+    return this.queryService.getDrilldown({
       clientId: authContext.clientId,
       ...period,
     })

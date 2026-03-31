@@ -12,6 +12,7 @@ export type SaleKpiQueryPeriodInput = {
   sellerId?: string | number | bigint
   status?: SaleStatusFilter
   orderType?: string
+  hasLinkedBudget?: boolean
 }
 
 export type SaleKpiPeriodView = {
@@ -83,10 +84,75 @@ export type SaleKpiTicketAverageResponse = {
   channels: SaleKpiTicketAverageChannelRow[]
 }
 
+export type SaleKpiDrilldownInput = SaleKpiQueryPeriodInput
+
+export type SaleKpiDrilldownFilters = {
+  sellerId?: number
+  status?: SaleStatusFilter
+  orderType?: string
+  hasLinkedBudget?: boolean
+}
+
+export type SaleKpiDrilldownFactRow = {
+  id: bigint | number | string
+  clientId: string
+  sourceTable: string
+  sourceRecordId: number | string | bigint
+  branchName: string
+  branchId: number | null
+  sellerId: number | string | bigint
+  sellerName: string | null
+  saleDate: Date | string
+  saleDatetime: Date | string
+  statusNormalized: string
+  channel: string | null
+  hasLinkedBudget: boolean
+  linkedBudgetSourceRecordId: number | string | bigint | null
+  customerName: string
+  cpfCnpj: string | null
+  valueAmount: string | number | bigint
+  sequential: number | string | bigint | null
+  invoiceSerie: number | string | bigint | null
+  invoiceNumeric: number | string | bigint | null
+  listDavsId: string | null
+  payloadJson: Record<string, unknown> | null
+}
+
+export type SaleKpiDrilldownRow = {
+  id: string
+  sourceTable: string
+  sourceRecordId: number
+  saleDate: string
+  saleDatetime: string
+  branchId: number | null
+  branchName: string
+  sellerId: number
+  sellerName: string | null
+  statusNormalized: string
+  channel: string | null
+  hasLinkedBudget: boolean
+  linkedBudgetSourceRecordId: number | null
+  customerName: string
+  cpfCnpj: string | null
+  valueAmount: string
+  sequential: string | null
+  invoiceSerie: string | null
+  invoiceNumeric: string | null
+  listDavsId: string | null
+  payloadJson: Record<string, unknown> | null
+}
+
+export type SaleKpiDrilldownResponse = {
+  period: SaleKpiPeriodView
+  filters: SaleKpiDrilldownFilters
+  rows: SaleKpiDrilldownRow[]
+}
+
 export type SaleKpiQueryRepository = {
   getSummaryRows(input: { clientId: string; period: KpiPeriod }): Promise<SaleKpiSnapshotRow[]>
   getDailyRows(input: { clientId: string; period: KpiPeriod }): Promise<SaleKpiBreakdownRow[]>
   getSaleFactRows(input: { clientId: string; period: KpiPeriod; sellerId?: number }): Promise<SaleFactRecord[]>
+  getDrilldownRows(input: { clientId: string; period: KpiPeriod; sellerId?: number }): Promise<SaleKpiDrilldownFactRow[]>
 }
 
 type SaleSummaryBucket = 'total' | 'active' | 'canceled'
@@ -296,6 +362,39 @@ export class SaleKpiQueryService {
     }
   }
 
+  async getDrilldown(input: SaleKpiDrilldownInput): Promise<SaleKpiDrilldownResponse> {
+    const period = this.toPeriod(input)
+    const sellerId = this.normalizeSellerId(input.sellerId)
+    const rows = await this.repository.getDrilldownRows({
+      clientId: input.clientId,
+      period,
+      sellerId,
+    })
+    const filteredRows = rows
+      .filter((row) => {
+        if (input.status !== undefined && this.normalizeStatusFilter(input.status) !== this.normalizeStatus(row.statusNormalized)) {
+          return false
+        }
+
+        if (input.orderType !== undefined && !this.matchesOrderTypeFilter(row.channel ?? null, input.orderType)) {
+          return false
+        }
+
+        if (input.hasLinkedBudget !== undefined && row.hasLinkedBudget !== input.hasLinkedBudget) {
+          return false
+        }
+
+        return true
+      })
+      .sort((left, right) => this.compareDrilldownRows(left, right))
+
+    return {
+      period: this.toPeriodView(period),
+      filters: this.buildDrilldownFilters({ ...input, sellerId }),
+      rows: filteredRows.map((row) => this.toDrilldownRow(row)),
+    }
+  }
+
   private async getFilteredFacts(input: SaleKpiQueryPeriodInput, period: KpiPeriod): Promise<SaleFactRecord[]> {
     const sellerId = this.normalizeSellerId(input.sellerId)
     const facts = await this.repository.getSaleFactRows({
@@ -313,12 +412,48 @@ export class SaleKpiQueryService {
         return false
       }
 
+      if (input.hasLinkedBudget !== undefined && fact.hasLinkedBudget !== input.hasLinkedBudget) {
+        return false
+      }
+
       return true
     })
   }
 
   private hasFactFilters(input: SaleKpiQueryPeriodInput): boolean {
-    return input.sellerId !== undefined || input.status !== undefined || input.orderType !== undefined
+    return (
+      input.sellerId !== undefined ||
+      input.status !== undefined ||
+      input.orderType !== undefined ||
+      input.hasLinkedBudget !== undefined
+    )
+  }
+
+  private buildDrilldownFilters(input: {
+    sellerId?: number
+    status?: SaleStatusFilter
+    orderType?: string
+    hasLinkedBudget?: boolean
+  }): SaleKpiDrilldownFilters {
+    const filters: SaleKpiDrilldownFilters = {}
+
+    if (input.sellerId !== undefined) {
+      filters.sellerId = input.sellerId
+    }
+
+    if (input.status !== undefined) {
+      filters.status = input.status
+    }
+
+    if (input.orderType !== undefined) {
+      filters.orderType = input.orderType
+    }
+
+    if (input.hasLinkedBudget !== undefined) {
+      filters.hasLinkedBudget = input.hasLinkedBudget
+    }
+
+    return filters
   }
 
   private buildSummaryFromFacts(period: KpiPeriod, facts: SaleFactRecord[]) {
@@ -362,6 +497,49 @@ export class SaleKpiQueryService {
       averageDaily: { count: '0.0000', value: '0.0000' },
       averageTicket: { value: '0.0000' },
     }
+  }
+
+  private toDrilldownRow(row: SaleKpiDrilldownFactRow): SaleKpiDrilldownRow {
+    return {
+      id: String(row.id),
+      sourceTable: row.sourceTable,
+      sourceRecordId: this.toCount(row.sourceRecordId),
+      saleDate: this.toDateKey(row.saleDate),
+      saleDatetime: this.toTimestampText(row.saleDatetime),
+      branchId: row.branchId,
+      branchName: row.branchName,
+      sellerId: this.toCount(row.sellerId),
+      sellerName: row.sellerName,
+      statusNormalized: row.statusNormalized,
+      channel: row.channel,
+      hasLinkedBudget: row.hasLinkedBudget,
+      linkedBudgetSourceRecordId:
+        row.linkedBudgetSourceRecordId === null ? null : this.toCount(row.linkedBudgetSourceRecordId),
+      customerName: row.customerName,
+      cpfCnpj: row.cpfCnpj,
+      valueAmount: this.toText(row.valueAmount),
+      sequential: row.sequential === null ? null : String(row.sequential),
+      invoiceSerie: row.invoiceSerie === null ? null : String(row.invoiceSerie),
+      invoiceNumeric: row.invoiceNumeric === null ? null : String(row.invoiceNumeric),
+      listDavsId: row.listDavsId,
+      payloadJson: row.payloadJson,
+    }
+  }
+
+  private compareDrilldownRows(left: SaleKpiDrilldownFactRow, right: SaleKpiDrilldownFactRow): number {
+    const saleDatetimeDiff = this.toComparableTimestamp(right.saleDatetime) - this.toComparableTimestamp(left.saleDatetime)
+
+    if (saleDatetimeDiff !== 0) {
+      return saleDatetimeDiff
+    }
+
+    const saleDateDiff = this.toComparableTimestamp(right.saleDate) - this.toComparableTimestamp(left.saleDate)
+
+    if (saleDateDiff !== 0) {
+      return saleDateDiff
+    }
+
+    return this.compareRecordIds(right.id, left.id)
   }
 
   private buildDailySeriesFromFacts(period: KpiPeriod, facts: SaleFactRecord[]): SaleKpiDailySeriesItem[] {
@@ -465,6 +643,49 @@ export class SaleKpiQueryService {
     }
 
     return KpiPeriod.formatDateKey(value)
+  }
+
+  private toTimestampText(value: Date | string): string {
+    if (typeof value === 'string') {
+      return value
+    }
+
+    return value.toISOString()
+  }
+
+  private toComparableTimestamp(value: Date | string): number {
+    if (value instanceof Date) {
+      return value.getTime()
+    }
+
+    return new Date(value).getTime()
+  }
+
+  private compareRecordIds(left: string | number | bigint, right: string | number | bigint): number {
+    const leftBigInt = this.toComparableBigInt(left)
+    const rightBigInt = this.toComparableBigInt(right)
+
+    if (leftBigInt !== null && rightBigInt !== null) {
+      if (leftBigInt > rightBigInt) {
+        return 1
+      }
+
+      if (leftBigInt < rightBigInt) {
+        return -1
+      }
+
+      return 0
+    }
+
+    return String(left).localeCompare(String(right))
+  }
+
+  private toComparableBigInt(value: string | number | bigint): bigint | null {
+    try {
+      return BigInt(value)
+    } catch {
+      return null
+    }
   }
 
   private toCount(value: string | number | bigint): number {

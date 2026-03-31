@@ -21,6 +21,7 @@ describe('SaleKpiQueryService', () => {
       ]),
       getDailyRows: jest.fn(),
       getSaleFactRows: jest.fn(),
+      getDrilldownRows: jest.fn(),
     }
 
     const service = new SaleKpiQueryService(repository)
@@ -78,6 +79,7 @@ describe('SaleKpiQueryService', () => {
           valueAmount: '666087.47',
         },
       ]),
+      getDrilldownRows: jest.fn(),
     }
 
     const service = new SaleKpiQueryService(repository)
@@ -130,6 +132,7 @@ describe('SaleKpiQueryService', () => {
           valueAmount: '75.00',
         },
       ]),
+      getDrilldownRows: jest.fn(),
     }
 
     const service = new SaleKpiQueryService(repository)
@@ -140,6 +143,64 @@ describe('SaleKpiQueryService', () => {
       to: '2026-01-31',
       status: 'Ativa',
       orderType: 'Balcao',
+    })
+
+    expect(result.total).toEqual({ count: 1, value: '100.0000' })
+    expect(result.active).toEqual({ count: 1, value: '100.0000' })
+    expect(result.canceled).toEqual({ count: 0, value: '0.0000' })
+    expect(result.averageDaily).toEqual({ count: '0.0323', value: '3.2258' })
+    expect(result.averageTicket).toEqual({ value: '100.0000' })
+  })
+
+  it('filters sales summary by hasLinkedBudget from canonical facts', async () => {
+    const repository: jest.Mocked<SaleKpiQueryRepository> = {
+      getSummaryRows: jest.fn(),
+      getDailyRows: jest.fn(),
+      getSaleFactRows: jest.fn().mockResolvedValue([
+        {
+          id: 1n,
+          saleDate: utcDate(2026, 0, 1),
+          saleDatetime: utcDate(2026, 0, 1, 10, 0),
+          sellerId: 7,
+          sellerName: 'Maria',
+          statusNormalized: 'VALID',
+          channel: 'Balcao',
+          hasLinkedBudget: true,
+          valueAmount: '100.00',
+        },
+        {
+          id: 2n,
+          saleDate: utcDate(2026, 0, 1),
+          saleDatetime: utcDate(2026, 0, 1, 11, 0),
+          sellerId: 7,
+          sellerName: 'Maria',
+          statusNormalized: 'CANCELED',
+          channel: 'Balcao',
+          hasLinkedBudget: false,
+          valueAmount: '50.00',
+        },
+        {
+          id: 3n,
+          saleDate: utcDate(2026, 0, 2),
+          saleDatetime: utcDate(2026, 0, 2, 12, 0),
+          sellerId: 7,
+          sellerName: 'Maria',
+          statusNormalized: 'VALID',
+          channel: null,
+          hasLinkedBudget: false,
+          valueAmount: '75.00',
+        },
+      ] as any),
+      getDrilldownRows: jest.fn(),
+    }
+
+    const service = new SaleKpiQueryService(repository)
+
+    const result = await service.getSummary({
+      clientId: 'c1',
+      from: '2026-01-01',
+      to: '2026-01-31',
+      hasLinkedBudget: true,
     })
 
     expect(result.total).toEqual({ count: 1, value: '100.0000' })
@@ -175,6 +236,7 @@ describe('SaleKpiQueryService', () => {
         },
       ]),
       getSaleFactRows: jest.fn(),
+      getDrilldownRows: jest.fn(),
     }
 
     const service = new SaleKpiQueryService(repository)
@@ -225,6 +287,7 @@ describe('SaleKpiQueryService', () => {
           valueAmount: '666087.47',
         },
       ]),
+      getDrilldownRows: jest.fn(),
     }
 
     const service = new SaleKpiQueryService(repository)
@@ -268,6 +331,7 @@ describe('SaleKpiQueryService', () => {
           valueAmount: '50.00',
         },
       ]),
+      getDrilldownRows: jest.fn(),
     }
 
     const service = new SaleKpiQueryService(repository)
@@ -320,6 +384,7 @@ describe('SaleKpiQueryService', () => {
           valueAmount: '25.00',
         },
       ]),
+      getDrilldownRows: jest.fn(),
     }
 
     const service = new SaleKpiQueryService(repository)
@@ -344,6 +409,170 @@ describe('SaleKpiQueryService', () => {
       channels: [
         { orderType: 'Nao identificado', count: 2, value: '150.0000', averageTicket: '75.0000' },
         { orderType: 'Televendas', count: 1, value: '25.0000', averageTicket: '25.0000' },
+      ],
+    })
+  })
+
+  it('returns drilldown rows with filters applied and newest records first', async () => {
+    const repository: jest.Mocked<SaleKpiQueryRepository> = {
+      getSummaryRows: jest.fn(),
+      getDailyRows: jest.fn(),
+      getSaleFactRows: jest.fn(),
+      getDrilldownRows: jest.fn().mockResolvedValue([
+        {
+          id: 10n,
+          clientId: 'c1',
+          sourceTable: 'raw.ferraco_sales',
+          sourceRecordId: 321,
+          branchName: 'Matriz',
+          branchId: 5,
+          sellerId: 7,
+          sellerName: 'Maria',
+          saleDate: utcDate(2026, 0, 5),
+          saleDatetime: '2026-01-05T09:00:00.000Z',
+          statusNormalized: 'CANCELED',
+          channel: 'Televendas',
+          hasLinkedBudget: true,
+          linkedBudgetSourceRecordId: 98,
+          customerName: 'ACME LTDA',
+          cpfCnpj: '12345678900',
+          valueAmount: '80.5000',
+          sequential: 999n,
+          invoiceSerie: 4n,
+          invoiceNumeric: 77n,
+          listDavsId: '1,2',
+          payloadJson: { family: 'sales' },
+        },
+        {
+          id: 11n,
+          clientId: 'c1',
+          sourceTable: 'raw.ferraco_sales',
+          sourceRecordId: 654,
+          branchName: 'Matriz',
+          branchId: 5,
+          sellerId: 7,
+          sellerName: 'Maria',
+          saleDate: utcDate(2026, 0, 5),
+          saleDatetime: '2026-01-05T14:30:00.000Z',
+          statusNormalized: 'CANCELED',
+          channel: 'Televendas',
+          hasLinkedBudget: true,
+          linkedBudgetSourceRecordId: null,
+          customerName: 'Globex',
+          cpfCnpj: null,
+          valueAmount: '120.0000',
+          sequential: null,
+          invoiceSerie: null,
+          invoiceNumeric: null,
+          listDavsId: null,
+          payloadJson: null,
+        },
+        {
+          id: 12n,
+          clientId: 'c1',
+          sourceTable: 'raw.ferraco_sales',
+          sourceRecordId: 777,
+          branchName: 'Filial',
+          branchId: 8,
+          sellerId: 9,
+          sellerName: 'Joao',
+          saleDate: utcDate(2026, 0, 5),
+          saleDatetime: '2026-01-05T16:00:00.000Z',
+          statusNormalized: 'VALID',
+          channel: 'Balcao',
+          hasLinkedBudget: false,
+          linkedBudgetSourceRecordId: null,
+          customerName: 'Umbrella',
+          cpfCnpj: null,
+          valueAmount: '300.0000',
+          sequential: 123n,
+          invoiceSerie: 9n,
+          invoiceNumeric: 10n,
+          listDavsId: null,
+          payloadJson: null,
+        },
+      ]),
+    }
+
+    const service = new SaleKpiQueryService(repository)
+
+    const result = await service.getDrilldown({
+      clientId: 'c1',
+      from: '2026-01-05',
+      to: '2026-01-05',
+      sellerId: 7,
+      status: 'Cancelada',
+      orderType: 'Televendas',
+      hasLinkedBudget: true,
+    })
+
+    expect(repository.getDrilldownRows).toHaveBeenCalledWith({
+      clientId: 'c1',
+      period: expect.objectContaining({
+        from: saoPauloPeriodDate(2026, 0, 5),
+        to: saoPauloPeriodDate(2026, 0, 5),
+      }),
+      sellerId: 7,
+    })
+    expect(result).toEqual({
+      period: {
+        from: '2026-01-05',
+        to: '2026-01-05',
+        key: '2026-01-05_2026-01-05',
+      },
+      filters: {
+        sellerId: 7,
+        status: 'Cancelada',
+        orderType: 'Televendas',
+        hasLinkedBudget: true,
+      },
+      rows: [
+        {
+          id: '11',
+          sourceTable: 'raw.ferraco_sales',
+          sourceRecordId: 654,
+          saleDate: '2026-01-05',
+          saleDatetime: '2026-01-05T14:30:00.000Z',
+          branchId: 5,
+          branchName: 'Matriz',
+          sellerId: 7,
+          sellerName: 'Maria',
+          statusNormalized: 'CANCELED',
+          channel: 'Televendas',
+          hasLinkedBudget: true,
+          linkedBudgetSourceRecordId: null,
+          customerName: 'Globex',
+          cpfCnpj: null,
+          valueAmount: '120.0000',
+          sequential: null,
+          invoiceSerie: null,
+          invoiceNumeric: null,
+          listDavsId: null,
+          payloadJson: null,
+        },
+        {
+          id: '10',
+          sourceTable: 'raw.ferraco_sales',
+          sourceRecordId: 321,
+          saleDate: '2026-01-05',
+          saleDatetime: '2026-01-05T09:00:00.000Z',
+          branchId: 5,
+          branchName: 'Matriz',
+          sellerId: 7,
+          sellerName: 'Maria',
+          statusNormalized: 'CANCELED',
+          channel: 'Televendas',
+          hasLinkedBudget: true,
+          linkedBudgetSourceRecordId: 98,
+          customerName: 'ACME LTDA',
+          cpfCnpj: '12345678900',
+          valueAmount: '80.5000',
+          sequential: '999',
+          invoiceSerie: '4',
+          invoiceNumeric: '77',
+          listDavsId: '1,2',
+          payloadJson: { family: 'sales' },
+        },
       ],
     })
   })

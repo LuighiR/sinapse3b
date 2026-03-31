@@ -3,6 +3,7 @@ import {
   BUDGET_FACT_UPSERT_REPOSITORY,
   BudgetNormalizationService,
   PrismaBudgetFactUpsertRepository,
+  PrismaRawFerracoBudgetReader,
   RAW_FERRACO_BUDGET_READER,
   type BudgetFactUpsertRepository,
   type RawFerracoBudgetReader,
@@ -33,6 +34,8 @@ describe('BudgetNormalizationService', () => {
           sellerName: 'Maria',
           openingDate: '2026-01-10',
           openingTime: '08:15:00',
+          cancellationDate: '2026-01-12',
+          cancelationTime: '14:20:00',
           closingDate: '2026-01-15',
           closingTime: '16:45:00',
           status: 'Baixado',
@@ -80,6 +83,8 @@ describe('BudgetNormalizationService', () => {
         sellerName: 'Maria',
         budgetDate: new Date(2026, 0, 10),
         budgetDatetime: new Date(2026, 0, 10, 8, 15, 0),
+        cancellationDate: new Date(2026, 0, 12),
+        cancelationTime: '14:20:00',
         closingDate: new Date(2026, 0, 15),
         statusRaw: 'Baixado',
         statusNormalized: 'WON',
@@ -98,6 +103,8 @@ describe('BudgetNormalizationService', () => {
         sellerName: 'Maria',
         budgetDate: new Date(2026, 0, 10),
         budgetDatetime: new Date(2026, 0, 10, 8, 15, 0),
+        cancellationDate: new Date(2026, 0, 12),
+        cancelationTime: '14:20:00',
         closingDate: new Date(2026, 0, 15),
         statusRaw: 'Baixado',
         statusNormalized: 'WON',
@@ -113,6 +120,47 @@ describe('BudgetNormalizationService', () => {
 
     expect(upsertArgs.create.valueAmount.toString()).toBe('1200.50')
     expect(upsertArgs.update.valueAmount.toString()).toBe('1200.50')
+  })
+
+  it('omits cancelation_time from payloadJson when the raw field is empty', async () => {
+    const rawReader: RawFerracoBudgetReader = {
+      findByClientId: jest.fn().mockResolvedValue([
+        {
+          id: 43,
+          clientId: 'client-1',
+          branch: '3',
+          sellerId: 7,
+          sellerName: 'Maria',
+          openingDate: '2026-01-10',
+          openingTime: '08:15:00',
+          cancellationDate: '2026-01-12',
+          cancelationTime: '',
+          closingDate: null,
+          closingTime: null,
+          status: 'Pendente',
+          channel: 'SHOWROOM',
+          customerName: 'Cliente Teste',
+          cpfCnpj: '12345678900',
+          value: '1200.50',
+          sequential: null,
+          davId: '2002',
+          sequentialLinkedSale: null,
+          payload: { source: 'fixture' },
+        },
+      ]),
+    }
+
+    const budgetFactRepository: BudgetFactUpsertRepository = {
+      upsert: jest.fn().mockResolvedValue(undefined),
+    }
+
+    const service = new BudgetNormalizationService(rawReader, budgetFactRepository)
+
+    await service.normalizeClientBudgets('client-1')
+
+    const [upsertArgs] = (budgetFactRepository.upsert as jest.Mock).mock.calls[0]
+
+    expect(upsertArgs.create.payloadJson).toEqual({ source: 'fixture' })
   })
 
   it('preserves the calendar day when raw date columns arrive as Date objects', async () => {
@@ -185,6 +233,24 @@ describe('BudgetNormalizationService', () => {
 
     expect(moduleRef.get(BudgetNormalizationService)).toBeInstanceOf(BudgetNormalizationService)
   })
+
+  it('reads cancellation fields from raw ferraco budgets in the query reader', async () => {
+    const queryRaw = jest.fn().mockResolvedValue([])
+    const reader = new PrismaRawFerracoBudgetReader({
+      $queryRaw: queryRaw,
+    } as never)
+
+    await reader.findByClientId('client-1')
+
+    expect(queryRaw).toHaveBeenCalledTimes(1)
+
+    const [queryParts, clientId] = queryRaw.mock.calls[0] as [TemplateStringsArray, string]
+    const sql = queryParts.join('?')
+
+    expect(clientId).toBe('client-1')
+    expect(sql).toContain('budget.cancellation_date AS "cancellationDate"')
+    expect(sql).toContain('budget.cancellation_time::text AS "cancelationTime"')
+  })
 })
 
 describe('PrismaBudgetFactUpsertRepository', () => {
@@ -205,5 +271,8 @@ describe('PrismaBudgetFactUpsertRepository', () => {
     expect(sql).toContain("COALESCE(budget.branch, '')")
     expect(sql).toContain("COALESCE(budget.seller_name, '')")
     expect(sql).toContain("COALESCE(budget.customer_name, '')")
+    expect(sql).toContain('cancellation_date')
+    expect(sql).toContain('cancelation_time')
+    expect(sql).toContain('budget.cancellation_time')
   })
 })

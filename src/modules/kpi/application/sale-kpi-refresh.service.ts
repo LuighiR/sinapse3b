@@ -11,6 +11,7 @@ export type SaleFactRecord = {
   sellerName: string | null
   statusNormalized: string | null
   channel?: string | null
+  hasLinkedBudget?: boolean
   valueAmount: string | number | bigint | Prisma.Decimal
 }
 

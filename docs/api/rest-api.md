@@ -520,14 +520,17 @@ Regra:
 - primeiro a API seleciona somente os orcamentos cuja abertura (`budgetDate` / `budgetDatetime`) caiu entre `from` e `to`
 - a classificacao considera o estado do orcamento em `referenceAt`, e nao o estado atual
 - se um orcamento fechou depois de `referenceAt`, ele ainda entra como `open` naquela consulta
-- `converted` e `lost` usam a diferenca entre abertura e `closingDate + closing_time`, desde que o fechamento ja tenha acontecido ate `referenceAt`
+- `converted` usa a diferenca entre abertura e `closingDate + closing_time`, desde que a conversao ja tenha acontecido ate `referenceAt`
+- `lost` usa a diferenca entre abertura e `cancellationDate + cancelationTime`, desde que o cancelamento ja tenha acontecido ate `referenceAt`
 - `open` usa a diferenca entre abertura e `referenceAt`
-- se `closing_time` nao existir no payload bruto, o fechamento cai no fim do dia de `closingDate`
+- se `closing_time` nao existir no payload bruto, a conversao cai no fim do dia de `closingDate`
+- se `cancelationTime` nao existir ou vier invalido, o cancelamento cai no fim do dia de `cancellationDate`
 - `percentage` representa a participacao da quantidade sobre o total geral de orcamentos analisados no follow-up
 - `total` no topo representa o total geral do follow-up no recorte analisado
 - `within24h.total` e `after24h.total` representam o total de cada janela
 - o frontend pode usar `total.count` / `total.value` como base de 100% para exibir os cards
 - `referenceAt` aceita timestamp com offset (`-03:00`) ou sem offset; quando o offset nao vier, a API assume `America/Sao_Paulo` (`UTC-3`)
+- `referenceAt` tambem aceita `YYYY-MM-DD`; nesse caso, a API interpreta o valor como o fim do dia em `America/Sao_Paulo` (`23:59:59.999`)
 
 Response `200`:
 
@@ -591,6 +594,156 @@ Exemplo:
 
 ```text
 GET /kpis/budgets/follow-up/summary?from=2026-01-01&to=2026-01-31&referenceAt=2026-01-31T18:30:00-03:00&sellerId=35747&orderType=Pedido%20Televendas
+```
+
+### `GET /kpis/budgets/follow-up/daily`
+
+Descricao:
+serie diaria do follow-up de orcamentos, usando `date` como bucket de abertura do budget (`budgetDate`) e classificando cada ponto em `within24h` ou `after24h` com `converted`, `lost` e `open`.
+
+Query Params:
+
+- `from` required: inicio do recorte do bucket de abertura do budget (`budgetDate`)
+- `to` required: fim do recorte do bucket de abertura do budget (`budgetDate`)
+- `referenceAt` required: data e hora de referencia enviada pelo frontend
+- `sellerId` optional
+- `orderType` optional
+
+Quando `sellerId` e informado nas rotas de budgets, ele representa `core.employees.erp_id`.
+
+Regra:
+
+- primeiro a API seleciona somente os orcamentos cuja abertura (`budgetDate`) caiu entre `from` e `to`
+- cada item de `rows` usa `date` como bucket de abertura do budget, e nao `budgetDatetime`
+- `budgetDatetime` e usado para o tempo de follow-up e para a classificacao em `referenceAt`, inclusive para excluir registros abertos depois de `referenceAt`
+- a classificacao considera o estado do orcamento em `referenceAt`, e nao o estado atual
+- budgets `LOST` passam a usar `cancellationDate + cancelationTime` como timestamp terminal; budgets `WON` continuam usando `closingDate + closing_time`
+- se `cancelationTime` nao existir ou vier invalido, o cancelamento cai no fim do dia de `cancellationDate`
+- `followUpWindow` e `followUpStatus` sao classificacoes de follow-up, e nao filtros brutos de status do budget
+- `referenceAt` aceita timestamp com offset (`-03:00`) ou, nas formas sem offset que o backend normaliza (`YYYY-MM-DDTHH:mm` ou `YYYY-MM-DDTHH:mm:ss`, com `T` ou espaco), a API assume `America/Sao_Paulo` (`UTC-3`)
+- `referenceAt` tambem aceita `YYYY-MM-DD`; nesse caso, a API interpreta o valor como o fim do dia em `America/Sao_Paulo` (`23:59:59.999`)
+- o frontend pode usar `rows[].date` junto com `rows[].window` e `rows[].status` para montar a grade diaria
+- a resposta vem densa/zero-filled para cada dia solicitado e para cada combinacao de `window` e `status`, mesmo quando nao houver registros
+
+Response `200`:
+
+```json
+{
+  "period": {
+    "from": "2026-01-01",
+    "to": "2026-01-31",
+    "key": "2026-01-01_2026-01-31"
+  },
+  "rows": [
+    {
+      "date": "2026-01-05",
+      "window": "within24h",
+      "status": "converted",
+      "count": 2,
+      "value": "240.0000"
+    },
+    {
+      "date": "2026-01-05",
+      "window": "within24h",
+      "status": "lost",
+      "count": 0,
+      "value": "0.0000"
+    }
+  ]
+}
+```
+
+Exemplo:
+
+```text
+GET /kpis/budgets/follow-up/daily?from=2026-01-01&to=2026-01-31&referenceAt=2026-01-31T18:30:00-03:00&sellerId=7&orderType=Balcao
+```
+
+### `GET /kpis/budgets/follow-up/drilldown`
+
+Descricao:
+detalhamento auditavel do follow-up por registro, com filtros de classificacao e o bucket de abertura do budget (`budgetDate`).
+
+Query Params:
+
+- `from` required: inicio do recorte do bucket de abertura do budget (`budgetDate`)
+- `to` required: fim do recorte do bucket de abertura do budget (`budgetDate`)
+- `referenceAt` required: data e hora de referencia enviada pelo frontend
+- `date` optional: bucket de abertura do budget (`budgetDate`)
+- `followUpWindow` optional: classificacao de follow-up (`within24h` ou `after24h`)
+- `followUpStatus` optional: classificacao de follow-up (`converted`, `lost` ou `open`)
+- `sellerId` optional
+- `orderType` optional
+
+Quando `sellerId` e informado nas rotas de budgets, ele representa `core.employees.erp_id`.
+
+Regra:
+
+- primeiro a API seleciona somente os orcamentos cuja abertura (`budgetDate`) caiu entre `from` e `to`
+- `date` filtra pelo bucket de abertura do budget (`budgetDate`), e nao por `budgetDatetime`
+- `budgetDatetime` e usado para o tempo de follow-up e para a classificacao em `referenceAt`, inclusive para excluir registros abertos depois de `referenceAt`
+- `followUpWindow` e `followUpStatus` sao classificacoes de follow-up, e nao filtros brutos de status do budget
+- a classificacao considera o estado do orcamento em `referenceAt`, e nao o estado atual
+- se um orcamento fechou depois de `referenceAt`, ele ainda entra como `open` naquela consulta
+- budgets `LOST` usam `cancellationDate + cancelationTime` como timestamp terminal; budgets `WON` usam `closingDate + closing_time`
+- se `cancelationTime` nao existir ou vier invalido, o cancelamento cai no fim do dia de `cancellationDate`
+- `referenceAt` aceita timestamp com offset (`-03:00`) ou, nas formas sem offset que o backend normaliza (`YYYY-MM-DDTHH:mm` ou `YYYY-MM-DDTHH:mm:ss`, com `T` ou espaco), a API assume `America/Sao_Paulo` (`UTC-3`)
+- `referenceAt` tambem aceita `YYYY-MM-DD`; nesse caso, a API interpreta o valor como o fim do dia em `America/Sao_Paulo` (`23:59:59.999`)
+- o objeto `filters` da resposta ecoa `referenceAt` e inclui `date`, `followUpWindow`, `followUpStatus`, `sellerId` e `orderType` quando esses filtros forem informados
+
+Exemplo:
+
+```text
+GET /kpis/budgets/follow-up/drilldown?from=2026-01-01&to=2026-01-31&referenceAt=2026-01-31T18:30:00-03:00&date=2026-01-05&sellerId=7&orderType=Balcao&followUpWindow=within24h&followUpStatus=lost
+```
+
+Response `200`:
+
+```json
+{
+  "period": {
+    "from": "2026-01-01",
+    "to": "2026-01-31",
+    "key": "2026-01-01_2026-01-31"
+  },
+  "filters": {
+    "referenceAt": "2026-01-31T18:30:00-03:00",
+    "date": "2026-01-05",
+    "followUpWindow": "within24h",
+    "followUpStatus": "lost",
+    "sellerId": 7,
+    "orderType": "Balcao"
+  },
+  "rows": [
+    {
+      "id": "99",
+      "sourceTable": "raw.ferraco_budgets",
+      "sourceRecordId": 123,
+      "budgetDate": "2026-01-05",
+      "budgetDatetime": "2026-01-05T09:30:00.000Z",
+      "closingDate": null,
+      "cancellationDate": "2026-01-05",
+      "cancelationTime": "11:15:00",
+      "branchId": 5,
+      "branchName": "Matriz",
+      "sellerId": 7,
+      "sellerName": "Maria",
+      "statusNormalized": "LOST",
+      "channel": "Balcao",
+      "customerName": "ACME LTDA",
+      "cpfCnpj": null,
+      "valueAmount": "200.5000",
+      "sequential": null,
+      "davId": "777",
+      "sequentialLinkedSale": null,
+      "payloadJson": {
+        "family": "budgets"
+      },
+      "followUpWindow": "within24h",
+      "followUpStatus": "lost"
+    }
+  ]
+}
 ```
 
 ### `GET /kpis/budgets/hourly`
@@ -707,6 +860,8 @@ Response `200`:
 Descricao:
 detalhamento auditavel por registro.
 
+Cada linha expõe tambem `cancellationDate` e `cancelationTime` quando o budget tiver cancelamento estruturado normalizado.
+
 Query Params:
 
 - `from` required
@@ -721,7 +876,7 @@ Quando `sellerId` e informado nas rotas de budgets, ele representa `core.employe
 Exemplo:
 
 ```text
-GET /kpis/budgets/drilldown?from=2026-01-01&to=2026-01-31&sellerId=35747&status=Baixado
+GET /kpis/budgets/drilldown?from=2026-01-01&to=2026-01-31&sellerId=35747&status=Cancelado
 ```
 
 Response `200`:
@@ -735,7 +890,7 @@ Response `200`:
   },
   "filters": {
     "sellerId": 7,
-    "status": "Baixado",
+    "status": "Cancelado",
     "branchId": 5,
     "branchName": "Matriz"
   },
@@ -747,11 +902,13 @@ Response `200`:
       "budgetDate": "2026-01-02",
       "budgetDatetime": "2026-01-02T09:30:00.000Z",
       "closingDate": null,
+      "cancellationDate": "2026-01-03",
+      "cancelationTime": "15:30:00",
       "branchId": 5,
       "branchName": "Matriz",
       "sellerId": 7,
       "sellerName": "Maria",
-      "statusNormalized": "WON",
+      "statusNormalized": "LOST",
       "channel": null,
       "customerName": "ACME LTDA",
       "cpfCnpj": null,
@@ -778,6 +935,7 @@ Sales aceitam:
 - `sellerId` optional
 - `status` optional: `Ativa`, `Cancelada`
 - `orderType` optional
+- `hasLinkedBudget` optional: `true`, `false`
 
 Quando `sellerId` e informado nas rotas de sales, ele representa `core.employees.erp_id`.
 
@@ -786,6 +944,16 @@ Em vendas, `orderType` vem do budget vinculado por:
 `sale.sequential = budget_fact.sequential_linked_sale`
 
 Se nao houver budget vinculado, o canal retorna `Nao identificado`.
+
+`hasLinkedBudget=true` retorna apenas vendas com budget vinculado. `hasLinkedBudget=false` retorna apenas vendas sem budget vinculado.
+
+Os filtros acima valem para:
+
+- `GET /kpis/sales/summary`
+- `GET /kpis/sales/daily`
+- `GET /kpis/sales/channel/daily`
+- `GET /kpis/sales/ticket-average`
+- `GET /kpis/sales/drilldown`
 
 ### `POST /kpis/sales/refresh`
 
@@ -858,13 +1026,17 @@ Response `200`:
 Exemplo:
 
 ```text
-GET /kpis/sales/summary?from=2026-03-01&to=2026-03-23&sellerId=35747&status=Cancelada&orderType=Pedido%20Televendas
+GET /kpis/sales/summary?from=2026-03-01&to=2026-03-23&sellerId=35747&status=Cancelada&orderType=Pedido%20Televendas&hasLinkedBudget=true
 ```
 
 ### `GET /kpis/sales/daily`
 
 Descricao:
 serie diaria de vendas por quantidade e valor.
+
+Query Params:
+
+- filtros da secao `Sales KPI > Filters`
 
 Response `200`:
 
@@ -889,6 +1061,10 @@ Response `200`:
 
 Descricao:
 vendas por dia e por canal.
+
+Query Params:
+
+- filtros da secao `Sales KPI > Filters`
 
 Response `200`:
 
@@ -921,6 +1097,10 @@ Response `200`:
 Descricao:
 ticket medio geral e por canal.
 
+Query Params:
+
+- filtros da secao `Sales KPI > Filters`
+
 Response `200`:
 
 ```json
@@ -947,6 +1127,60 @@ Response `200`:
       "count": 132,
       "value": "376164.8800",
       "averageTicket": "2849.7339"
+    }
+  ]
+}
+```
+
+### `GET /kpis/sales/drilldown`
+
+Descricao:
+retorna as vendas detalhadas do periodo, com filtros opcionais.
+
+Query Params:
+
+- filtros da secao `Sales KPI > Filters`
+
+Response `200`:
+
+```json
+{
+  "period": {
+    "from": "2026-03-02",
+    "to": "2026-03-02",
+    "key": "2026-03-02_2026-03-02"
+  },
+  "filters": {
+    "sellerId": 35747,
+    "status": "Cancelada",
+    "orderType": "Pedido Televendas",
+    "hasLinkedBudget": true
+  },
+  "rows": [
+    {
+      "id": "99",
+      "sourceTable": "raw.ferraco_sales",
+      "sourceRecordId": 123,
+      "saleDate": "2026-03-02",
+      "saleDatetime": "2026-03-02T14:33:00.000Z",
+      "branchId": 5,
+      "branchName": "Matriz",
+      "sellerId": 35747,
+      "sellerName": "Maria",
+      "statusNormalized": "CANCELED",
+      "channel": "Pedido Televendas",
+      "hasLinkedBudget": true,
+      "linkedBudgetSourceRecordId": 777,
+      "customerName": "ACME LTDA",
+      "cpfCnpj": null,
+      "valueAmount": "200.5000",
+      "sequential": "888",
+      "invoiceSerie": "1",
+      "invoiceNumeric": "42",
+      "listDavsId": "11,12",
+      "payloadJson": {
+        "family": "sales"
+      }
     }
   ]
 }
@@ -1471,7 +1705,7 @@ curl -X GET "http://localhost:3000/kpis/budgets/follow-up/summary?from=2026-01-0
 ### Sales Summary
 
 ```bash
-curl -X GET "http://localhost:3000/kpis/sales/summary?from=2026-03-01&to=2026-03-23&status=Ativa" ^
+curl -X GET "http://localhost:3000/kpis/sales/summary?from=2026-03-01&to=2026-03-23&status=Ativa&hasLinkedBudget=true" ^
   -H "Authorization: Bearer <jwt>" ^
   -H "X-Tenant-Id: tenant-ferracosul-kpi-dev"
 ```

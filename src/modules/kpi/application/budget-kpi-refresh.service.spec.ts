@@ -19,6 +19,8 @@ describe('BudgetKpiRefreshService', () => {
         {
           id: 1n,
           budgetDate: utcDate(2026, 0, 1),
+          cancellationDate: null,
+          cancelationTime: null,
           sellerId: 7,
           sellerName: 'Maria',
           statusNormalized: 'WON',
@@ -27,6 +29,8 @@ describe('BudgetKpiRefreshService', () => {
         {
           id: 2n,
           budgetDate: utcDate(2026, 0, 1),
+          cancellationDate: null,
+          cancelationTime: null,
           sellerId: 7,
           sellerName: 'Maria',
           statusNormalized: 'OPEN',
@@ -35,6 +39,8 @@ describe('BudgetKpiRefreshService', () => {
         {
           id: 3n,
           budgetDate: utcDate(2026, 0, 3),
+          cancellationDate: null,
+          cancelationTime: null,
           sellerId: 8,
           sellerName: 'Joao',
           statusNormalized: 'LOST',

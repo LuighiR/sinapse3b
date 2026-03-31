@@ -251,127 +251,133 @@ export class PrismaCallKpiRepository
   }): Promise<{ snapshotsCreated: number; breakdownsCreated: number }> {
     const prisma = this.prisma as any
 
-    return prisma.$transaction(async (tx: any) => {
-      const periodStart = KpiPeriod.toDatabaseDate(input.period.from)
-      const periodEnd = KpiPeriod.toDatabaseDate(input.period.to)
+    return prisma.$transaction(
+      async (tx: any) => {
+        const periodStart = KpiPeriod.toDatabaseDate(input.period.from)
+        const periodEnd = KpiPeriod.toDatabaseDate(input.period.to)
 
-      await tx.kpiSnapshot.deleteMany({
-        where: {
-          clientId: input.clientId,
-          definitionId: input.summaryDefinitionId,
-          periodType: KpiPeriod.periodType,
-          periodStart,
-          periodEnd,
-        },
-      })
-      await tx.kpiBreakdown.deleteMany({
-        where: {
-          clientId: input.clientId,
-          definitionId: input.hourlyDefinitionId,
-          periodType: KpiPeriod.periodType,
-          periodStart,
-          periodEnd,
-        },
-      })
-      await tx.kpiBreakdown.deleteMany({
-        where: {
-          clientId: input.clientId,
-          definitionId: input.agentRankingDefinitionId,
-          periodType: KpiPeriod.periodType,
-          periodStart,
-          periodEnd,
-        },
-      })
-      await tx.kpiBreakdown.deleteMany({
-        where: {
-          clientId: input.clientId,
-          definitionId: input.hourlyComparisonDefinitionId,
-          periodType: KpiPeriod.periodType,
-          periodStart,
-          periodEnd,
-        },
-      })
-
-      if (input.summaryRows.length > 0) {
-        await tx.kpiSnapshot.createMany({
-          data: input.summaryRows.map((row) => ({
+        await tx.kpiSnapshot.deleteMany({
+          where: {
             clientId: input.clientId,
             definitionId: input.summaryDefinitionId,
             periodType: KpiPeriod.periodType,
             periodStart,
             periodEnd,
-            metricKey: row.metricKey,
-            metricValue: new Prisma.Decimal(row.metricValue),
-            dimensionsJson: row.dimensionsJson,
-          })),
+          },
         })
-      }
-
-      if (input.hourlyRows.length > 0) {
-        await tx.kpiBreakdown.createMany({
-          data: input.hourlyRows.map((row) => ({
+        await tx.kpiBreakdown.deleteMany({
+          where: {
             clientId: input.clientId,
             definitionId: input.hourlyDefinitionId,
             periodType: KpiPeriod.periodType,
             periodStart,
             periodEnd,
-            bucketDate: KpiPeriod.toDatabaseDate(row.bucketDate),
-            dimensionType: row.dimensionType,
-            dimensionKey: row.dimensionKey,
-            dimensionLabel: row.dimensionLabel,
-            metricKey: row.metricKey,
-            metricValue: new Prisma.Decimal(row.metricValue),
-            sortOrder: row.sortOrder,
-            payloadJson: row.payloadJson,
-          })),
+          },
         })
-      }
-
-      if (input.rankingRows.length > 0) {
-        await tx.kpiBreakdown.createMany({
-          data: input.rankingRows.map((row) => ({
+        await tx.kpiBreakdown.deleteMany({
+          where: {
             clientId: input.clientId,
             definitionId: input.agentRankingDefinitionId,
             periodType: KpiPeriod.periodType,
             periodStart,
             periodEnd,
-            bucketDate: KpiPeriod.toDatabaseDate(row.bucketDate),
-            dimensionType: row.dimensionType,
-            dimensionKey: row.dimensionKey,
-            dimensionLabel: row.dimensionLabel,
-            metricKey: row.metricKey,
-            metricValue: new Prisma.Decimal(row.metricValue),
-            sortOrder: row.sortOrder,
-            payloadJson: row.payloadJson,
-          })),
+          },
         })
-      }
-
-      if (input.comparisonRows.length > 0) {
-        await tx.kpiBreakdown.createMany({
-          data: input.comparisonRows.map((row) => ({
+        await tx.kpiBreakdown.deleteMany({
+          where: {
             clientId: input.clientId,
             definitionId: input.hourlyComparisonDefinitionId,
             periodType: KpiPeriod.periodType,
             periodStart,
             periodEnd,
-            bucketDate: KpiPeriod.toDatabaseDate(row.bucketDate),
-            dimensionType: row.dimensionType,
-            dimensionKey: row.dimensionKey,
-            dimensionLabel: row.dimensionLabel,
-            metricKey: row.metricKey,
-            metricValue: new Prisma.Decimal(row.metricValue),
-            sortOrder: row.sortOrder,
-            payloadJson: row.payloadJson,
-          })),
+          },
         })
-      }
 
-      return {
-        snapshotsCreated: input.summaryRows.length,
-        breakdownsCreated: input.hourlyRows.length + input.rankingRows.length + input.comparisonRows.length,
-      }
-    })
+        if (input.summaryRows.length > 0) {
+          await tx.kpiSnapshot.createMany({
+            data: input.summaryRows.map((row) => ({
+              clientId: input.clientId,
+              definitionId: input.summaryDefinitionId,
+              periodType: KpiPeriod.periodType,
+              periodStart,
+              periodEnd,
+              metricKey: row.metricKey,
+              metricValue: new Prisma.Decimal(row.metricValue),
+              dimensionsJson: row.dimensionsJson,
+            })),
+          })
+        }
+
+        if (input.hourlyRows.length > 0) {
+          await tx.kpiBreakdown.createMany({
+            data: input.hourlyRows.map((row) => ({
+              clientId: input.clientId,
+              definitionId: input.hourlyDefinitionId,
+              periodType: KpiPeriod.periodType,
+              periodStart,
+              periodEnd,
+              bucketDate: KpiPeriod.toDatabaseDate(row.bucketDate),
+              dimensionType: row.dimensionType,
+              dimensionKey: row.dimensionKey,
+              dimensionLabel: row.dimensionLabel,
+              metricKey: row.metricKey,
+              metricValue: new Prisma.Decimal(row.metricValue),
+              sortOrder: row.sortOrder,
+              payloadJson: row.payloadJson,
+            })),
+          })
+        }
+
+        if (input.rankingRows.length > 0) {
+          await tx.kpiBreakdown.createMany({
+            data: input.rankingRows.map((row) => ({
+              clientId: input.clientId,
+              definitionId: input.agentRankingDefinitionId,
+              periodType: KpiPeriod.periodType,
+              periodStart,
+              periodEnd,
+              bucketDate: KpiPeriod.toDatabaseDate(row.bucketDate),
+              dimensionType: row.dimensionType,
+              dimensionKey: row.dimensionKey,
+              dimensionLabel: row.dimensionLabel,
+              metricKey: row.metricKey,
+              metricValue: new Prisma.Decimal(row.metricValue),
+              sortOrder: row.sortOrder,
+              payloadJson: row.payloadJson,
+            })),
+          })
+        }
+
+        if (input.comparisonRows.length > 0) {
+          await tx.kpiBreakdown.createMany({
+            data: input.comparisonRows.map((row) => ({
+              clientId: input.clientId,
+              definitionId: input.hourlyComparisonDefinitionId,
+              periodType: KpiPeriod.periodType,
+              periodStart,
+              periodEnd,
+              bucketDate: KpiPeriod.toDatabaseDate(row.bucketDate),
+              dimensionType: row.dimensionType,
+              dimensionKey: row.dimensionKey,
+              dimensionLabel: row.dimensionLabel,
+              metricKey: row.metricKey,
+              metricValue: new Prisma.Decimal(row.metricValue),
+              sortOrder: row.sortOrder,
+              payloadJson: row.payloadJson,
+            })),
+          })
+        }
+
+        return {
+          snapshotsCreated: input.summaryRows.length,
+          breakdownsCreated: input.hourlyRows.length + input.rankingRows.length + input.comparisonRows.length,
+        }
+      },
+      {
+        maxWait: 10_000,
+        timeout: 30_000,
+      },
+    )
   }
 
   async upsertAvailability(input: CallKpiAvailabilityUpdate): Promise<void> {

@@ -119,4 +119,58 @@ describe('PrismaCallKpiRepository', () => {
       }),
     ])
   })
+
+  it('extends the interactive transaction timeout when persisting materialization', async () => {
+    const tx = {
+      kpiSnapshot: {
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+        createMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      kpiBreakdown: {
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+        createMany: jest.fn().mockResolvedValue({ count: 3 }),
+      },
+    }
+    const prisma = {
+      $transaction: jest.fn().mockImplementation(async (callback, options) => {
+        expect(options).toMatchObject({
+          maxWait: 10_000,
+          timeout: 30_000,
+        })
+
+        return callback(tx)
+      }),
+    }
+
+    const repository = new PrismaCallKpiRepository(prisma as any)
+
+    await expect(
+      repository.persistMaterialization({
+        clientId: 'client-1',
+        summaryDefinitionId: 1n,
+        hourlyDefinitionId: 2n,
+        agentRankingDefinitionId: 3n,
+        hourlyComparisonDefinitionId: 4n,
+        period: {
+          from: utcDate(2026, 2, 1),
+          to: utcDate(2026, 2, 31),
+          key: '2026-03-01_2026-03-31',
+          eachDay: () => [],
+        } as any,
+        summaryRows: [
+          {
+            metricKey: 'received.count',
+            metricValue: '1',
+            dimensionsJson: { family: 'calls' },
+          },
+        ],
+        hourlyRows: [],
+        rankingRows: [],
+        comparisonRows: [],
+      }),
+    ).resolves.toEqual({
+      snapshotsCreated: 1,
+      breakdownsCreated: 0,
+    })
+  })
 })

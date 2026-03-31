@@ -150,6 +150,17 @@ export class PrismaSaleFactUpsertRepository implements SaleFactUpsertRepository 
 
   async bulkUpsertClient(clientId: string): Promise<void> {
     await this.prisma.$executeRaw`
+      WITH linked_budget AS (
+        SELECT DISTINCT ON (budget.client_id, budget.sequential_linked_sale)
+          budget.client_id,
+          budget.sequential_linked_sale,
+          budget.source_record_id AS linked_budget_source_record_id,
+          budget.channel
+        FROM core.budget_facts AS budget
+        WHERE budget.client_id = ${clientId}
+          AND budget.sequential_linked_sale IS NOT NULL
+        ORDER BY budget.client_id, budget.sequential_linked_sale, budget.id ASC
+      )
       INSERT INTO core.sale_facts (
         client_id,
         source_table,
@@ -190,9 +201,9 @@ export class PrismaSaleFactUpsertRepository implements SaleFactUpsertRepository 
           WHEN sale.canceled = 'S' THEN 'CANCELED'
           ELSE 'UNKNOWN'
         END,
-        linked.channel,
-        (linked.linked_budget_source_record_id IS NOT NULL),
-        linked.linked_budget_source_record_id,
+        linked_budget.channel,
+        (linked_budget.linked_budget_source_record_id IS NOT NULL),
+        linked_budget.linked_budget_source_record_id,
         COALESCE(sale.customer_name, ''),
         sale.cpf_cnpj,
         COALESCE(sale.value, 0),
@@ -202,16 +213,9 @@ export class PrismaSaleFactUpsertRepository implements SaleFactUpsertRepository 
         sale.list_davs_id,
         row_to_json(sale)
       FROM raw.ferraco_sales AS sale
-      LEFT JOIN LATERAL (
-        SELECT
-          budget.source_record_id AS linked_budget_source_record_id,
-          budget.channel
-        FROM core.budget_facts AS budget
-        WHERE budget.client_id = sale.client_id
-          AND budget.sequential_linked_sale = sale.sequential
-        ORDER BY budget.id ASC
-        LIMIT 1
-      ) AS linked ON TRUE
+      LEFT JOIN linked_budget
+        ON linked_budget.client_id = sale.client_id
+       AND linked_budget.sequential_linked_sale = sale.sequential
       WHERE sale.client_id = ${clientId}
       ON CONFLICT (client_id, source_table, source_record_id)
       DO UPDATE SET

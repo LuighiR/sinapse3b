@@ -10,6 +10,8 @@ import { parseBudgetChannelDailyQuery } from './query/budget-channel-daily.query
 import { parseBudgetChannelHourlyQuery } from './query/budget-channel-hourly.query'
 import { parseBudgetDailyQuery } from './query/budget-daily.query'
 import { parseBudgetDrilldownQuery } from './query/budget-drilldown.query'
+import { parseBudgetFollowUpDailyQuery } from './query/budget-follow-up-daily.query'
+import { parseBudgetFollowUpDrilldownQuery } from './query/budget-follow-up-drilldown.query'
 import { parseBudgetFollowUpSummaryQuery } from './query/budget-follow-up-summary.query'
 import { parseBudgetHourlyQuery } from './query/budget-hourly.query'
 import { parseBudgetSummaryQuery } from './query/budget-summary.query'
@@ -61,6 +63,26 @@ export class KpiController {
     const period = parseBudgetFollowUpSummaryQuery(query)
 
     return this.queryService.getFollowUpSummary({
+      clientId: authContext.clientId,
+      ...period,
+    })
+  }
+
+  @Get('follow-up/daily')
+  getFollowUpDaily(@RequestContext() authContext: AuthContext, @Query() query: Record<string, unknown>) {
+    const period = parseBudgetFollowUpDailyQuery(query)
+
+    return this.queryService.getFollowUpDaily({
+      clientId: authContext.clientId,
+      ...period,
+    })
+  }
+
+  @Get('follow-up/drilldown')
+  getFollowUpDrilldown(@RequestContext() authContext: AuthContext, @Query() query: Record<string, unknown>) {
+    const period = parseBudgetFollowUpDrilldownQuery(query)
+
+    return this.queryService.getFollowUpDrilldown({
       clientId: authContext.clientId,
       ...period,
     })

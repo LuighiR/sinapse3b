@@ -399,6 +399,8 @@ describe('BudgetKpiQueryService', () => {
           budgetDate: '2026-01-02',
           budgetDatetime: budgetDatetime.toISOString(),
           closingDate: null,
+          cancellationDate: null,
+          cancelationTime: null,
           branchId: 5,
           branchName: 'Matriz',
           sellerId: 7,
@@ -435,6 +437,8 @@ describe('BudgetKpiQueryService', () => {
           budgetDate: '2026-01-02',
           budgetDatetime: '2026-01-02T09:30:00.000Z',
           closingDate: '2026-01-03',
+          cancellationDate: '2026-01-04',
+          cancelationTime: '14:45:00',
           statusNormalized: 'WON',
           channel: null,
           customerName: 'ACME LTDA',
@@ -464,6 +468,8 @@ describe('BudgetKpiQueryService', () => {
         budgetDate: '2026-01-02',
         budgetDatetime: '2026-01-02T09:30:00.000Z',
         closingDate: '2026-01-03',
+        cancellationDate: '2026-01-04',
+        cancelationTime: '14:45:00',
         branchId: 5,
         branchName: 'Matriz',
         sellerId: 7,
@@ -479,6 +485,369 @@ describe('BudgetKpiQueryService', () => {
         payloadJson: { family: 'budgets' },
       },
     ])
+  })
+
+  it('filters and orders follow-up drilldown rows by date window and status', async () => {
+    const repository: jest.Mocked<BudgetKpiQueryRepository> = {
+      getSummaryRows: jest.fn(),
+      getDailyRows: jest.fn(),
+      getBudgetFactRows: jest.fn(),
+      getDrilldownRows: jest.fn().mockResolvedValue([
+        {
+          id: 302n,
+          clientId: 'c1',
+          sourceTable: 'raw.ferraco_budgets',
+          sourceRecordId: 302,
+          branchName: 'Matriz',
+          branchId: 5,
+          sellerId: 7,
+          sellerName: 'Maria',
+          budgetDate: utcDate(2026, 0, 5),
+          budgetDatetime: utcDate(2026, 0, 5, 6, 0),
+          closingDate: null,
+          statusNormalized: 'OPEN',
+          channel: 'Balcao',
+          customerName: 'ACME LTDA',
+          cpfCnpj: null,
+          valueAmount: '180.0000',
+          sequential: null,
+          davId: 778n,
+          sequentialLinkedSale: null,
+          payloadJson: {},
+        },
+        {
+          id: 304n,
+          clientId: 'c1',
+          sourceTable: 'raw.ferraco_budgets',
+          sourceRecordId: 304,
+          branchName: 'Matriz',
+          branchId: 5,
+          sellerId: 7,
+          sellerName: 'Maria',
+          budgetDate: utcDate(2026, 0, 5),
+          budgetDatetime: utcDate(2026, 0, 5, 22, 0),
+          closingDate: null,
+          statusNormalized: 'OPEN',
+          channel: 'Balcao',
+          customerName: 'ACME LTDA',
+          cpfCnpj: null,
+          valueAmount: '90.0000',
+          sequential: null,
+          davId: 780n,
+          sequentialLinkedSale: null,
+          payloadJson: {},
+        },
+        {
+          id: 305n,
+          clientId: 'c1',
+          sourceTable: 'raw.ferraco_budgets',
+          sourceRecordId: 305,
+          branchName: 'Matriz',
+          branchId: 5,
+          sellerId: 7,
+          sellerName: 'Maria',
+          budgetDate: utcDate(2026, 0, 5),
+          budgetDatetime: utcDate(2026, 0, 5, 9, 0),
+          closingDate: utcDate(2026, 0, 5),
+          statusNormalized: 'WON',
+          channel: 'Balcao',
+          customerName: 'ACME LTDA',
+          cpfCnpj: null,
+          valueAmount: '220.0000',
+          sequential: null,
+          davId: 779n,
+          sequentialLinkedSale: null,
+          payloadJson: { closing_time: '10:00:00' },
+        },
+        {
+          id: 301n,
+          clientId: 'c1',
+          sourceTable: 'raw.ferraco_budgets',
+          sourceRecordId: 301,
+          branchName: 'Matriz',
+          branchId: 5,
+          sellerId: 7,
+          sellerName: 'Maria',
+          budgetDate: utcDate(2026, 0, 5),
+          budgetDatetime: utcDate(2026, 0, 5, 8, 0),
+          closingDate: null,
+          statusNormalized: 'OPEN',
+          channel: 'Balcao',
+          customerName: 'ACME LTDA',
+          cpfCnpj: null,
+          valueAmount: '200.0000',
+          sequential: null,
+          davId: 777n,
+          sequentialLinkedSale: null,
+          payloadJson: {},
+        },
+        {
+          id: 303n,
+          clientId: 'c1',
+          sourceTable: 'raw.ferraco_budgets',
+          sourceRecordId: 303,
+          branchName: 'Matriz',
+          branchId: 5,
+          sellerId: 7,
+          sellerName: 'Maria',
+          budgetDate: utcDate(2026, 0, 4),
+          budgetDatetime: utcDate(2026, 0, 4, 8, 0),
+          closingDate: null,
+          statusNormalized: 'OPEN',
+          channel: 'Balcao',
+          customerName: 'ACME LTDA',
+          cpfCnpj: null,
+          valueAmount: '75.0000',
+          sequential: null,
+          davId: 781n,
+          sequentialLinkedSale: null,
+          payloadJson: {},
+        },
+        {
+          id: 306n,
+          clientId: 'c1',
+          sourceTable: 'raw.ferraco_budgets',
+          sourceRecordId: 306,
+          branchName: 'Matriz',
+          branchId: 5,
+          sellerId: 7,
+          sellerName: 'Maria',
+          budgetDate: utcDate(2026, 0, 5),
+          budgetDatetime: utcDate(2026, 0, 5, 7, 30),
+          closingDate: null,
+          statusNormalized: 'OPEN',
+          channel: 'Televendas',
+          customerName: 'ACME LTDA',
+          cpfCnpj: null,
+          valueAmount: '65.0000',
+          sequential: null,
+          davId: 782n,
+          sequentialLinkedSale: null,
+          payloadJson: {},
+        },
+      ]),
+    }
+
+    const service = new BudgetKpiQueryService(repository)
+
+    const result = await service.getFollowUpDrilldown({
+      clientId: 'c1',
+      from: '2026-01-01',
+      to: '2026-01-31',
+      referenceAt: '2026-01-06T18:30:00-03:00',
+      date: '2026-01-05',
+      followUpWindow: 'after24h',
+      followUpStatus: 'open',
+      sellerId: '7',
+      orderType: 'Balcao',
+    })
+
+    expect(repository.getDrilldownRows).toHaveBeenCalledWith({
+      clientId: 'c1',
+      period: expect.objectContaining({
+        from: saoPauloPeriodDate(2026, 0, 1),
+        to: saoPauloPeriodDate(2026, 0, 31),
+      }),
+      sellerId: 7,
+      branchId: undefined,
+      branchName: undefined,
+    })
+    expect(result.filters).toEqual({
+      referenceAt: '2026-01-06T18:30:00-03:00',
+      date: '2026-01-05',
+      followUpWindow: 'after24h',
+      followUpStatus: 'open',
+      sellerId: 7,
+      orderType: 'Balcao',
+    })
+    expect(result.rows).toHaveLength(2)
+    expect(result.rows.map(({ id }) => id)).toEqual(['301', '302'])
+    expect(result.rows[0]).toMatchObject({
+      id: '301',
+      budgetDate: '2026-01-05',
+      budgetDatetime: utcDate(2026, 0, 5, 8, 0).toISOString(),
+      followUpWindow: 'after24h',
+      followUpStatus: 'open',
+    })
+    expect(result.rows[1]).toMatchObject({
+      id: '302',
+      budgetDate: '2026-01-05',
+      budgetDatetime: utcDate(2026, 0, 5, 6, 0).toISOString(),
+      followUpWindow: 'after24h',
+      followUpStatus: 'open',
+    })
+    expect(result.rows).toEqual(
+      expect.not.arrayContaining([expect.objectContaining({ id: '306' })]),
+    )
+  })
+
+  it('orders follow-up drilldown rows by id when budgetDatetime and budgetDate tie', async () => {
+    const repository: jest.Mocked<BudgetKpiQueryRepository> = {
+      getSummaryRows: jest.fn(),
+      getDailyRows: jest.fn(),
+      getBudgetFactRows: jest.fn(),
+      getDrilldownRows: jest.fn().mockResolvedValue([
+        {
+          id: 2n,
+          clientId: 'c1',
+          sourceTable: 'raw.ferraco_budgets',
+          sourceRecordId: 2,
+          branchName: 'Matriz',
+          branchId: 5,
+          sellerId: 7,
+          sellerName: 'Maria',
+          budgetDate: utcDate(2026, 0, 5),
+          budgetDatetime: utcDate(2026, 0, 5, 8, 0),
+          closingDate: null,
+          statusNormalized: 'OPEN',
+          channel: 'Balcao',
+          customerName: 'ACME LTDA',
+          cpfCnpj: null,
+          valueAmount: '20.0000',
+          sequential: null,
+          davId: 2n,
+          sequentialLinkedSale: null,
+          payloadJson: {},
+        },
+        {
+          id: 10n,
+          clientId: 'c1',
+          sourceTable: 'raw.ferraco_budgets',
+          sourceRecordId: 10,
+          branchName: 'Matriz',
+          branchId: 5,
+          sellerId: 7,
+          sellerName: 'Maria',
+          budgetDate: utcDate(2026, 0, 5),
+          budgetDatetime: utcDate(2026, 0, 5, 8, 0),
+          closingDate: null,
+          statusNormalized: 'OPEN',
+          channel: 'Balcao',
+          customerName: 'ACME LTDA',
+          cpfCnpj: null,
+          valueAmount: '30.0000',
+          sequential: null,
+          davId: 10n,
+          sequentialLinkedSale: null,
+          payloadJson: {},
+        },
+      ]),
+    }
+
+    const service = new BudgetKpiQueryService(repository)
+
+    const result = await service.getFollowUpDrilldown({
+      clientId: 'c1',
+      from: '2026-01-01',
+      to: '2026-01-31',
+      referenceAt: '2026-01-06T18:30:00-03:00',
+    })
+
+    expect(result.rows.map((row) => row.id)).toEqual(['10', '2'])
+  })
+
+  it('classifies cancelled follow-up drilldown rows from structured cancellation fields', async () => {
+    const repository: jest.Mocked<BudgetKpiQueryRepository> = {
+      getSummaryRows: jest.fn(),
+      getDailyRows: jest.fn(),
+      getBudgetFactRows: jest.fn(),
+      getDrilldownRows: jest.fn().mockResolvedValue([
+        {
+          id: 901n,
+          clientId: 'c1',
+          sourceTable: 'raw.ferraco_budgets',
+          sourceRecordId: 901,
+          branchName: 'Matriz',
+          branchId: 5,
+          sellerId: 7,
+          sellerName: 'Maria',
+          budgetDate: new Date('2026-01-05T00:00:00-03:00'),
+          budgetDatetime: new Date('2026-01-05T09:00:00-03:00'),
+          closingDate: null,
+          cancellationDate: new Date('2026-01-05T00:00:00-03:00'),
+          cancelationTime: '11:00:00',
+          statusNormalized: 'LOST',
+          channel: 'Balcao',
+          customerName: 'ACME LTDA',
+          cpfCnpj: null,
+          valueAmount: '125.0000',
+          sequential: null,
+          davId: 901n,
+          sequentialLinkedSale: null,
+          payloadJson: {},
+        },
+      ]),
+    }
+
+    const service = new BudgetKpiQueryService(repository)
+
+    const result = await service.getFollowUpDrilldown({
+      clientId: 'c1',
+      from: '2026-01-01',
+      to: '2026-01-31',
+      referenceAt: '2026-01-06T09:00:00-03:00',
+      date: '2026-01-05',
+      followUpWindow: 'within24h',
+      followUpStatus: 'lost',
+      orderType: 'Balcao',
+    })
+
+    expect(result.rows).toEqual([
+      expect.objectContaining({
+        id: '901',
+        cancellationDate: '2026-01-05',
+        cancelationTime: '11:00:00',
+        followUpWindow: 'within24h',
+        followUpStatus: 'lost',
+      }),
+    ])
+  })
+
+  it('keeps rows without resolvable closure as open in follow-up drilldown', async () => {
+    const repository: jest.Mocked<BudgetKpiQueryRepository> = {
+      getSummaryRows: jest.fn(),
+      getDailyRows: jest.fn(),
+      getBudgetFactRows: jest.fn(),
+      getDrilldownRows: jest.fn().mockResolvedValue([
+        {
+          id: 401n,
+          clientId: 'c1',
+          sourceTable: 'raw.ferraco_budgets',
+          sourceRecordId: 401,
+          branchName: 'Matriz',
+          branchId: 5,
+          sellerId: 7,
+          sellerName: 'Maria',
+          budgetDate: utcDate(2026, 0, 5),
+          budgetDatetime: utcDate(2026, 0, 5, 8, 0),
+          closingDate: null,
+          statusNormalized: 'WON',
+          channel: 'Balcao',
+          customerName: 'ACME LTDA',
+          cpfCnpj: null,
+          valueAmount: '200.0000',
+          sequential: null,
+          davId: 777n,
+          sequentialLinkedSale: null,
+          payloadJson: {},
+        },
+      ]),
+    }
+
+    const service = new BudgetKpiQueryService(repository)
+
+    const result = await service.getFollowUpDrilldown({
+      clientId: 'c1',
+      from: '2026-01-01',
+      to: '2026-01-31',
+      referenceAt: '2026-01-31T18:30:00-03:00',
+      followUpStatus: 'open',
+    })
+
+    expect(result.rows[0]).toMatchObject({
+      id: '401',
+      followUpStatus: 'open',
+    })
   })
 
   it('filters drilldown rows by status using the budget status query contract', async () => {
@@ -682,13 +1051,14 @@ describe('BudgetKpiQueryService', () => {
           id: 2n,
           budgetDate: new Date('2026-01-05T00:00:00-03:00'),
           budgetDatetime: new Date('2026-01-05T09:00:00-03:00'),
-          closingDate: utcDate(2026, 0, 6),
+          cancellationDate: new Date('2026-01-05T00:00:00-03:00'),
+          cancelationTime: '10:30:00',
           sellerId: 7,
           sellerName: 'Maria',
           statusNormalized: 'LOST',
           channel: 'Balcao',
           valueAmount: '50.00',
-          payloadJson: { closing_time: '08:30:00' },
+          payloadJson: {},
         },
         {
           id: 3n,
@@ -768,6 +1138,155 @@ describe('BudgetKpiQueryService', () => {
         open: { count: 2, value: '225.0000', percentage: '40.00' },
       },
     })
+  })
+
+  it('treats won budgets without closing_time as converted by end of closing day in follow-up summary', async () => {
+    const repository: jest.Mocked<BudgetKpiQueryRepository> = {
+      getSummaryRows: jest.fn(),
+      getDailyRows: jest.fn(),
+      getBudgetFactRows: jest.fn().mockResolvedValue([
+        {
+          id: 1n,
+          budgetDate: new Date('2026-01-05T00:00:00-03:00'),
+          budgetDatetime: new Date('2026-01-05T08:00:00-03:00'),
+          closingDate: new Date('2026-01-05T00:00:00-03:00'),
+          sellerId: 7,
+          sellerName: 'Maria',
+          statusNormalized: 'WON',
+          valueAmount: '100.00',
+          payloadJson: {},
+        },
+      ]),
+      getDrilldownRows: jest.fn(),
+    }
+
+    const service = new BudgetKpiQueryService(repository)
+
+    const result = await service.getFollowUpSummary({
+      clientId: 'c1',
+      from: '2026-01-01',
+      to: '2026-01-31',
+      referenceAt: '2026-01-06T09:00:00-03:00',
+    })
+
+    expect(result.within24h.converted.count).toBe(1)
+    expect(result.within24h.open.count).toBe(0)
+  })
+
+  it('returns zero-filled follow-up daily rows for all six groups', async () => {
+    const repository: jest.Mocked<BudgetKpiQueryRepository> = {
+      getSummaryRows: jest.fn(),
+      getDailyRows: jest.fn(),
+      getBudgetFactRows: jest.fn().mockResolvedValue([
+        {
+          id: 1n,
+          budgetDate: new Date('2026-01-05T00:00:00-03:00'),
+          budgetDatetime: new Date('2026-01-05T08:00:00-03:00'),
+          closingDate: new Date('2026-01-05T00:00:00-03:00'),
+          sellerId: 7,
+          sellerName: 'Maria',
+          statusNormalized: 'WON',
+          channel: 'Balcao',
+          valueAmount: '100.00',
+          payloadJson: {},
+        },
+        {
+          id: 2n,
+          budgetDate: new Date('2026-01-05T00:00:00-03:00'),
+          budgetDatetime: new Date('2026-01-05T11:00:00-03:00'),
+          cancellationDate: new Date('2026-01-05T00:00:00-03:00'),
+          cancelationTime: '12:00:00',
+          sellerId: 7,
+          sellerName: 'Maria',
+          statusNormalized: 'LOST',
+          channel: 'Balcao',
+          valueAmount: '25.00',
+          payloadJson: {},
+        },
+      ]),
+      getDrilldownRows: jest.fn(),
+    }
+
+    const service = new BudgetKpiQueryService(repository)
+
+    const result = await service.getFollowUpDaily({
+      clientId: 'c1',
+      from: '2026-01-05',
+      to: '2026-01-06',
+      referenceAt: '2026-01-06T09:00:00-03:00',
+      sellerId: '7',
+      orderType: 'Balcao',
+    })
+
+    expect(repository.getBudgetFactRows).toHaveBeenCalledWith({
+      clientId: 'c1',
+      period: expect.objectContaining({
+        from: saoPauloPeriodDate(2026, 0, 5),
+        to: saoPauloPeriodDate(2026, 0, 6),
+      }),
+      sellerId: 7,
+    })
+    expect(result.rows).toHaveLength(12)
+    expect(result.rows).toEqual([
+      { date: '2026-01-05', window: 'within24h', status: 'converted', count: 1, value: '100.0000' },
+      { date: '2026-01-05', window: 'within24h', status: 'lost', count: 1, value: '25.0000' },
+      { date: '2026-01-05', window: 'within24h', status: 'open', count: 0, value: '0.0000' },
+      { date: '2026-01-05', window: 'after24h', status: 'converted', count: 0, value: '0.0000' },
+      { date: '2026-01-05', window: 'after24h', status: 'lost', count: 0, value: '0.0000' },
+      { date: '2026-01-05', window: 'after24h', status: 'open', count: 0, value: '0.0000' },
+      { date: '2026-01-06', window: 'within24h', status: 'converted', count: 0, value: '0.0000' },
+      { date: '2026-01-06', window: 'within24h', status: 'lost', count: 0, value: '0.0000' },
+      { date: '2026-01-06', window: 'within24h', status: 'open', count: 0, value: '0.0000' },
+      { date: '2026-01-06', window: 'after24h', status: 'converted', count: 0, value: '0.0000' },
+      { date: '2026-01-06', window: 'after24h', status: 'lost', count: 0, value: '0.0000' },
+      { date: '2026-01-06', window: 'after24h', status: 'open', count: 0, value: '0.0000' },
+    ])
+  })
+
+  it('excludes budgets opened after referenceAt from follow-up daily rows', async () => {
+    const repository: jest.Mocked<BudgetKpiQueryRepository> = {
+      getSummaryRows: jest.fn(),
+      getDailyRows: jest.fn(),
+      getBudgetFactRows: jest.fn().mockResolvedValue([
+        {
+          id: 2n,
+          budgetDate: new Date('2026-01-06T00:00:00-03:00'),
+          budgetDatetime: new Date('2026-01-06T12:00:00-03:00'),
+          sellerId: 7,
+          sellerName: 'Maria',
+          statusNormalized: 'OPEN',
+          channel: 'Balcao',
+          valueAmount: '55.00',
+          payloadJson: {},
+        },
+      ]),
+      getDrilldownRows: jest.fn(),
+    }
+
+    const service = new BudgetKpiQueryService(repository)
+
+    const result = await service.getFollowUpDaily({
+      clientId: 'c1',
+      from: '2026-01-05',
+      to: '2026-01-06',
+      referenceAt: '2026-01-06T09:00:00-03:00',
+    })
+
+    expect(result.rows).toHaveLength(12)
+    expect(result.rows).toEqual([
+      { date: '2026-01-05', window: 'within24h', status: 'converted', count: 0, value: '0.0000' },
+      { date: '2026-01-05', window: 'within24h', status: 'lost', count: 0, value: '0.0000' },
+      { date: '2026-01-05', window: 'within24h', status: 'open', count: 0, value: '0.0000' },
+      { date: '2026-01-05', window: 'after24h', status: 'converted', count: 0, value: '0.0000' },
+      { date: '2026-01-05', window: 'after24h', status: 'lost', count: 0, value: '0.0000' },
+      { date: '2026-01-05', window: 'after24h', status: 'open', count: 0, value: '0.0000' },
+      { date: '2026-01-06', window: 'within24h', status: 'converted', count: 0, value: '0.0000' },
+      { date: '2026-01-06', window: 'within24h', status: 'lost', count: 0, value: '0.0000' },
+      { date: '2026-01-06', window: 'within24h', status: 'open', count: 0, value: '0.0000' },
+      { date: '2026-01-06', window: 'after24h', status: 'converted', count: 0, value: '0.0000' },
+      { date: '2026-01-06', window: 'after24h', status: 'lost', count: 0, value: '0.0000' },
+      { date: '2026-01-06', window: 'after24h', status: 'open', count: 0, value: '0.0000' },
+    ])
   })
 
   it('returns a zero-filled hourly series sorted from 00 to 23', async () => {

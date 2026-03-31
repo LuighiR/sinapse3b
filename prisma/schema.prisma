@@ -298,6 +298,8 @@ model BudgetFact {
   sellerName           String            @map("seller_name")
   budgetDate           DateTime          @map("budget_date") @db.Date
   budgetDatetime       DateTime          @map("budget_datetime")
+  cancellationDate     DateTime?         @map("cancellation_date") @db.Date
+  cancelationTime      String?           @map("cancelation_time")
   closingDate          DateTime?         @map("closing_date") @db.Date
   statusRaw            String?           @map("status_raw")
   statusNormalized     String            @default("UNKNOWN") @map("status_normalized")

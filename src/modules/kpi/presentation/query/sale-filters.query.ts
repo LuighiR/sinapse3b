@@ -13,6 +13,7 @@ export type SaleFactFiltersQuery = SaleBasePeriodQuery & {
   sellerId?: number
   status?: SaleStatusQuery
   orderType?: string
+  hasLinkedBudget?: boolean
 }
 
 const numericIdSchema = z
@@ -44,6 +45,10 @@ const saleFactFiltersSchema = saleBasePeriodSchema.extend({
   sellerId: numericIdSchema.optional(),
   status: z.enum(['Ativa', 'Cancelada']).optional(),
   orderType: orderTypeSchema,
+  hasLinkedBudget: z
+    .enum(['true', 'false'])
+    .transform((value) => value === 'true')
+    .optional(),
 })
 
 export function parseSaleFactFiltersQuery(
@@ -56,6 +61,7 @@ export function parseSaleFactFiltersQuery(
     sellerId: query.sellerId,
     status: query.status,
     orderType: query.orderType,
+    hasLinkedBudget: query.hasLinkedBudget,
   })
 
   if (!parsed.success || !isValidPeriod(parsed.data)) {

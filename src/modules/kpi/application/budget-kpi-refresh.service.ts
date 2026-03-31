@@ -8,6 +8,8 @@ export type BudgetFactRecord = {
   budgetDate: Date
   budgetDatetime?: Date | string
   closingDate?: Date | string | null
+  cancellationDate?: Date | string | null
+  cancelationTime?: string | null
   sellerId: number | string | bigint
   sellerName: string | null
   statusNormalized: string | null

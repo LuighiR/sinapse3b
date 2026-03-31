@@ -6,6 +6,7 @@ import {
   SaleKpiQueryService,
   type SaleKpiChannelDailyResponse,
   type SaleKpiDailySeriesResponse,
+  type SaleKpiDrilldownResponse,
   type SaleKpiSummaryResponse,
   type SaleKpiTicketAverageResponse,
 } from '../src/modules/kpi/application/sale-kpi-query.service'
@@ -60,6 +61,35 @@ describe('Sale KPI endpoints', () => {
         { orderType: 'Nao identificado', count: 1, value: '100.0000', averageTicket: '100.0000' },
       ],
     } satisfies SaleKpiTicketAverageResponse)
+    jest.spyOn(queryService, 'getDrilldown').mockResolvedValue({
+      period: { from: '2026-01-05', to: '2026-01-05', key: '2026-01-05_2026-01-05' },
+      filters: { sellerId: 7, status: 'Cancelada', orderType: 'Televendas', hasLinkedBudget: true } as any,
+      rows: [
+        {
+          id: '99',
+          sourceTable: 'raw.ferraco_sales',
+          sourceRecordId: 123,
+          saleDate: '2026-01-05',
+          saleDatetime: '2026-01-05T09:30:00.000Z',
+          branchId: 5,
+          branchName: 'Matriz',
+          sellerId: 7,
+          sellerName: 'Maria',
+          statusNormalized: 'CANCELED',
+          channel: 'Televendas',
+          hasLinkedBudget: true,
+          linkedBudgetSourceRecordId: 777,
+          customerName: 'ACME LTDA',
+          cpfCnpj: null,
+          valueAmount: '200.5000',
+          sequential: '888',
+          invoiceSerie: '1',
+          invoiceNumeric: '42',
+          listDavsId: '11,12',
+          payloadJson: { family: 'sales' },
+        },
+      ],
+    } satisfies SaleKpiDrilldownResponse)
     jest.spyOn(refreshService, 'refresh').mockResolvedValue({
       clientId: 'client-1',
       from: '2026-01-01',
@@ -100,40 +130,135 @@ describe('Sale KPI endpoints', () => {
       .get('/kpis/sales/summary')
       .set('Authorization', `Bearer ${token}`)
       .set('X-Tenant-Id', 'tenant-1')
-      .query({ from: '2026-01-01', to: '2026-01-31', sellerId: '7', status: 'Cancelada', orderType: 'Televendas' })
+      .query({
+        from: '2026-01-01',
+        to: '2026-01-31',
+        sellerId: '7',
+        status: 'Cancelada',
+        orderType: 'Televendas',
+        hasLinkedBudget: 'true',
+      })
       .expect(200)
 
-    expect(queryService.getSummary).toHaveBeenCalledWith({
+    expect(queryService.getSummary).toHaveBeenLastCalledWith(
+      expect.objectContaining({
       clientId: 'client-1',
       from: '2026-01-01',
       to: '2026-01-31',
       sellerId: 7,
       status: 'Cancelada',
       orderType: 'Televendas',
-    })
+      hasLinkedBudget: true,
+      }),
+    )
   })
 
-  it('returns sales daily and ticket-average endpoints', async () => {
+  it('forwards hasLinkedBudget through daily, channel, and ticket-average endpoints', async () => {
     await request(app.getHttpServer())
       .get('/kpis/sales/daily')
       .set('Authorization', `Bearer ${token}`)
       .set('X-Tenant-Id', 'tenant-1')
-      .query({ from: '2026-01-01', to: '2026-01-31' })
+      .query({ from: '2026-01-01', to: '2026-01-31', hasLinkedBudget: 'false' })
       .expect(200)
+
+    expect(queryService.getDailySeries).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+      clientId: 'client-1',
+      from: '2026-01-01',
+      to: '2026-01-31',
+      hasLinkedBudget: false,
+      }),
+    )
 
     await request(app.getHttpServer())
       .get('/kpis/sales/channel/daily')
       .set('Authorization', `Bearer ${token}`)
       .set('X-Tenant-Id', 'tenant-1')
-      .query({ from: '2026-01-01', to: '2026-01-31', status: 'Ativa' })
+      .query({ from: '2026-01-01', to: '2026-01-31', status: 'Ativa', hasLinkedBudget: 'true' })
       .expect(200)
+
+    expect(queryService.getChannelDaily).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+      clientId: 'client-1',
+      from: '2026-01-01',
+      to: '2026-01-31',
+      status: 'Ativa',
+      hasLinkedBudget: true,
+      }),
+    )
 
     await request(app.getHttpServer())
       .get('/kpis/sales/ticket-average')
       .set('Authorization', `Bearer ${token}`)
       .set('X-Tenant-Id', 'tenant-1')
-      .query({ from: '2026-01-01', to: '2026-01-31' })
+      .query({ from: '2026-01-01', to: '2026-01-31', hasLinkedBudget: 'true' })
       .expect(200)
+
+    expect(queryService.getTicketAverage).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+      clientId: 'client-1',
+      from: '2026-01-01',
+      to: '2026-01-31',
+      hasLinkedBudget: true,
+      }),
+    )
+  })
+
+  it('returns sales drilldown rows and forwards the filters', async () => {
+    await request(app.getHttpServer())
+      .get('/kpis/sales/drilldown')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Tenant-Id', 'tenant-1')
+      .query({
+        from: '2026-01-05',
+        to: '2026-01-05',
+        sellerId: '7',
+        status: 'Cancelada',
+        orderType: 'Televendas',
+        hasLinkedBudget: 'true',
+      })
+      .expect(200)
+      .expect({
+        period: { from: '2026-01-05', to: '2026-01-05', key: '2026-01-05_2026-01-05' },
+        filters: { sellerId: 7, status: 'Cancelada', orderType: 'Televendas', hasLinkedBudget: true },
+        rows: [
+          {
+            id: '99',
+            sourceTable: 'raw.ferraco_sales',
+            sourceRecordId: 123,
+            saleDate: '2026-01-05',
+            saleDatetime: '2026-01-05T09:30:00.000Z',
+            branchId: 5,
+            branchName: 'Matriz',
+            sellerId: 7,
+            sellerName: 'Maria',
+            statusNormalized: 'CANCELED',
+            channel: 'Televendas',
+            hasLinkedBudget: true,
+            linkedBudgetSourceRecordId: 777,
+            customerName: 'ACME LTDA',
+            cpfCnpj: null,
+            valueAmount: '200.5000',
+            sequential: '888',
+            invoiceSerie: '1',
+            invoiceNumeric: '42',
+            listDavsId: '11,12',
+            payloadJson: { family: 'sales' },
+          },
+        ],
+      })
+
+    expect(queryService.getDrilldown).toHaveBeenCalledWith(
+      expect.objectContaining({
+      clientId: 'client-1',
+      from: '2026-01-05',
+      to: '2026-01-05',
+      sellerId: 7,
+      status: 'Cancelada',
+      orderType: 'Televendas',
+      hasLinkedBudget: true,
+      }),
+    )
   })
 
   it('refreshes the sales kpis for the active tenant client', async () => {

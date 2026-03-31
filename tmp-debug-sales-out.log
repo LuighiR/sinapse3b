@@ -1,0 +1,76 @@
+
+> sinapse3@0.0.0 predev
+> npm run prisma:generate
+
+
+> sinapse3@0.0.0 prisma:generate
+> prisma generate
+
+
+✔ Generated Prisma Client (v7.5.0) to .\node_modules\@prisma\client in 222ms
+
+Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
+
+
+
+> sinapse3@0.0.0 dev
+> ts-node src/main.ts
+
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[NestFactory] [39m[32mStarting Nest application...[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mAppModule dependencies initialized[39m[38;5;3m +27ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mPrismaModule dependencies initialized[39m[38;5;3m +3ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mHealthModule dependencies initialized[39m[38;5;3m +1ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mMeModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mNormalizationModule dependencies initialized[39m[38;5;3m +1ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mCompaniesModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mAuthModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mKpiModule dependencies initialized[39m[38;5;3m +1ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mHealthController {/health}:[39m[38;5;3m +3ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/health, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mAuthContextController {/auth}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/auth/context, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mAuthSessionController {/auth}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/auth/login, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/auth/refresh, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mMeController {/me}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/me, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/me/tenants, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mCompaniesController {/companies}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/companies/current, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/companies/current/branches, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/companies/current/employees, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mKpiController {/kpis/budgets}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/kpis/budgets/refresh, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/kpis/budgets/summary, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/kpis/budgets/daily, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/kpis/budgets/follow-up/summary, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/kpis/budgets/follow-up/daily, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/kpis/budgets/follow-up/drilldown, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/kpis/budgets/hourly, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/kpis/budgets/channel/daily, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/kpis/budgets/channel/hourly, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/kpis/budgets/channel/abandonment, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/kpis/budgets/drilldown, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mSalesKpiController {/kpis/sales}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/kpis/sales/refresh, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/kpis/sales/summary, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/kpis/sales/daily, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/kpis/sales/channel/daily, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/kpis/sales/ticket-average, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mCallKpiController {/kpis/calls}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/kpis/calls/refresh, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/kpis/calls/summary, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/kpis/calls/hourly, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/kpis/calls/agents/ranking, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/kpis/calls/hourly/comparison, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mWhatsAppKpiController {/kpis/whatsapp}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/kpis/whatsapp/summary, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/kpis/whatsapp/agents/ranking, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/kpis/whatsapp/sessions/hourly, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/kpis/whatsapp/sessions/daily, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/kpis/whatsapp/messages/hourly, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/kpis/whatsapp/messages/daily, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/kpis/whatsapp/tags, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/kpis/whatsapp/tags/hourly, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/kpis/whatsapp/tags/hourly/comparison, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 26488  - [39m30/03/2026, 15:55:29 [32m    LOG[39m [38;5;3m[NestApplication] [39m[32mNest application successfully started[39m[38;5;3m +50ms[39m

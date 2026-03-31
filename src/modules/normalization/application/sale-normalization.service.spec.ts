@@ -1,5 +1,6 @@
 import { Test } from '@nestjs/testing'
 import {
+  PrismaSaleFactUpsertRepository,
   RAW_FERRACO_SALE_READER,
   SALE_FACT_UPSERT_REPOSITORY,
   SaleNormalizationService,
@@ -19,6 +20,26 @@ describe('mapSaleStatus', () => {
 })
 
 describe('SaleNormalizationService', () => {
+  it('builds the bulk upsert query with a precomputed budget lookup instead of a lateral join per sale', async () => {
+    const prisma = {
+      $executeRaw: jest.fn().mockResolvedValue(25468),
+    }
+
+    const repository = new PrismaSaleFactUpsertRepository(prisma as any)
+
+    await repository.bulkUpsertClient('client-1')
+
+    expect(prisma.$executeRaw).toHaveBeenCalledTimes(1)
+
+    const [templateStrings] = prisma.$executeRaw.mock.calls[0] as [TemplateStringsArray]
+    const sqlText = templateStrings.join('__VALUE__')
+
+    expect(sqlText).toContain('WITH linked_budget AS (')
+    expect(sqlText).toContain('SELECT DISTINCT ON (budget.client_id, budget.sequential_linked_sale)')
+    expect(sqlText).toContain('linked_budget.sequential_linked_sale = sale.sequential')
+    expect(sqlText).not.toContain('LEFT JOIN LATERAL')
+  })
+
   it('normalizes raw ferraco sales for the provided client and enriches channel from linked budgets', async () => {
     const rawReader: RawFerracoSaleReader = {
       findByClientId: jest.fn().mockResolvedValue([

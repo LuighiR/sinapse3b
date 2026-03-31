@@ -13,6 +13,8 @@ export type RawFerracoBudgetRecord = {
   sellerName: string | null
   openingDate: string | Date
   openingTime: string | Date | null
+  cancellationDate: string | Date | null
+  cancelationTime: string | Date | null
   closingDate: string | Date | null
   closingTime: string | Date | null
   status: string | null
@@ -36,6 +38,8 @@ export type BudgetFactWritePayload = {
   sellerName: string
   budgetDate: Date
   budgetDatetime: Date
+  cancellationDate: Date | null
+  cancelationTime: string | null
   closingDate: Date | null
   statusRaw: string | null
   statusNormalized: NormalizedBudgetStatus
@@ -106,6 +110,8 @@ export class PrismaRawFerracoBudgetReader implements RawFerracoBudgetReader {
         budget.seller_name AS "sellerName",
         budget.opening_date AS "openingDate",
         budget.opening_time::text AS "openingTime",
+        budget.cancellation_date AS "cancellationDate",
+        budget.cancellation_time::text AS "cancelationTime",
         budget.closing_date AS "closingDate",
         budget.closing_time::text AS "closingTime",
         budget.status,
@@ -146,6 +152,8 @@ export class PrismaBudgetFactUpsertRepository implements BudgetFactUpsertReposit
         seller_name,
         budget_date,
         budget_datetime,
+        cancellation_date,
+        cancelation_time,
         closing_date,
         status_raw,
         status_normalized,
@@ -168,6 +176,8 @@ export class PrismaBudgetFactUpsertRepository implements BudgetFactUpsertReposit
         COALESCE(budget.seller_name, ''),
         budget.opening_date,
         budget.opening_date::timestamp + COALESCE(budget.opening_time, time '00:00:00'),
+        budget.cancellation_date,
+        budget.cancellation_time,
         budget.closing_date,
         budget.status,
         CASE
@@ -195,6 +205,8 @@ export class PrismaBudgetFactUpsertRepository implements BudgetFactUpsertReposit
         seller_name = EXCLUDED.seller_name,
         budget_date = EXCLUDED.budget_date,
         budget_datetime = EXCLUDED.budget_datetime,
+        cancellation_date = EXCLUDED.cancellation_date,
+        cancelation_time = EXCLUDED.cancelation_time,
         closing_date = EXCLUDED.closing_date,
         status_raw = EXCLUDED.status_raw,
         status_normalized = EXCLUDED.status_normalized,
@@ -291,6 +303,8 @@ export class BudgetNormalizationService {
       sellerName: budget.sellerName ?? '',
       budgetDate: this.parseDateOnly(budget.openingDate),
       budgetDatetime: this.parseBudgetDatetime(budget.openingDate, budget.openingTime),
+      cancellationDate: this.parseOptionalDateOnly(budget.cancellationDate),
+      cancelationTime: this.normalizeOptionalText(budget.cancelationTime),
       closingDate: this.parseOptionalDateOnly(budget.closingDate),
       statusRaw: budget.status,
       statusNormalized: mapBudgetStatus(budget.status),
@@ -303,6 +317,7 @@ export class BudgetNormalizationService {
       sequentialLinkedSale: this.parseOptionalBigInt(budget.sequentialLinkedSale),
       payloadJson: {
         ...(budget.payload ?? {}),
+        ...(budget.cancelationTime != null && budget.cancelationTime !== '' ? { cancelation_time: String(budget.cancelationTime) } : {}),
         ...(budget.closingTime != null && budget.closingTime !== '' ? { closing_time: String(budget.closingTime) } : {}),
       },
     }
@@ -365,6 +380,20 @@ export class BudgetNormalizationService {
     }
 
     return String(value)
+  }
+
+  private normalizeOptionalText(value: string | Date | null): string | null {
+    if (value == null) {
+      return null
+    }
+
+    if (value instanceof Date) {
+      return value.toISOString()
+    }
+
+    const normalizedValue = String(value).trim()
+
+    return normalizedValue === '' ? null : normalizedValue
   }
 
   private getDateParts(value: string | Date): [number, number, number] {

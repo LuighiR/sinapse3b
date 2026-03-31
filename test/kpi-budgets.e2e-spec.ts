@@ -4,6 +4,8 @@ import { buildTestApp } from './helpers/build-test-app'
 import {
   type BudgetKpiFollowUpSummaryResponse,
   BudgetKpiQueryService,
+  type BudgetKpiFollowUpDailyResponse,
+  type BudgetKpiFollowUpDrilldownResponse,
   type BudgetKpiDailySeriesResponse,
   type BudgetKpiDrilldownResponse,
   type BudgetKpiSummaryResponse,
@@ -87,9 +89,59 @@ describe('Budget KPI endpoints', () => {
         open: { count: 0, value: '0.0000', percentage: '0.00' },
       },
     } satisfies BudgetKpiFollowUpSummaryResponse)
+    jest.spyOn(queryService, 'getFollowUpDaily').mockResolvedValue({
+      period: { from: '2026-01-01', to: '2026-01-31', key: '2026-01-01_2026-01-31' },
+      rows: [
+        {
+          date: '2026-01-05',
+          window: 'within24h',
+          status: 'converted',
+          count: 2,
+          value: '240.0000',
+        },
+      ],
+    } satisfies BudgetKpiFollowUpDailyResponse)
+    jest.spyOn(queryService, 'getFollowUpDrilldown').mockImplementation(async (input) => ({
+      period: { from: '2026-01-01', to: '2026-01-31', key: '2026-01-01_2026-01-31' },
+      filters: {
+        referenceAt: typeof input.referenceAt === 'string' ? input.referenceAt : input.referenceAt.toISOString(),
+        date: input.date,
+        sellerId: input.sellerId as number | undefined,
+        orderType: input.orderType,
+        followUpWindow: input.followUpWindow,
+        followUpStatus: input.followUpStatus,
+      },
+      rows: [
+        {
+          id: '99',
+          sourceTable: 'raw.ferraco_budgets',
+          sourceRecordId: 123,
+          budgetDate: '2026-01-05',
+          budgetDatetime: '2026-01-05T09:30:00.000Z',
+          closingDate: null,
+          cancellationDate: '2026-01-05',
+          cancelationTime: '11:15:00',
+          branchId: 5,
+          branchName: 'Matriz',
+          sellerId: 7,
+          sellerName: 'Maria',
+          statusNormalized: 'LOST',
+          channel: 'Balcao',
+          customerName: 'ACME LTDA',
+          cpfCnpj: null,
+          valueAmount: '200.5000',
+          sequential: null,
+          davId: '777',
+          sequentialLinkedSale: null,
+          payloadJson: { family: 'budgets' },
+          followUpWindow: 'within24h',
+          followUpStatus: 'lost',
+        },
+      ],
+    } satisfies BudgetKpiFollowUpDrilldownResponse))
     jest.spyOn(queryService, 'getDrilldown').mockResolvedValue({
       period: { from: '2026-01-01', to: '2026-01-31', key: '2026-01-01_2026-01-31' },
-      filters: { sellerId: 7, branchId: 5, branchName: 'Matriz', status: 'Baixado' },
+      filters: { sellerId: 7, branchId: 5, branchName: 'Matriz', status: 'Cancelado' },
       rows: [
         {
           id: '99',
@@ -98,11 +150,13 @@ describe('Budget KPI endpoints', () => {
           budgetDate: '2026-01-02',
           budgetDatetime: '2026-01-02T09:30:00.000Z',
           closingDate: null,
+          cancellationDate: '2026-01-03',
+          cancelationTime: '15:30:00',
           branchId: 5,
           branchName: 'Matriz',
           sellerId: 7,
           sellerName: 'Maria',
-          statusNormalized: 'WON',
+          statusNormalized: 'LOST',
           channel: null,
           customerName: 'ACME LTDA',
           cpfCnpj: null,
@@ -285,9 +339,147 @@ describe('Budget KPI endpoints', () => {
     })
   })
 
+  it('accepts date-only referenceAt on follow-up summary and normalizes it to the end of day', async () => {
+    await request(app.getHttpServer())
+      .get('/kpis/budgets/follow-up/summary')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Tenant-Id', 'tenant-1')
+      .query({ from: '2026-01-01', to: '2026-01-31', referenceAt: '2026-01-31' })
+      .expect(200)
+
+    expect(queryService.getFollowUpSummary).toHaveBeenCalledWith({
+      clientId: 'client-1',
+      from: '2026-01-01',
+      to: '2026-01-31',
+      referenceAt: '2026-01-31T23:59:59.999',
+    })
+  })
+
   it('rejects follow-up summary without referenceAt', async () => {
     await request(app.getHttpServer())
       .get('/kpis/budgets/follow-up/summary')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Tenant-Id', 'tenant-1')
+      .query({ from: '2026-01-01', to: '2026-01-31' })
+      .expect(400)
+  })
+
+  it('returns the budget follow-up daily rows for the active tenant client', async () => {
+    await request(app.getHttpServer())
+      .get('/kpis/budgets/follow-up/daily')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Tenant-Id', 'tenant-1')
+      .query({
+        from: '2026-01-01',
+        to: '2026-01-31',
+        referenceAt: '2026-01-31T18:30:00-03:00',
+        sellerId: '7',
+        orderType: 'Balcao',
+      })
+      .expect(200)
+      .expect({
+        period: { from: '2026-01-01', to: '2026-01-31', key: '2026-01-01_2026-01-31' },
+        rows: [
+          {
+            date: '2026-01-05',
+            window: 'within24h',
+            status: 'converted',
+            count: 2,
+            value: '240.0000',
+          },
+        ],
+      })
+
+    expect(queryService.getFollowUpDaily).toHaveBeenCalledWith({
+      clientId: 'client-1',
+      from: '2026-01-01',
+      to: '2026-01-31',
+      referenceAt: '2026-01-31T18:30:00-03:00',
+      sellerId: 7,
+      orderType: 'Balcao',
+    })
+  })
+
+  it('echoes the budget follow-up drilldown filters when they are supplied', async () => {
+    await request(app.getHttpServer())
+      .get('/kpis/budgets/follow-up/drilldown')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Tenant-Id', 'tenant-1')
+      .query({
+        from: '2026-01-01',
+        to: '2026-01-31',
+        referenceAt: '2026-01-31T18:30:00-03:00',
+        date: '2026-01-05',
+        sellerId: '7',
+        orderType: 'Balcao',
+        followUpWindow: 'within24h',
+        followUpStatus: 'lost',
+      })
+      .expect(200)
+      .expect({
+        period: { from: '2026-01-01', to: '2026-01-31', key: '2026-01-01_2026-01-31' },
+        filters: {
+          referenceAt: '2026-01-31T18:30:00-03:00',
+          date: '2026-01-05',
+          sellerId: 7,
+          orderType: 'Balcao',
+          followUpWindow: 'within24h',
+          followUpStatus: 'lost',
+        },
+        rows: [
+          {
+            id: '99',
+            sourceTable: 'raw.ferraco_budgets',
+            sourceRecordId: 123,
+            budgetDate: '2026-01-05',
+            budgetDatetime: '2026-01-05T09:30:00.000Z',
+            closingDate: null,
+            cancellationDate: '2026-01-05',
+            cancelationTime: '11:15:00',
+            branchId: 5,
+            branchName: 'Matriz',
+            sellerId: 7,
+            sellerName: 'Maria',
+            statusNormalized: 'LOST',
+            channel: 'Balcao',
+            customerName: 'ACME LTDA',
+            cpfCnpj: null,
+            valueAmount: '200.5000',
+            sequential: null,
+            davId: '777',
+            sequentialLinkedSale: null,
+            payloadJson: { family: 'budgets' },
+            followUpWindow: 'within24h',
+            followUpStatus: 'lost',
+          },
+        ],
+      })
+
+    expect(queryService.getFollowUpDrilldown).toHaveBeenCalledWith({
+      clientId: 'client-1',
+      from: '2026-01-01',
+      to: '2026-01-31',
+      referenceAt: '2026-01-31T18:30:00-03:00',
+      date: '2026-01-05',
+      sellerId: 7,
+      orderType: 'Balcao',
+      followUpWindow: 'within24h',
+      followUpStatus: 'lost',
+    })
+  })
+
+  it('rejects the budget follow-up daily route without referenceAt', async () => {
+    await request(app.getHttpServer())
+      .get('/kpis/budgets/follow-up/daily')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Tenant-Id', 'tenant-1')
+      .query({ from: '2026-01-01', to: '2026-01-31' })
+      .expect(400)
+  })
+
+  it('rejects the budget follow-up drilldown route without referenceAt', async () => {
+    await request(app.getHttpServer())
+      .get('/kpis/budgets/follow-up/drilldown')
       .set('Authorization', `Bearer ${token}`)
       .set('X-Tenant-Id', 'tenant-1')
       .query({ from: '2026-01-01', to: '2026-01-31' })
@@ -303,14 +495,14 @@ describe('Budget KPI endpoints', () => {
         from: '2026-01-01',
         to: '2026-01-31',
         sellerId: '7',
-        status: 'Baixado',
+        status: 'Cancelado',
         branchId: '5',
         branchName: 'Matriz',
       })
       .expect(200)
       .expect({
         period: { from: '2026-01-01', to: '2026-01-31', key: '2026-01-01_2026-01-31' },
-        filters: { sellerId: 7, branchId: 5, branchName: 'Matriz', status: 'Baixado' },
+        filters: { sellerId: 7, branchId: 5, branchName: 'Matriz', status: 'Cancelado' },
         rows: [
           {
             id: '99',
@@ -319,11 +511,13 @@ describe('Budget KPI endpoints', () => {
             budgetDate: '2026-01-02',
             budgetDatetime: '2026-01-02T09:30:00.000Z',
             closingDate: null,
+            cancellationDate: '2026-01-03',
+            cancelationTime: '15:30:00',
             branchId: 5,
             branchName: 'Matriz',
             sellerId: 7,
             sellerName: 'Maria',
-            statusNormalized: 'WON',
+            statusNormalized: 'LOST',
             channel: null,
             customerName: 'ACME LTDA',
             cpfCnpj: null,
@@ -341,7 +535,7 @@ describe('Budget KPI endpoints', () => {
       from: '2026-01-01',
       to: '2026-01-31',
       sellerId: 7,
-      status: 'Baixado',
+      status: 'Cancelado',
       branchId: 5,
       branchName: 'Matriz',
     })
