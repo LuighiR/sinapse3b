@@ -11,6 +11,10 @@ import {
   type BudgetKpiSummaryResponse,
 } from '../src/modules/kpi/application/budget-kpi-query.service'
 import {
+  BudgetFollowUpDkwDispatchService,
+  type BudgetFollowUpDkwDispatchResponse,
+} from '../src/modules/kpi/application/budget-follow-up-dkw-dispatch.service'
+import {
   BudgetKpiRefreshService,
   type BudgetKpiRefreshResult,
 } from '../src/modules/kpi/application/budget-kpi-refresh.service'
@@ -20,6 +24,7 @@ describe('Budget KPI endpoints', () => {
   let app: INestApplication
   let token: string
   let queryService: BudgetKpiQueryService
+  let dispatchService: BudgetFollowUpDkwDispatchService
   let refreshService: BudgetKpiRefreshService
   const tenantOne = 'tenant-1'
   const tenantTwo = 'tenant-2'
@@ -45,6 +50,7 @@ describe('Budget KPI endpoints', () => {
     })
 
     queryService = app.get(BudgetKpiQueryService)
+    dispatchService = app.get(BudgetFollowUpDkwDispatchService)
     refreshService = app.get(BudgetKpiRefreshService)
 
     jest.spyOn(queryService, 'getSummary').mockImplementation(async ({ clientId }) => {
@@ -106,6 +112,7 @@ describe('Budget KPI endpoints', () => {
       filters: {
         referenceAt: typeof input.referenceAt === 'string' ? input.referenceAt : input.referenceAt.toISOString(),
         date: input.date,
+        branchId: input.branchId as number | undefined,
         sellerId: input.sellerId as number | undefined,
         orderType: input.orderType,
         followUpWindow: input.followUpWindow,
@@ -168,6 +175,11 @@ describe('Budget KPI endpoints', () => {
         },
       ],
     })
+    jest.spyOn(dispatchService, 'dispatch').mockResolvedValue({
+      period: { from: '2026-04-01', to: '2026-04-02', key: '2026-04-01_2026-04-02' },
+      referenceAt: '2026-04-02T10:00:00-03:00',
+      status: 'completed',
+    } satisfies BudgetFollowUpDkwDispatchResponse)
     jest.spyOn(refreshService, 'refresh').mockResolvedValue({
       clientId: 'client-1',
       from: '2026-01-01',
@@ -226,7 +238,7 @@ describe('Budget KPI endpoints', () => {
       .get('/kpis/budgets/summary')
       .set('Authorization', `Bearer ${token}`)
       .set('X-Tenant-Id', 'tenant-1')
-      .query({ from: '2026-01-01', to: '2026-01-31', sellerId: '7' })
+      .query({ from: '2026-01-01', to: '2026-01-31', sellerId: '7', branchId: '5' })
       .expect(200)
 
     expect(queryService.getSummary).toHaveBeenCalledWith({
@@ -234,6 +246,7 @@ describe('Budget KPI endpoints', () => {
       from: '2026-01-01',
       to: '2026-01-31',
       sellerId: 7,
+      branchId: 5,
     })
   })
 
@@ -312,7 +325,12 @@ describe('Budget KPI endpoints', () => {
       .get('/kpis/budgets/follow-up/summary')
       .set('Authorization', `Bearer ${token}`)
       .set('X-Tenant-Id', 'tenant-1')
-      .query({ from: '2026-01-01', to: '2026-01-31', referenceAt: '2026-01-31T18:30:00-03:00' })
+      .query({
+        from: '2026-01-01',
+        to: '2026-01-31',
+        referenceAt: '2026-01-31T18:30:00-03:00',
+        branchId: '5',
+      })
       .expect(200)
       .expect({
         period: { from: '2026-01-01', to: '2026-01-31', key: '2026-01-01_2026-01-31' },
@@ -336,6 +354,7 @@ describe('Budget KPI endpoints', () => {
       from: '2026-01-01',
       to: '2026-01-31',
       referenceAt: '2026-01-31T18:30:00-03:00',
+      branchId: 5,
     })
   })
 
@@ -410,6 +429,7 @@ describe('Budget KPI endpoints', () => {
         to: '2026-01-31',
         referenceAt: '2026-01-31T18:30:00-03:00',
         date: '2026-01-05',
+        branchId: '5',
         sellerId: '7',
         orderType: 'Balcao',
         followUpWindow: 'within24h',
@@ -421,6 +441,7 @@ describe('Budget KPI endpoints', () => {
         filters: {
           referenceAt: '2026-01-31T18:30:00-03:00',
           date: '2026-01-05',
+          branchId: 5,
           sellerId: 7,
           orderType: 'Balcao',
           followUpWindow: 'within24h',
@@ -461,6 +482,7 @@ describe('Budget KPI endpoints', () => {
       to: '2026-01-31',
       referenceAt: '2026-01-31T18:30:00-03:00',
       date: '2026-01-05',
+      branchId: 5,
       sellerId: 7,
       orderType: 'Balcao',
       followUpWindow: 'within24h',
@@ -483,6 +505,46 @@ describe('Budget KPI endpoints', () => {
       .set('Authorization', `Bearer ${token}`)
       .set('X-Tenant-Id', 'tenant-1')
       .query({ from: '2026-01-01', to: '2026-01-31' })
+      .expect(400)
+  })
+
+  it('dispatches budget follow-up dkw rows for the active tenant client', async () => {
+    await request(app.getHttpServer())
+      .post('/kpis/budgets/follow-up/dkw-dispatch')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Tenant-Id', 'tenant-1')
+      .query({
+        from: '2026-04-01',
+        to: '2026-04-02',
+        referenceAt: '2026-04-02T10:00:00-03:00',
+        sellerId: '7',
+        branchId: '5',
+        orderType: 'Balcao',
+      })
+      .expect(200)
+      .expect({
+        period: { from: '2026-04-01', to: '2026-04-02', key: '2026-04-01_2026-04-02' },
+        referenceAt: '2026-04-02T10:00:00-03:00',
+        status: 'completed',
+      })
+
+    expect(dispatchService.dispatch).toHaveBeenCalledWith({
+      clientId: 'client-1',
+      from: '2026-04-01',
+      to: '2026-04-02',
+      referenceAt: '2026-04-02T10:00:00-03:00',
+      sellerId: 7,
+      branchId: 5,
+      orderType: 'Balcao',
+    })
+  })
+
+  it('rejects the budget follow-up dkw dispatch route without referenceAt', async () => {
+    await request(app.getHttpServer())
+      .post('/kpis/budgets/follow-up/dkw-dispatch')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Tenant-Id', 'tenant-1')
+      .query({ from: '2026-04-01', to: '2026-04-02' })
       .expect(400)
   })
 

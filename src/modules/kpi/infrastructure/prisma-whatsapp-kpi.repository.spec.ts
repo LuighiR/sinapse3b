@@ -52,6 +52,34 @@ describe('PrismaWhatsAppKpiRepository', () => {
     expect(sqlText).toContain('join core.tickets t on t.id = m.ticket_id')
   })
 
+  it('adds the branch employee lookup to summary queries when branchId is provided', async () => {
+    const prisma = {
+      $queryRaw: jest.fn().mockResolvedValue([
+        {
+          total_conversations_count: 12n,
+          received_messages_count: 34n,
+        },
+      ]),
+    }
+
+    const repository = new PrismaWhatsAppKpiRepository(prisma as any)
+
+    await repository.getSummaryCounts({
+      clientId: 'client-1',
+      period: KpiPeriod.between({ from: '2026-03-01', to: '2026-03-31' }),
+      branchId: 5,
+    } as any)
+
+    const sql = prisma.$queryRaw.mock.calls[0]?.[0]
+    const sqlText = sql?.strings?.join(' ')
+
+    expect(sql.values).toContain(5)
+    expect(sqlText).toContain('lower(btrim(e.chat_id))')
+    expect(sqlText).toContain('lower(btrim(s.assigned_user_email))')
+    expect(sqlText).toContain('e.branch_id =')
+    expect(sqlText).toContain('employee_count = 1')
+  })
+
   it('reads ranking counts grouped by assigned user identity', async () => {
     const prisma = {
       $queryRaw: jest.fn().mockResolvedValue([
@@ -225,5 +253,36 @@ describe('PrismaWhatsAppKpiRepository', () => {
     expect(sql.values).toEqual(expect.arrayContaining(['client-1', 21830n, 'maria@empresa.com', 35747]))
     expect(sqlText).toContain('assigned_user_email')
     expect(sqlText).toContain('bf.seller_id')
+  })
+
+  it('filters both tag sessions and open budgets by branchId when requested', async () => {
+    const prisma = {
+      $queryRaw: jest.fn().mockResolvedValue([
+        {
+          hour: '14',
+          tag_sessions_count: 30n,
+          open_budgets_count: 20n,
+        },
+      ]),
+    }
+
+    const repository = new PrismaWhatsAppKpiRepository(prisma as any)
+
+    await repository.getTagHourlyComparisonRows({
+      clientId: 'client-1',
+      period: KpiPeriod.between({ from: '2026-03-05', to: '2026-03-05' }),
+      tagId: 21830n,
+      branchId: 5,
+    } as any)
+
+    const sql = prisma.$queryRaw.mock.calls[0]?.[0]
+    const sqlText = sql?.strings?.join(' ')
+
+    expect(sql.values).toEqual(expect.arrayContaining(['client-1', 21830n, 5]))
+    expect(sqlText).toContain('lower(btrim(e.chat_id))')
+    expect(sqlText).toContain('lower(btrim(s.assigned_user_email))')
+    expect(sqlText).toContain('e.branch_id =')
+    expect(sqlText).toContain('bf.branch_id =')
+    expect(sqlText).toContain('employee_count = 1')
   })
 })

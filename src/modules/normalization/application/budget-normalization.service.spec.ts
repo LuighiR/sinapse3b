@@ -23,6 +23,68 @@ describe('mapBudgetStatus', () => {
 })
 
 describe('BudgetNormalizationService', () => {
+  it('maps branchId from the seller ERP lookup when the seller belongs to a unique branch', async () => {
+    const rawReader: RawFerracoBudgetReader = {
+      findByClientId: jest.fn().mockResolvedValue([
+        {
+          id: 42,
+          clientId: 'client-1',
+          branch: '3',
+          sellerId: 7,
+          sellerName: 'Maria',
+          openingDate: '2026-01-10',
+          openingTime: '08:15:00',
+          cancellationDate: '2026-01-12',
+          cancelationTime: '14:20:00',
+          closingDate: '2026-01-15',
+          closingTime: '16:45:00',
+          status: 'Baixado',
+          channel: 'SHOWROOM',
+          customerName: 'Cliente Teste',
+          cpfCnpj: '12345678900',
+          value: '1200.50',
+          sequential: '1001',
+          davId: '2002',
+          sequentialLinkedSale: '3003',
+          payload: { source: 'fixture' },
+        },
+      ]),
+    }
+
+    const budgetFactRepository: BudgetFactUpsertRepository = {
+      upsert: jest.fn().mockResolvedValue(undefined),
+    }
+
+    const employeeBranchLookup = {
+      findByClientId: jest.fn().mockResolvedValue([
+        {
+          sellerId: 7,
+          branchId: 2,
+          branchName: 'FerraçoSul - Pelotas',
+        },
+      ]),
+    }
+
+    const service = new BudgetNormalizationService(rawReader, budgetFactRepository, employeeBranchLookup as any)
+
+    await service.normalizeClientBudgets('client-1')
+
+    expect(employeeBranchLookup.findByClientId).toHaveBeenCalledWith('client-1')
+
+    const [upsertArgs] = (budgetFactRepository.upsert as jest.Mock).mock.calls[0]
+
+    expect(upsertArgs.create).toMatchObject({
+      branchId: 2,
+      branchName: 'FerraçoSul - Pelotas',
+      sellerId: 7,
+    })
+    expect(upsertArgs.update).toMatchObject({
+      branchId: 2,
+      branchName: 'FerraçoSul - Pelotas',
+      sellerId: 7,
+    })
+  })
+
   it('normalizes raw ferraco budgets for the provided client and upserts canonical facts', async () => {
     const rawReader: RawFerracoBudgetReader = {
       findByClientId: jest.fn().mockResolvedValue([
@@ -268,6 +330,9 @@ describe('PrismaBudgetFactUpsertRepository', () => {
     const sql = queryParts.join('?')
 
     expect(clientId).toBe('ferracosul')
+    expect(sql).toContain('employee_branch_lookup')
+    expect(sql).toContain('e.erp_id')
+    expect(sql).toContain('branch_id')
     expect(sql).toContain("COALESCE(budget.branch, '')")
     expect(sql).toContain("COALESCE(budget.seller_name, '')")
     expect(sql).toContain("COALESCE(budget.customer_name, '')")

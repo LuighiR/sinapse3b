@@ -8,6 +8,7 @@ import { CallKpiRefreshService } from '../application/call-kpi-refresh.service'
 import { parseCallAgentRankingQuery } from './query/call-agent-ranking.query'
 import { parseCallHourlyComparisonQuery } from './query/call-hourly-comparison.query'
 import { parseCallHourlyQuery } from './query/call-hourly.query'
+import { parseCallRefreshQuery } from './query/call-refresh.query'
 import { parseCallSummaryQuery } from './query/call-summary.query'
 
 @Controller('kpis/calls')
@@ -21,7 +22,7 @@ export class CallKpiController {
   @Post('refresh')
   @HttpCode(200)
   refreshCallKpis(@RequestContext() authContext: AuthContext, @Query() query: Record<string, unknown>) {
-    const period = parseCallSummaryQuery(query)
+    const period = parseCallRefreshQuery(query)
 
     return this.refreshService.refresh({
       clientId: authContext.clientId,

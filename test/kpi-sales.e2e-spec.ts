@@ -63,7 +63,7 @@ describe('Sale KPI endpoints', () => {
     } satisfies SaleKpiTicketAverageResponse)
     jest.spyOn(queryService, 'getDrilldown').mockResolvedValue({
       period: { from: '2026-01-05', to: '2026-01-05', key: '2026-01-05_2026-01-05' },
-      filters: { sellerId: 7, status: 'Cancelada', orderType: 'Televendas', hasLinkedBudget: true } as any,
+      filters: { branchId: 5, sellerId: 7, status: 'Cancelada', orderType: 'Televendas', hasLinkedBudget: true } as any,
       rows: [
         {
           id: '99',
@@ -133,6 +133,7 @@ describe('Sale KPI endpoints', () => {
       .query({
         from: '2026-01-01',
         to: '2026-01-31',
+        branchId: '5',
         sellerId: '7',
         status: 'Cancelada',
         orderType: 'Televendas',
@@ -145,6 +146,7 @@ describe('Sale KPI endpoints', () => {
       clientId: 'client-1',
       from: '2026-01-01',
       to: '2026-01-31',
+      branchId: 5,
       sellerId: 7,
       status: 'Cancelada',
       orderType: 'Televendas',
@@ -212,6 +214,7 @@ describe('Sale KPI endpoints', () => {
       .query({
         from: '2026-01-05',
         to: '2026-01-05',
+        branchId: '5',
         sellerId: '7',
         status: 'Cancelada',
         orderType: 'Televendas',
@@ -220,7 +223,7 @@ describe('Sale KPI endpoints', () => {
       .expect(200)
       .expect({
         period: { from: '2026-01-05', to: '2026-01-05', key: '2026-01-05_2026-01-05' },
-        filters: { sellerId: 7, status: 'Cancelada', orderType: 'Televendas', hasLinkedBudget: true },
+        filters: { branchId: 5, sellerId: 7, status: 'Cancelada', orderType: 'Televendas', hasLinkedBudget: true },
         rows: [
           {
             id: '99',
@@ -253,6 +256,7 @@ describe('Sale KPI endpoints', () => {
       clientId: 'client-1',
       from: '2026-01-05',
       to: '2026-01-05',
+      branchId: 5,
       sellerId: 7,
       status: 'Cancelada',
       orderType: 'Televendas',

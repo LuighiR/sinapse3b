@@ -10,6 +10,7 @@ export type SaleBasePeriodQuery = {
 }
 
 export type SaleFactFiltersQuery = SaleBasePeriodQuery & {
+  branchId?: number
   sellerId?: number
   status?: SaleStatusQuery
   orderType?: string
@@ -42,6 +43,7 @@ const saleBasePeriodSchema = z.object({
 })
 
 const saleFactFiltersSchema = saleBasePeriodSchema.extend({
+  branchId: numericIdSchema.optional(),
   sellerId: numericIdSchema.optional(),
   status: z.enum(['Ativa', 'Cancelada']).optional(),
   orderType: orderTypeSchema,
@@ -58,6 +60,7 @@ export function parseSaleFactFiltersQuery(
   const parsed = saleFactFiltersSchema.safeParse({
     from: query.from,
     to: query.to,
+    branchId: query.branchId,
     sellerId: query.sellerId,
     status: query.status,
     orderType: query.orderType,

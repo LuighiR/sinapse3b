@@ -21,6 +21,10 @@ import {
   PrismaRawFerracoCallReader,
   RAW_FERRACO_CALL_READER,
 } from './application/call-normalization.service'
+import {
+  EMPLOYEE_BRANCH_LOOKUP_READER,
+  PrismaEmployeeBranchLookupReader,
+} from './application/employee-branch-lookup.service'
 
 @Module({
   imports: [PrismaModule],
@@ -32,6 +36,7 @@ import {
     PrismaBudgetFactUpsertRepository,
     PrismaRawFerracoSaleReader,
     PrismaSaleFactUpsertRepository,
+    PrismaEmployeeBranchLookupReader,
     PrismaRawFerracoCallReader,
     PrismaCallFactUpsertRepository,
     {
@@ -49,6 +54,10 @@ import {
     {
       provide: SALE_FACT_UPSERT_REPOSITORY,
       useExisting: PrismaSaleFactUpsertRepository,
+    },
+    {
+      provide: EMPLOYEE_BRANCH_LOOKUP_READER,
+      useExisting: PrismaEmployeeBranchLookupReader,
     },
     {
       provide: RAW_FERRACO_CALL_READER,

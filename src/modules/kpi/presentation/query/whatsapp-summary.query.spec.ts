@@ -16,6 +16,21 @@ describe('parseWhatsAppSummaryQuery', () => {
     })
   })
 
+  it('accepts an optional branchId filter', () => {
+    expect(
+      parseWhatsAppSummaryQuery({
+        from: '2026-03-01',
+        to: '2026-03-31',
+        branchId: '5',
+      }),
+    ).toEqual({
+      from: '2026-03-01',
+      to: '2026-03-31',
+      chatId: undefined,
+      branchId: 5,
+    })
+  })
+
   it('rejects invalid periods', () => {
     expect(() =>
       parseWhatsAppSummaryQuery({

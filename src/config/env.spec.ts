@@ -18,6 +18,7 @@ describe('loadEnv', () => {
       AUTH_JWT_SECRET: 'super-secret',
       AUTH_JWT_ISSUER: 'sinapse3',
       AUTH_JWT_AUDIENCE: 'sinapse3-web',
+      BUDGET_FOLLOW_UP_DKW_WEBHOOK_URL: '',
       AUTH_REFRESH_JWT_SECRET: '',
       AUTH_ACCESS_TOKEN_TTL_MINUTES: 60,
       AUTH_REFRESH_TOKEN_TTL_DAYS: 30,
@@ -34,6 +35,7 @@ describe('loadEnv', () => {
       AUTH_JWT_SECRET: process.env.AUTH_JWT_SECRET,
       AUTH_JWT_ISSUER: process.env.AUTH_JWT_ISSUER,
       AUTH_JWT_AUDIENCE: process.env.AUTH_JWT_AUDIENCE,
+      BUDGET_FOLLOW_UP_DKW_WEBHOOK_URL: process.env.BUDGET_FOLLOW_UP_DKW_WEBHOOK_URL,
       AUTH_REFRESH_JWT_SECRET: process.env.AUTH_REFRESH_JWT_SECRET,
       AUTH_ACCESS_TOKEN_TTL_MINUTES: process.env.AUTH_ACCESS_TOKEN_TTL_MINUTES,
       AUTH_REFRESH_TOKEN_TTL_DAYS: process.env.AUTH_REFRESH_TOKEN_TTL_DAYS,
@@ -49,6 +51,7 @@ describe('loadEnv', () => {
         'AUTH_JWT_SECRET=super-secret',
         'AUTH_JWT_ISSUER=sinapse3',
         'AUTH_JWT_AUDIENCE=sinapse3-web',
+        'BUDGET_FOLLOW_UP_DKW_WEBHOOK_URL=https://atende-api.corz.com.br/webhook/leads/test',
         'AUTH_REFRESH_JWT_SECRET=refresh-secret',
         'AUTH_ACCESS_TOKEN_TTL_MINUTES=45',
         'AUTH_REFRESH_TOKEN_TTL_DAYS=14',
@@ -63,6 +66,7 @@ describe('loadEnv', () => {
       delete process.env.AUTH_JWT_SECRET
       delete process.env.AUTH_JWT_ISSUER
       delete process.env.AUTH_JWT_AUDIENCE
+      delete process.env.BUDGET_FOLLOW_UP_DKW_WEBHOOK_URL
       delete process.env.AUTH_REFRESH_JWT_SECRET
       delete process.env.AUTH_ACCESS_TOKEN_TTL_MINUTES
       delete process.env.AUTH_REFRESH_TOKEN_TTL_DAYS
@@ -77,6 +81,7 @@ describe('loadEnv', () => {
         AUTH_JWT_SECRET: 'super-secret',
         AUTH_JWT_ISSUER: 'sinapse3',
         AUTH_JWT_AUDIENCE: 'sinapse3-web',
+        BUDGET_FOLLOW_UP_DKW_WEBHOOK_URL: 'https://atende-api.corz.com.br/webhook/leads/test',
         AUTH_REFRESH_JWT_SECRET: 'refresh-secret',
         AUTH_ACCESS_TOKEN_TTL_MINUTES: 45,
         AUTH_REFRESH_TOKEN_TTL_DAYS: 14,
@@ -89,6 +94,7 @@ describe('loadEnv', () => {
       restoreEnvValue('AUTH_JWT_SECRET', originalEnv.AUTH_JWT_SECRET)
       restoreEnvValue('AUTH_JWT_ISSUER', originalEnv.AUTH_JWT_ISSUER)
       restoreEnvValue('AUTH_JWT_AUDIENCE', originalEnv.AUTH_JWT_AUDIENCE)
+      restoreEnvValue('BUDGET_FOLLOW_UP_DKW_WEBHOOK_URL', originalEnv.BUDGET_FOLLOW_UP_DKW_WEBHOOK_URL)
       restoreEnvValue('AUTH_REFRESH_JWT_SECRET', originalEnv.AUTH_REFRESH_JWT_SECRET)
       restoreEnvValue('AUTH_ACCESS_TOKEN_TTL_MINUTES', originalEnv.AUTH_ACCESS_TOKEN_TTL_MINUTES)
       restoreEnvValue('AUTH_REFRESH_TOKEN_TTL_DAYS', originalEnv.AUTH_REFRESH_TOKEN_TTL_DAYS)

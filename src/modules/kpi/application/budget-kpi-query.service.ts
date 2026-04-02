@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
+import { BranchScopeService } from '../../companies/application/branch-scope.service'
 import { KpiPeriod } from '../domain/kpi-period'
 import {
   BudgetFactRecord,
@@ -20,6 +21,7 @@ export type BudgetKpiQueryPeriodInput = {
   clientId: string
   from: string | Date
   to: string | Date
+  branchId?: string | number | bigint
   sellerId?: string | number | bigint
   status?: BudgetStatusFilter
   orderType?: string
@@ -214,6 +216,7 @@ export type BudgetKpiFollowUpDrilldownInput = BudgetKpiFollowUpSummaryInput & {
 }
 
 export type BudgetKpiFollowUpDrilldownFilters = {
+  branchId?: number
   referenceAt: string
   date?: string
   followUpWindow?: FollowUpWindow
@@ -239,6 +242,7 @@ export type BudgetKpiQueryRepository = {
   getBudgetFactRows(input: {
     clientId: string
     period: KpiPeriod
+    branchId?: number
     sellerId?: number
   }): Promise<BudgetFactRecord[]>
   getDrilldownRows(input: {
@@ -257,7 +261,10 @@ const MISSING_ORDER_TYPE_LABEL = 'Nao identificado'
 
 @Injectable()
 export class BudgetKpiQueryService {
-  constructor(private readonly repository: BudgetKpiQueryRepository) {}
+  constructor(
+    private readonly repository: BudgetKpiQueryRepository,
+    private readonly branchScopeService?: BranchScopeService,
+  ) {}
 
   async getSummary(input: BudgetKpiQueryPeriodInput): Promise<BudgetKpiSummaryResponse> {
     const period = this.toPeriod(input)
@@ -502,7 +509,7 @@ export class BudgetKpiQueryService {
   async getDrilldown(input: BudgetKpiDrilldownInput): Promise<BudgetKpiDrilldownResponse> {
     const period = this.toPeriod(input)
     const sellerId = this.normalizeSellerId(input.sellerId)
-    const branchId = this.normalizeBranchId(input.branchId)
+    const branchId = await this.resolveBranchScope(input.clientId, input.branchId)
     const status = input.status
     const rows = await this.repository.getDrilldownRows({
       clientId: input.clientId,
@@ -530,10 +537,12 @@ export class BudgetKpiQueryService {
     const period = this.toPeriod(input)
     const referenceAt = this.parseReferenceAt(input.referenceAt)
     const sellerId = this.normalizeSellerId(input.sellerId)
+    const branchId = await this.resolveBranchScope(input.clientId, input.branchId)
     const rows = await this.repository.getDrilldownRows({
       clientId: input.clientId,
       period,
       sellerId,
+      branchId,
     })
     const filteredRows = rows
       .map((row) => ({
@@ -577,7 +586,15 @@ export class BudgetKpiQueryService {
 
     return {
       period: this.toPeriodView(period),
-      filters: this.buildFollowUpDrilldownFilters({ ...input, sellerId }),
+      filters: this.buildFollowUpDrilldownFilters({
+        referenceAt: input.referenceAt,
+        date: input.date,
+        followUpWindow: input.followUpWindow,
+        followUpStatus: input.followUpStatus,
+        sellerId,
+        branchId,
+        orderType: input.orderType,
+      }),
       rows: filteredRows.map(({ row, classification }) => ({
         ...this.toDrilldownRow(row),
         followUpWindow: classification!.window,
@@ -588,9 +605,11 @@ export class BudgetKpiQueryService {
 
   private async getFilteredFacts(input: BudgetKpiQueryPeriodInput, period: KpiPeriod): Promise<BudgetFactRecord[]> {
     const sellerId = this.normalizeSellerId(input.sellerId)
+    const branchId = await this.resolveBranchScope(input.clientId, input.branchId)
     const facts = await this.repository.getBudgetFactRows({
       clientId: input.clientId,
       period,
+      branchId,
       sellerId,
     })
 
@@ -608,7 +627,12 @@ export class BudgetKpiQueryService {
   }
 
   private hasFactFilters(input: BudgetKpiQueryPeriodInput): boolean {
-    return input.sellerId !== undefined || input.status !== undefined || input.orderType !== undefined
+    return (
+      input.branchId !== undefined ||
+      input.sellerId !== undefined ||
+      input.status !== undefined ||
+      input.orderType !== undefined
+    )
   }
 
   private createEmptySummary(): Record<SummaryBucket, BudgetKpiSummaryCard> {
@@ -786,9 +810,11 @@ export class BudgetKpiQueryService {
     period: KpiPeriod,
   ): Promise<BudgetFactRecord[]> {
     const sellerId = this.normalizeSellerId(input.sellerId)
+    const branchId = await this.resolveBranchScope(input.clientId, input.branchId)
     const facts = await this.repository.getBudgetFactRows({
       clientId: input.clientId,
       period,
+      branchId,
       sellerId,
     })
 
@@ -898,9 +924,21 @@ export class BudgetKpiQueryService {
     return filters
   }
 
-  private buildFollowUpDrilldownFilters(input: BudgetKpiFollowUpDrilldownInput & { sellerId?: number }): BudgetKpiFollowUpDrilldownFilters {
+  private buildFollowUpDrilldownFilters(input: {
+    referenceAt: string | Date
+    date?: string
+    followUpWindow?: FollowUpWindow
+    followUpStatus?: FollowUpStatus
+    sellerId?: number
+    branchId?: number
+    orderType?: string
+  }): BudgetKpiFollowUpDrilldownFilters {
     const filters: BudgetKpiFollowUpDrilldownFilters = {
       referenceAt: this.toReferenceAtFilterValue(input.referenceAt),
+    }
+
+    if (input.branchId !== undefined) {
+      filters.branchId = input.branchId
     }
 
     if (input.date !== undefined) {
@@ -1232,6 +1270,19 @@ export class BudgetKpiQueryService {
 
   private normalizeSellerId(value: BudgetKpiQueryPeriodInput['sellerId']): number | undefined {
     return this.normalizeOptionalSafeInteger(value, 'sellerId')
+  }
+
+  private async resolveBranchScope(
+    clientId: string,
+    value: BudgetKpiDrilldownInput['branchId'],
+  ): Promise<number | undefined> {
+    const branchId = this.normalizeBranchId(value)
+
+    if (branchId !== undefined && this.branchScopeService !== undefined) {
+      await this.branchScopeService.assertBranchScope(clientId, branchId)
+    }
+
+    return branchId
   }
 
   private normalizeBranchId(value: BudgetKpiDrilldownInput['branchId']): number | undefined {

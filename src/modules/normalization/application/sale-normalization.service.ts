@@ -1,5 +1,6 @@
-import { Inject, Injectable } from '@nestjs/common'
+import { Inject, Injectable, Optional } from '@nestjs/common'
 import { PrismaService } from '../../../infra/prisma/prisma.service'
+import { EMPLOYEE_BRANCH_LOOKUP_READER, type EmployeeBranchLookupReader } from './employee-branch-lookup.service'
 import { mapSaleStatus, type NormalizedSaleStatus } from './sale-status.mapper'
 
 export const RAW_FERRACO_SALE_READER = 'RAW_FERRACO_SALE_READER'
@@ -160,6 +161,16 @@ export class PrismaSaleFactUpsertRepository implements SaleFactUpsertRepository 
         WHERE budget.client_id = ${clientId}
           AND budget.sequential_linked_sale IS NOT NULL
         ORDER BY budget.client_id, budget.sequential_linked_sale, budget.id ASC
+      ),
+      employee_branch_lookup AS (
+        SELECT
+          e.erp_id AS seller_id,
+          CASE WHEN count(*) = 1 THEN min(e.branch_id) ELSE NULL::integer END AS branch_id,
+          CASE WHEN count(*) = 1 THEN min(b.name) ELSE NULL::text END AS branch_name
+        FROM core.employees AS e
+        JOIN core.branches AS b ON b.id = e.branch_id
+        WHERE b.client_id = ${clientId}
+        GROUP BY e.erp_id
       )
       INSERT INTO core.sale_facts (
         client_id,
@@ -189,8 +200,8 @@ export class PrismaSaleFactUpsertRepository implements SaleFactUpsertRepository 
         sale.client_id,
         'raw.ferraco_sales',
         sale.id,
-        COALESCE(sale.branch, ''),
-        NULL::integer,
+        COALESCE(employee_branch.branch_name, COALESCE(sale.branch, '')),
+        employee_branch.branch_id,
         COALESCE(sale.seller_id, 0),
         COALESCE(sale.seller_name, ''),
         sale.date,
@@ -216,6 +227,8 @@ export class PrismaSaleFactUpsertRepository implements SaleFactUpsertRepository 
       LEFT JOIN linked_budget
         ON linked_budget.client_id = sale.client_id
        AND linked_budget.sequential_linked_sale = sale.sequential
+      LEFT JOIN employee_branch_lookup AS employee_branch
+        ON employee_branch.seller_id = sale.seller_id
       WHERE sale.client_id = ${clientId}
       ON CONFLICT (client_id, source_table, source_record_id)
       DO UPDATE SET
@@ -253,6 +266,9 @@ export class SaleNormalizationService {
     private readonly rawReader: RawFerracoSaleReader,
     @Inject(SALE_FACT_UPSERT_REPOSITORY)
     private readonly saleFactRepository: SaleFactUpsertRepository,
+    @Optional()
+    @Inject(EMPLOYEE_BRANCH_LOOKUP_READER)
+    private readonly employeeBranchLookupReader?: EmployeeBranchLookupReader,
   ) {}
 
   async normalizeClientSales(clientId: string): Promise<SaleNormalizationResult> {
@@ -275,7 +291,8 @@ export class SaleNormalizationService {
     }
 
     const sales = await this.rawReader.findByClientId(clientId)
-    const normalizedSales = sales.map((sale) => this.normalizeSale(clientId, sale))
+    const employeeBranchLookup = await this.buildEmployeeBranchLookup(clientId)
+    const normalizedSales = sales.map((sale) => this.normalizeSale(clientId, sale, employeeBranchLookup))
 
     for (let index = 0; index < normalizedSales.length; index += this.upsertBatchSize) {
       const batch = normalizedSales.slice(index, index + this.upsertBatchSize)
@@ -312,14 +329,43 @@ export class SaleNormalizationService {
     return sales.length
   }
 
-  private normalizeSale(clientId: string, sale: RawFerracoSaleRecord): SaleFactWritePayload {
+  private async buildEmployeeBranchLookup(
+    clientId: string,
+  ): Promise<Map<number, { branchId: number | null; branchName: string | null }>> {
+    if (this.employeeBranchLookupReader === undefined) {
+      return new Map()
+    }
+
+    const rows = await this.employeeBranchLookupReader.findByClientId(clientId)
+
+    return new Map(
+      rows
+        .filter((row) => Number.isFinite(row.sellerId))
+        .map((row) => [
+          row.sellerId,
+          {
+            branchId: row.branchId,
+            branchName: row.branchName,
+          },
+        ]),
+    )
+  }
+
+  private normalizeSale(
+    clientId: string,
+    sale: RawFerracoSaleRecord,
+    employeeBranchLookup: Map<number, { branchId: number | null; branchName: string | null }>,
+  ): SaleFactWritePayload {
+    const sellerId = this.parseNumberOrDefault(sale.sellerId, 0)
+    const branchMatch = employeeBranchLookup.get(sellerId)
+
     return {
       clientId,
       sourceTable: this.sourceTable,
       sourceRecordId: this.parseNumber(sale.id, 'id'),
-      branchId: null,
-      branchName: sale.branch ?? '',
-      sellerId: this.parseNumberOrDefault(sale.sellerId, 0),
+      branchId: branchMatch?.branchId ?? null,
+      branchName: branchMatch?.branchName ?? sale.branch ?? '',
+      sellerId,
       sellerName: sale.sellerName ?? '',
       saleDate: this.parseDateOnly(sale.saleDate),
       saleDatetime: this.parseSaleDatetime(sale.saleDate, sale.saleTime),

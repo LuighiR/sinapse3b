@@ -153,6 +153,22 @@ describe('Call KPI endpoints', () => {
     })
   })
 
+  it('passes branchId through the call summary endpoint', async () => {
+    await request(app.getHttpServer())
+      .get('/kpis/calls/summary')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Tenant-Id', 'tenant-1')
+      .query({ from: '2026-01-01', to: '2026-01-31', branchId: '12' })
+      .expect(200)
+
+    expect(queryService.getSummary).toHaveBeenCalledWith({
+      clientId: 'client-1',
+      from: '2026-01-01',
+      to: '2026-01-31',
+      branchId: 12,
+    })
+  })
+
   it('returns the call hourly series for the active tenant client', async () => {
     await request(app.getHttpServer())
       .get('/kpis/calls/hourly')
@@ -221,6 +237,22 @@ describe('Call KPI endpoints', () => {
     })
   })
 
+  it('passes branchId through the hourly comparison endpoint', async () => {
+    await request(app.getHttpServer())
+      .get('/kpis/calls/hourly/comparison')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Tenant-Id', 'tenant-1')
+      .query({ from: '2026-01-01', to: '2026-01-31', branchId: '12' })
+      .expect(200)
+
+    expect(queryService.getHourlyComparison).toHaveBeenCalledWith({
+      clientId: 'client-1',
+      from: '2026-01-01',
+      to: '2026-01-31',
+      branchId: 12,
+    })
+  })
+
   it('refreshes the call kpis for the active tenant client', async () => {
     await request(app.getHttpServer())
       .post('/kpis/calls/refresh')
@@ -244,6 +276,24 @@ describe('Call KPI endpoints', () => {
       from: '2026-01-01',
       to: '2026-01-31',
     })
+  })
+
+  it('rejects branchId on the refresh endpoint', async () => {
+    await request(app.getHttpServer())
+      .post('/kpis/calls/refresh')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Tenant-Id', 'tenant-1')
+      .query({ from: '2026-01-01', to: '2026-01-31', branchId: '12' })
+      .expect(400)
+  })
+
+  it('rejects sellerId on the refresh endpoint', async () => {
+    await request(app.getHttpServer())
+      .post('/kpis/calls/refresh')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Tenant-Id', 'tenant-1')
+      .query({ from: '2026-01-01', to: '2026-01-31', sellerId: '7' })
+      .expect(400)
   })
 
   it('rejects invalid date ranges with 400', async () => {

@@ -57,6 +57,7 @@ const budgetFollowUpPeriodSchema = z.object({
 
 export const budgetFollowUpSummaryQuerySchema = budgetFollowUpPeriodSchema.extend({
   referenceAt: referenceAtSchema,
+  branchId: numericIdSchema.optional(),
   sellerId: numericIdSchema.optional(),
   orderType: orderTypeSchema,
 })

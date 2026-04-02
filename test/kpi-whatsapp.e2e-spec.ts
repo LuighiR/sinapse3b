@@ -125,7 +125,7 @@ describe('WhatsApp KPI endpoints', () => {
       .get('/kpis/whatsapp/summary')
       .set('Authorization', `Bearer ${token}`)
       .set('X-Tenant-Id', 'tenant-2')
-      .query({ from: '2026-03-01', to: '2026-03-31', chatId: 'maria@empresa.com' })
+      .query({ from: '2026-03-01', to: '2026-03-31', chatId: 'maria@empresa.com', branchId: '5' })
       .expect(200)
       .expect({
         period: { from: '2026-03-01', to: '2026-03-31', key: '2026-03-01_2026-03-31' },
@@ -138,6 +138,7 @@ describe('WhatsApp KPI endpoints', () => {
       from: '2026-03-01',
       to: '2026-03-31',
       chatId: 'maria@empresa.com',
+      branchId: 5,
     })
   })
 
@@ -290,6 +291,7 @@ describe('WhatsApp KPI endpoints', () => {
         to: '2026-03-31',
         tagId: '21830',
         chatId: 'maria@empresa.com',
+        branchId: '5',
         sellerId: '35747',
       })
       .expect(200)
@@ -305,6 +307,7 @@ describe('WhatsApp KPI endpoints', () => {
       to: '2026-03-31',
       tagId: '21830',
       chatId: 'maria@empresa.com',
+      branchId: 5,
       sellerId: 35747,
     })
   })

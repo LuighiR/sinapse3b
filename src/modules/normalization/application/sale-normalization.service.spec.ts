@@ -35,9 +35,73 @@ describe('SaleNormalizationService', () => {
     const sqlText = templateStrings.join('__VALUE__')
 
     expect(sqlText).toContain('WITH linked_budget AS (')
+    expect(sqlText).toContain('employee_branch_lookup')
+    expect(sqlText).toContain('e.erp_id')
+    expect(sqlText).toContain('branch_id')
     expect(sqlText).toContain('SELECT DISTINCT ON (budget.client_id, budget.sequential_linked_sale)')
     expect(sqlText).toContain('linked_budget.sequential_linked_sale = sale.sequential')
     expect(sqlText).not.toContain('LEFT JOIN LATERAL')
+  })
+
+  it('maps branchId from the seller ERP lookup when the seller belongs to a unique branch', async () => {
+    const rawReader: RawFerracoSaleReader = {
+      findByClientId: jest.fn().mockResolvedValue([
+        {
+          id: 42,
+          clientId: 'client-1',
+          branch: '5',
+          sellerId: 7,
+          sellerName: 'Maria',
+          saleDate: '2026-01-10',
+          saleTime: '08:15:00',
+          canceled: 'N',
+          customerName: 'Cliente Teste',
+          cpfCnpj: '12345678900',
+          value: '1200.50',
+          sequential: '1001',
+          invoiceSerie: '3',
+          invoiceNumeric: '2002',
+          listDavsId: '"5001"',
+          channel: 'Pedido Televendas',
+          hasLinkedBudget: true,
+          linkedBudgetSourceRecordId: 99,
+          payload: { source: 'fixture' },
+        },
+      ]),
+    }
+
+    const saleFactRepository: SaleFactUpsertRepository = {
+      upsert: jest.fn().mockResolvedValue(undefined),
+    }
+
+    const employeeBranchLookup = {
+      findByClientId: jest.fn().mockResolvedValue([
+        {
+          sellerId: 7,
+          branchId: 2,
+          branchName: 'FerraçoSul - Pelotas',
+        },
+      ]),
+    }
+
+    const service = new SaleNormalizationService(rawReader, saleFactRepository, employeeBranchLookup as any)
+
+    await service.normalizeClientSales('client-1')
+
+    expect(employeeBranchLookup.findByClientId).toHaveBeenCalledWith('client-1')
+
+    const [upsertArgs] = (saleFactRepository.upsert as jest.Mock).mock.calls[0]
+
+    expect(upsertArgs.create).toMatchObject({
+      branchId: 2,
+      branchName: 'FerraçoSul - Pelotas',
+      sellerId: 7,
+    })
+    expect(upsertArgs.update).toMatchObject({
+      branchId: 2,
+      branchName: 'FerraçoSul - Pelotas',
+      sellerId: 7,
+    })
   })
 
   it('normalizes raw ferraco sales for the provided client and enriches channel from linked budgets', async () => {

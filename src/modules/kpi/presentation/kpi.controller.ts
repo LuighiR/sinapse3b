@@ -3,6 +3,7 @@ import { AuthContext } from '../../auth/domain/auth-context'
 import { RequestContext } from '../../auth/presentation/decorators/request-context.decorator'
 import { JwtAuthGuard } from '../../auth/presentation/guards/jwt-auth.guard'
 import { TenantScopeGuard } from '../../auth/presentation/guards/tenant-scope.guard'
+import { BudgetFollowUpDkwDispatchService } from '../application/budget-follow-up-dkw-dispatch.service'
 import { BudgetKpiQueryService } from '../application/budget-kpi-query.service'
 import { BudgetKpiRefreshService } from '../application/budget-kpi-refresh.service'
 import { parseBudgetChannelAbandonmentQuery } from './query/budget-channel-abandonment.query'
@@ -11,6 +12,7 @@ import { parseBudgetChannelHourlyQuery } from './query/budget-channel-hourly.que
 import { parseBudgetDailyQuery } from './query/budget-daily.query'
 import { parseBudgetDrilldownQuery } from './query/budget-drilldown.query'
 import { parseBudgetFollowUpDailyQuery } from './query/budget-follow-up-daily.query'
+import { parseBudgetFollowUpDkwDispatchQuery } from './query/budget-follow-up-dkw-dispatch.query'
 import { parseBudgetFollowUpDrilldownQuery } from './query/budget-follow-up-drilldown.query'
 import { parseBudgetFollowUpSummaryQuery } from './query/budget-follow-up-summary.query'
 import { parseBudgetHourlyQuery } from './query/budget-hourly.query'
@@ -22,6 +24,7 @@ export class KpiController {
   constructor(
     private readonly refreshService: BudgetKpiRefreshService,
     private readonly queryService: BudgetKpiQueryService,
+    private readonly dkwDispatchService: BudgetFollowUpDkwDispatchService,
   ) {}
 
   @Post('refresh')
@@ -83,6 +86,17 @@ export class KpiController {
     const period = parseBudgetFollowUpDrilldownQuery(query)
 
     return this.queryService.getFollowUpDrilldown({
+      clientId: authContext.clientId,
+      ...period,
+    })
+  }
+
+  @Post('follow-up/dkw-dispatch')
+  @HttpCode(200)
+  dispatchFollowUpDkw(@RequestContext() authContext: AuthContext, @Query() query: Record<string, unknown>) {
+    const period = parseBudgetFollowUpDkwDispatchQuery(query)
+
+    return this.dkwDispatchService.dispatch({
       clientId: authContext.clientId,
       ...period,
     })

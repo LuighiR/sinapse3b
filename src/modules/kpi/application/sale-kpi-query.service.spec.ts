@@ -152,6 +152,86 @@ describe('SaleKpiQueryService', () => {
     expect(result.averageTicket).toEqual({ value: '100.0000' })
   })
 
+  it('filters sales summary by branchId from canonical facts', async () => {
+    const repository: jest.Mocked<SaleKpiQueryRepository> = {
+      getSummaryRows: jest.fn(),
+      getDailyRows: jest.fn(),
+      getSaleFactRows: jest.fn().mockResolvedValue([
+        {
+          id: 1n,
+          saleDate: utcDate(2026, 0, 1),
+          saleDatetime: utcDate(2026, 0, 1, 10, 0),
+          sellerId: 7,
+          branchId: 5,
+          sellerName: 'Maria',
+          statusNormalized: 'VALID',
+          channel: 'Balcao',
+          valueAmount: '100.00',
+        },
+        {
+          id: 2n,
+          saleDate: utcDate(2026, 0, 1),
+          saleDatetime: utcDate(2026, 0, 1, 11, 0),
+          sellerId: 7,
+          branchId: 5,
+          sellerName: 'Maria',
+          statusNormalized: 'CANCELED',
+          channel: 'Balcao',
+          valueAmount: '50.00',
+        },
+      ] as any),
+      getDrilldownRows: jest.fn(),
+    }
+
+    const service = new SaleKpiQueryService(repository)
+
+    const result = await service.getSummary({
+      clientId: 'c1',
+      from: '2026-01-01',
+      to: '2026-01-31',
+      branchId: '5',
+    })
+
+    expect(repository.getSummaryRows).not.toHaveBeenCalled()
+    expect(repository.getSaleFactRows).toHaveBeenCalledWith({
+      clientId: 'c1',
+      period: expect.objectContaining({
+        from: saoPauloPeriodDate(2026, 0, 1),
+        to: saoPauloPeriodDate(2026, 0, 31),
+      }),
+      branchId: 5,
+    })
+    expect(result.total).toEqual({ count: 2, value: '150.0000' })
+    expect(result.active).toEqual({ count: 1, value: '100.0000' })
+    expect(result.canceled).toEqual({ count: 1, value: '50.0000' })
+  })
+
+  it('validates branch scope before querying sales summary rows', async () => {
+    const repository: jest.Mocked<SaleKpiQueryRepository> = {
+      getSummaryRows: jest.fn().mockResolvedValue([]),
+      getDailyRows: jest.fn(),
+      getSaleFactRows: jest.fn().mockResolvedValue([]),
+      getDrilldownRows: jest.fn(),
+    }
+    const branchScopeService = {
+      assertBranchScope: jest.fn().mockRejectedValue(new Error('Branch is outside the active client scope')),
+    }
+
+    const service = new (SaleKpiQueryService as any)(repository, branchScopeService)
+
+    await expect(
+      service.getSummary({
+        clientId: 'c1',
+        from: '2026-01-01',
+        to: '2026-01-31',
+        branchId: '9',
+      }),
+    ).rejects.toThrow('Branch is outside the active client scope')
+
+    expect(branchScopeService.assertBranchScope).toHaveBeenCalledWith('c1', 9)
+    expect(repository.getSummaryRows).not.toHaveBeenCalled()
+  })
+
   it('filters sales summary by hasLinkedBudget from canonical facts', async () => {
     const repository: jest.Mocked<SaleKpiQueryRepository> = {
       getSummaryRows: jest.fn(),
@@ -501,6 +581,7 @@ describe('SaleKpiQueryService', () => {
       from: '2026-01-05',
       to: '2026-01-05',
       sellerId: 7,
+      branchId: 5,
       status: 'Cancelada',
       orderType: 'Televendas',
       hasLinkedBudget: true,
@@ -513,6 +594,7 @@ describe('SaleKpiQueryService', () => {
         to: saoPauloPeriodDate(2026, 0, 5),
       }),
       sellerId: 7,
+      branchId: 5,
     })
     expect(result).toEqual({
       period: {
@@ -522,6 +604,7 @@ describe('SaleKpiQueryService', () => {
       },
       filters: {
         sellerId: 7,
+        branchId: 5,
         status: 'Cancelada',
         orderType: 'Televendas',
         hasLinkedBudget: true,

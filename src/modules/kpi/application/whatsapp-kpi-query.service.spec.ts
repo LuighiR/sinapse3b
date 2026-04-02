@@ -48,6 +48,46 @@ describe('WhatsAppKpiQueryService', () => {
     })
   })
 
+  it('validates branch scope and passes branchId to summary lookups', async () => {
+    const repository: jest.Mocked<WhatsAppKpiQueryRepository> = {
+      getSummaryCounts: jest.fn().mockResolvedValue({
+        totalConversationsCount: 12,
+        receivedMessagesCount: 34,
+      }),
+      getAgentRankingRows: jest.fn(),
+      getSessionsHourlyRows: jest.fn(),
+      getMessagesHourlyRows: jest.fn(),
+      getSessionsDailyRows: jest.fn(),
+      getMessagesDailyRows: jest.fn(),
+      listTags: jest.fn(),
+      getTagHourlyRows: jest.fn(),
+      getTagHourlyComparisonRows: jest.fn(),
+    }
+    const branchScopeService = {
+      assertBranchScope: jest.fn().mockResolvedValue(undefined),
+    }
+
+    const service = new (WhatsAppKpiQueryService as any)(repository, branchScopeService)
+
+    await service.getSummary({
+      clientId: 'client-1',
+      from: '2026-03-01',
+      to: '2026-03-31',
+      branchId: 5,
+    } as any)
+
+    expect(branchScopeService.assertBranchScope).toHaveBeenCalledWith('client-1', 5)
+    expect(repository.getSummaryCounts).toHaveBeenCalledWith({
+      clientId: 'client-1',
+      chatId: undefined,
+      branchId: 5,
+      period: expect.objectContaining({
+        from: saoPauloPeriodDate(2026, 2, 1),
+        to: saoPauloPeriodDate(2026, 2, 31),
+      }),
+    })
+  })
+
   it('returns ranking rows grouped by assigned user with an unassigned fallback', async () => {
     const repository: jest.Mocked<WhatsAppKpiQueryRepository> = {
       getSummaryCounts: jest.fn(),
@@ -317,6 +357,49 @@ describe('WhatsAppKpiQueryService', () => {
       tagId: 21830n,
     })
     expect(result.rows[14]).toEqual({ hour: '14', sessionsCount: 30 })
+  })
+
+  it('passes branchId to both whatsapp and budget lookups for tag comparison', async () => {
+    const repository: jest.Mocked<WhatsAppKpiQueryRepository> = {
+      getSummaryCounts: jest.fn(),
+      getAgentRankingRows: jest.fn(),
+      getSessionsHourlyRows: jest.fn(),
+      getMessagesHourlyRows: jest.fn(),
+      getSessionsDailyRows: jest.fn(),
+      getMessagesDailyRows: jest.fn(),
+      listTags: jest.fn(),
+      getTagHourlyRows: jest.fn(),
+      getTagHourlyComparisonRows: jest.fn().mockResolvedValue([
+        { hour: '14', tagSessionsCount: 30, openBudgetsCount: 20 },
+      ]),
+    }
+    const branchScopeService = {
+      assertBranchScope: jest.fn().mockResolvedValue(undefined),
+    }
+
+    const service = new (WhatsAppKpiQueryService as any)(repository, branchScopeService)
+
+    await service.getTagHourlyComparison({
+      clientId: 'client-1',
+      from: '2026-03-05',
+      to: '2026-03-05',
+      tagId: '21830',
+      branchId: 5,
+      sellerId: '35747',
+    } as any)
+
+    expect(branchScopeService.assertBranchScope).toHaveBeenCalledWith('client-1', 5)
+    expect(repository.getTagHourlyComparisonRows).toHaveBeenCalledWith({
+      clientId: 'client-1',
+      chatId: undefined,
+      branchId: 5,
+      sellerId: 35747,
+      period: expect.objectContaining({
+        from: saoPauloPeriodDate(2026, 2, 5),
+        to: saoPauloPeriodDate(2026, 2, 5),
+      }),
+      tagId: 21830n,
+    })
   })
 
   it('returns tag versus open budget hourly comparison rows', async () => {

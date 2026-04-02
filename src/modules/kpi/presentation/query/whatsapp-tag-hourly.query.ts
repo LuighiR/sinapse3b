@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common'
 import { z } from 'zod'
+import { numericIdSchema } from './budget-filters.query'
 import { KpiPeriod } from '../../domain/kpi-period'
 
 export type WhatsAppTagHourlyQuery = {
@@ -7,6 +8,7 @@ export type WhatsAppTagHourlyQuery = {
   to: string
   tagId: string
   chatId?: string
+  branchId?: number
 }
 
 const optionalFilterTextSchema = z
@@ -20,6 +22,7 @@ const whatsappTagHourlyQuerySchema = z.object({
   to: z.string().trim().min(1),
   tagId: z.string().trim().min(1),
   chatId: optionalFilterTextSchema,
+  branchId: numericIdSchema.optional(),
 })
 
 export function parseWhatsAppTagHourlyQuery(query: Record<string, unknown>): WhatsAppTagHourlyQuery {
@@ -28,6 +31,7 @@ export function parseWhatsAppTagHourlyQuery(query: Record<string, unknown>): Wha
     to: query.to,
     tagId: query.tagId,
     chatId: query.chatId,
+    branchId: query.branchId,
   })
 
   if (!parsed.success || !isValidPeriod(parsed.data) || !isValidTagId(parsed.data.tagId)) {

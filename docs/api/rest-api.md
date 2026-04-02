@@ -746,6 +746,62 @@ Response `200`:
 }
 ```
 
+### `POST /kpis/budgets/follow-up/dkw-dispatch`
+
+Descricao:
+dispara para o webhook DKW os orcamentos de follow-up classificados como `after24h` e `open`, sem reenviar registros que ja tenham `raw.ferraco_budgets.sent_dkw_at`.
+
+Headers:
+
+```http
+Authorization: Bearer <jwt>
+X-Tenant-Id: <tenant-id>
+```
+
+Query Params:
+
+- `from` required: inicio do recorte de aberturas
+- `to` required: fim do recorte de aberturas
+- `referenceAt` required: data e hora de referencia da classificacao
+- `sellerId` optional
+- `branchId` optional
+- `orderType` optional
+
+Quando `sellerId` e informado nas rotas de budgets, ele representa `core.employees.erp_id`.
+
+Regra:
+
+- o endpoint reutiliza a mesma classificacao de follow-up dos endpoints `summary`, `daily` e `drilldown`
+- somente orcamentos classificados como `after24h` e `open` entram no disparo
+- o estado de envio fica em `raw.ferraco_budgets.sent_dkw_at`
+- se `sent_dkw_at` ja estiver preenchido, o registro e ignorado
+- em sucesso no webhook, a API grava `sent_dkw_at`
+- em erro de um item, a API continua; se houver 3 erros seguidos, a execucao aborta
+- o payload usa `cell_phone`, fallback `phone`, fallback final `Sem registro`
+- quando nao houver telefone em nenhum dos dois campos, a API tambem envia `mensagem = "Sem telefone registrado"`
+- `referenceAt` aceita timestamp com offset (`-03:00`) ou, nas formas sem offset que o backend normaliza (`YYYY-MM-DDTHH:mm` ou `YYYY-MM-DDTHH:mm:ss`, com `T` ou espaco), a API assume `America/Sao_Paulo` (`UTC-3`)
+- `referenceAt` tambem aceita `YYYY-MM-DD`; nesse caso, a API interpreta o valor como o fim do dia em `America/Sao_Paulo` (`23:59:59.999`)
+
+Exemplo:
+
+```text
+POST /kpis/budgets/follow-up/dkw-dispatch?from=2026-04-01&to=2026-04-02&referenceAt=2026-04-02T10:00:00-03:00&sellerId=7&branchId=5&orderType=Balcao
+```
+
+Response `200`:
+
+```json
+{
+  "period": {
+    "from": "2026-04-01",
+    "to": "2026-04-02",
+    "key": "2026-04-01_2026-04-02"
+  },
+  "referenceAt": "2026-04-02T10:00:00-03:00",
+  "status": "completed"
+}
+```
+
 ### `GET /kpis/budgets/hourly`
 
 Descricao:
@@ -1364,12 +1420,15 @@ WhatsApp e mensageria aceitam:
 - `from` required
 - `to` required
 - `chatId` optional
+- `branchId` optional
 - `tagId` required apenas nas rotas por tag
 - `sellerId` optional apenas em `GET /kpis/whatsapp/tags/hourly/comparison`
 
 As metricas sao lidas diretamente das tabelas canonicas `core.sessions`, `core.messages`, `core.tickets`, `core.contacts`, `core.tags` e `core.contact_tags`.
 
 Quando `chatId` e informado nas rotas analiticas de WhatsApp, ele representa o email do atendente e o filtro e aplicado diretamente por `core.sessions.assigned_user_email`, com comparacao case-insensitive.
+
+Quando `branchId` e informado nas rotas analiticas de WhatsApp, o filtro e derivado de employee: `lower(btrim(core.employees.chat_id))` precisa casar com `lower(btrim(core.sessions.assigned_user_email))` dentro da filial selecionada. Registros sem match resolvivel ou com match ambiguo nao entram no resultado filtrado.
 
 Quando `sellerId` e informado em `GET /kpis/whatsapp/tags/hourly/comparison`, ele filtra somente `openBudgetsCount` pelo mesmo identificador de budgets e sales: `core.employees.erp_id` / `core.budget_facts.seller_id`.
 
@@ -1383,6 +1442,7 @@ Query Params:
 - `from`
 - `to`
 - `chatId` optional
+- `branchId` optional
 
 Response `200`:
 
@@ -1412,6 +1472,7 @@ Query Params:
 - `from`
 - `to`
 - `chatId` optional
+- `branchId` optional
 
 Response `200`:
 
@@ -1457,6 +1518,7 @@ Query Params:
 - `from`
 - `to`
 - `chatId` optional
+- `branchId` optional
 
 Response `200`:
 
@@ -1486,6 +1548,7 @@ Query Params:
 - `from`
 - `to`
 - `chatId` optional
+- `branchId` optional
 
 Response `200`:
 
@@ -1523,6 +1586,7 @@ Query Params:
 - `from`
 - `to`
 - `chatId` optional
+- `branchId` optional
 
 Response `200`:
 
@@ -1609,6 +1673,7 @@ Query Params:
 - `to`
 - `tagId`
 - `chatId` optional
+- `branchId` optional
 
 Response `200`:
 
@@ -1640,6 +1705,7 @@ Query Params:
 - `to`
 - `tagId`
 - `chatId` optional
+- `branchId` optional
 - `sellerId` optional
 
 Response `200`:

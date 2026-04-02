@@ -8,6 +8,7 @@ export const envSchema = z.object({
   AUTH_JWT_SECRET: requiredString,
   AUTH_JWT_ISSUER: requiredString,
   AUTH_JWT_AUDIENCE: requiredString,
+  BUDGET_FOLLOW_UP_DKW_WEBHOOK_URL: z.string().default('').transform((value) => value.trim()),
   AUTH_REFRESH_JWT_SECRET: z.string().default('').transform((value) => value.trim()),
   AUTH_ACCESS_TOKEN_TTL_MINUTES: z.coerce.number().int().min(1).default(60),
   AUTH_REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).default(30),

@@ -19,9 +19,15 @@ import {
 import { CallKpiQueryRepository } from '../application/call-kpi-query.service'
 
 type EmployeeLookupRow = {
+  id: number
   name: string
   extensionUuid: string
   extensionNumber: string
+}
+
+type BranchEmployeeLookupMatch = {
+  employeeId: number
+  employeeName: string
 }
 
 type CallFactEmployeeCandidate = Omit<CallFactRecord, 'employeeName'>
@@ -126,40 +132,45 @@ export class PrismaCallKpiRepository
     }
   }
 
-  async listCallFacts(input: { clientId: string; from: Date; to: Date }): Promise<CallFactRecord[]> {
+  async listCallFacts(input: { clientId: string; from: Date; to: Date; branchId?: number }): Promise<CallFactRecord[]> {
     const prisma = this.prisma as any
-    const rows = await prisma.callFact.findMany({
-      where: {
-        clientId: input.clientId,
-        startedAt: this.toTimestampWhere(input.from, input.to),
-      },
-      orderBy: [{ startedAt: 'asc' }, { id: 'asc' }],
-      select: {
-        id: true,
-        startedAt: true,
-        isInboundToCompany: true,
-        isReceived: true,
-        isLost: true,
-        agentResolutionType: true,
-        agentResolutionKey: true,
-        agentExtensionNumber: true,
-        extensionUuid: true,
-      },
-    })
+    if (input.branchId === undefined) {
+      const rows = await prisma.callFact.findMany({
+        where: {
+          clientId: input.clientId,
+          startedAt: this.toTimestampWhere(input.from, input.to),
+        },
+        orderBy: [{ startedAt: 'asc' }, { id: 'asc' }],
+        select: {
+          id: true,
+          startedAt: true,
+          isInboundToCompany: true,
+          isReceived: true,
+          isLost: true,
+          agentResolutionType: true,
+          agentResolutionKey: true,
+          agentExtensionNumber: true,
+          extensionUuid: true,
+        },
+      })
 
-    return this.attachEmployeeNames(
-      input.clientId,
-      rows.map((row: CallFactEmployeeCandidate) => ({
-        ...row,
-        employeeName: null,
-      })),
-    )
+      return this.attachEmployeeNames(
+        input.clientId,
+        rows.map((row: CallFactEmployeeCandidate) => ({
+          ...row,
+          employeeName: null,
+        })),
+      )
+    }
+
+    return this.attachBranchCallFacts(input.clientId, input.branchId, input.from, input.to)
   }
 
   async listTelemarketingBudgetFacts(input: {
     clientId: string
     from: Date
     to: Date
+    branchId?: number
   }): Promise<TelemarketingBudgetFactRecord[]> {
     const prisma = this.prisma as any
 
@@ -168,6 +179,7 @@ export class PrismaCallKpiRepository
         clientId: input.clientId,
         channel: 'Pedido Televendas',
         budgetDatetime: this.toTimestampWhere(input.from, input.to),
+        ...(input.branchId !== undefined ? { branchId: input.branchId } : {}),
       },
       orderBy: [{ budgetDatetime: 'asc' }, { id: 'asc' }],
       select: {
@@ -462,22 +474,25 @@ export class PrismaCallKpiRepository
     })
   }
 
-  async getCallFactRows(input: { clientId: string; period: KpiPeriod }): Promise<CallFactRecord[]> {
+  async getCallFactRows(input: { clientId: string; period: KpiPeriod; branchId?: number }): Promise<CallFactRecord[]> {
     return this.listCallFacts({
       clientId: input.clientId,
       from: input.period.from,
       to: input.period.to,
+      branchId: input.branchId,
     })
   }
 
   async getTelemarketingBudgetRows(input: {
     clientId: string
     period: KpiPeriod
+    branchId?: number
   }): Promise<TelemarketingBudgetFactRecord[]> {
     return this.listTelemarketingBudgetFacts({
       clientId: input.clientId,
       from: input.period.from,
       to: input.period.to,
+      branchId: input.branchId,
     })
   }
 
@@ -609,6 +624,195 @@ export class PrismaCallKpiRepository
         employeeName: employeeNameByExtension ?? null,
       }
     })
+  }
+
+  private async attachBranchCallFacts(
+    clientId: string,
+    branchId: number,
+    from: Date,
+    to: Date,
+  ): Promise<CallFactRecord[]> {
+    const prisma = this.prisma as any
+    const employees = (await prisma.employee.findMany({
+      where: {
+        branchId,
+      },
+      orderBy: [{ id: 'asc' }],
+      select: {
+        id: true,
+        name: true,
+        extensionUuid: true,
+        extensionNumber: true,
+      },
+    })) as EmployeeLookupRow[]
+
+    const uniqueLookup = this.buildUniqueBranchEmployeeLookup(employees)
+    const uniqueExtensionUuids = [...uniqueLookup.byExtensionUuid.entries()]
+      .filter(([, value]) => value !== null)
+      .map(([key]) => key)
+    const uniqueExtensionNumbers = [...uniqueLookup.byExtensionNumber.entries()]
+      .filter(([, value]) => value !== null)
+      .map(([key]) => key)
+
+    if (uniqueExtensionUuids.length === 0 && uniqueExtensionNumbers.length === 0) {
+      return []
+    }
+
+    const candidates = (await prisma.callFact.findMany({
+      where: {
+        clientId,
+        startedAt: this.toTimestampWhere(from, to),
+        OR: [
+          ...(uniqueExtensionUuids.length > 0 ? [{ extensionUuid: { in: uniqueExtensionUuids } }] : []),
+          ...(uniqueExtensionNumbers.length > 0
+            ? [
+                { agentExtensionNumber: { in: uniqueExtensionNumbers } },
+                { agentResolutionKey: { in: uniqueExtensionNumbers } },
+              ]
+            : []),
+        ],
+      },
+      orderBy: [{ startedAt: 'asc' }, { id: 'asc' }],
+      select: {
+        id: true,
+        startedAt: true,
+        isInboundToCompany: true,
+        isReceived: true,
+        isLost: true,
+        agentResolutionType: true,
+        agentResolutionKey: true,
+        agentExtensionNumber: true,
+        extensionUuid: true,
+      },
+    })) as CallFactRecord[]
+
+    return candidates.flatMap((fact) => {
+      const employeeNameByUuid = this.resolveEmployeeByExtensionUuid(uniqueLookup.byExtensionUuid, fact.extensionUuid)
+
+      if (employeeNameByUuid === null) {
+        return []
+      }
+
+      if (employeeNameByUuid !== undefined) {
+        return [
+          {
+            ...fact,
+            employeeName: employeeNameByUuid.employeeName,
+          },
+        ]
+      }
+
+      const primaryExtensionNumber = this.normalizeOptionalText(fact.agentExtensionNumber)
+
+      if (primaryExtensionNumber !== null) {
+        const employeeNameByPrimary = this.resolveEmployeeByExtensionNumber(
+          uniqueLookup.byExtensionNumber,
+          primaryExtensionNumber,
+        )
+
+        if (employeeNameByPrimary === undefined) {
+          return []
+        }
+
+        return [
+          {
+            ...fact,
+            employeeName: employeeNameByPrimary.employeeName,
+          },
+        ]
+      }
+
+      const secondaryExtensionNumber = this.normalizeOptionalText(fact.agentResolutionKey)
+
+      if (secondaryExtensionNumber !== null) {
+        const employeeNameBySecondary = this.resolveEmployeeByExtensionNumber(
+          uniqueLookup.byExtensionNumber,
+          secondaryExtensionNumber,
+        )
+
+        if (employeeNameBySecondary !== undefined) {
+          return [
+            {
+              ...fact,
+              employeeName: employeeNameBySecondary.employeeName,
+            },
+          ]
+        }
+      }
+
+      return []
+    })
+  }
+
+  private buildUniqueBranchEmployeeLookup(employees: EmployeeLookupRow[]): {
+    byExtensionUuid: Map<string, BranchEmployeeLookupMatch | null>
+    byExtensionNumber: Map<string, BranchEmployeeLookupMatch | null>
+  } {
+    const byExtensionUuid = new Map<string, BranchEmployeeLookupMatch | null>()
+    const byExtensionNumber = new Map<string, BranchEmployeeLookupMatch | null>()
+
+    for (const employee of employees) {
+      if (this.hasText(employee.extensionUuid)) {
+        this.storeUniqueBranchEmployeeMatch(byExtensionUuid, employee.extensionUuid, employee)
+      }
+
+      if (this.hasText(employee.extensionNumber)) {
+        this.storeUniqueBranchEmployeeMatch(byExtensionNumber, employee.extensionNumber, employee)
+      }
+    }
+
+    return {
+      byExtensionUuid,
+      byExtensionNumber,
+    }
+  }
+
+  private resolveEmployeeByExtensionUuid(
+    map: Map<string, BranchEmployeeLookupMatch | null>,
+    extensionUuid: string | null,
+  ): BranchEmployeeLookupMatch | null | undefined {
+    if (!this.hasText(extensionUuid)) {
+      return undefined
+    }
+
+    if (!map.has(extensionUuid)) {
+      return undefined
+    }
+
+    const value = map.get(extensionUuid)
+    return value
+  }
+
+  private resolveEmployeeByExtensionNumber(
+    map: Map<string, BranchEmployeeLookupMatch | null>,
+    extensionNumber: string | null,
+  ): BranchEmployeeLookupMatch | undefined {
+    if (!this.hasText(extensionNumber)) {
+      return undefined
+    }
+
+    if (!map.has(extensionNumber)) {
+      return undefined
+    }
+
+    const value = map.get(extensionNumber)
+    return value === null ? undefined : value
+  }
+
+  private storeUniqueBranchEmployeeMatch(
+    map: Map<string, BranchEmployeeLookupMatch | null>,
+    key: string,
+    employee: EmployeeLookupRow,
+  ): void {
+    if (!map.has(key)) {
+      map.set(key, {
+        employeeId: employee.id,
+        employeeName: employee.name,
+      })
+      return
+    }
+
+    map.set(key, null)
   }
 
   private toTimestampWhere(from: Date, to: Date): { gte: Date; lt: Date } {

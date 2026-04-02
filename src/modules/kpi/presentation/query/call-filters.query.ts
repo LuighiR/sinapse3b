@@ -10,6 +10,7 @@ export type CallBasePeriodQuery = {
 export type CallFactFiltersQuery = CallBasePeriodQuery & {
   extensionUuid?: string
   extensionNumber?: string
+  branchId?: number
 }
 
 const optionalFilterTextSchema = z
@@ -17,6 +18,12 @@ const optionalFilterTextSchema = z
   .trim()
   .transform((value) => (value === '' ? undefined : value))
   .optional()
+
+const optionalFilterNumberSchema = z
+  .preprocess(
+    (value) => (value == null || value === '' ? undefined : value),
+    z.coerce.number().int().positive().optional(),
+  )
 
 const callBasePeriodSchema = z.object({
   from: z.string().trim().min(1),
@@ -26,6 +33,7 @@ const callBasePeriodSchema = z.object({
 const callFactFiltersSchema = callBasePeriodSchema.extend({
   extensionUuid: optionalFilterTextSchema,
   extensionNumber: optionalFilterTextSchema,
+  branchId: optionalFilterNumberSchema,
 })
 
 export function parseCallFactFiltersQuery(
@@ -41,6 +49,7 @@ export function parseCallFactFiltersQuery(
     to: query.to,
     extensionUuid: query.extensionUuid,
     extensionNumber: query.extensionNumber,
+    branchId: query.branchId,
   })
 
   if (!parsed.success || !isValidPeriod(parsed.data)) {

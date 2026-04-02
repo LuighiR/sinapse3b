@@ -21,6 +21,23 @@ describe('parseCallFactFiltersQuery', () => {
     })
   })
 
+  it('accepts branchId filters', () => {
+    expect(
+      parseCallFactFiltersQuery(
+        {
+          from: '2026-01-01',
+          to: '2026-01-31',
+          branchId: ' 12 ',
+        },
+        'Invalid call query params',
+      ),
+    ).toMatchObject({
+      from: '2026-01-01',
+      to: '2026-01-31',
+      branchId: 12,
+    })
+  })
+
   it('rejects legacy sellerId filters for calls', () => {
     expect(() =>
       parseCallFactFiltersQuery(

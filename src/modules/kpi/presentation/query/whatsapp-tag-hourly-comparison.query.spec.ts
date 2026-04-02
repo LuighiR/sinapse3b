@@ -9,6 +9,7 @@ describe('parseWhatsAppTagHourlyComparisonQuery', () => {
         to: '2026-03-31',
         tagId: '21830',
         chatId: ' maria@empresa.com ',
+        branchId: ' 5 ',
         sellerId: ' 35747 ',
       }),
     ).toEqual({
@@ -16,6 +17,7 @@ describe('parseWhatsAppTagHourlyComparisonQuery', () => {
       to: '2026-03-31',
       tagId: '21830',
       chatId: 'maria@empresa.com',
+      branchId: 5,
       sellerId: 35747,
     })
   })

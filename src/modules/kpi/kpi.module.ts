@@ -1,6 +1,7 @@
 import { Injectable, Module } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
 import { AuthModule } from '../auth/auth.module'
+import { CompaniesModule } from '../companies/companies.module'
 import { NormalizationModule } from '../normalization/normalization.module'
 import { BudgetNormalizationService } from '../normalization/application/budget-normalization.service'
 import { CallNormalizationService } from '../normalization/application/call-normalization.service'
@@ -9,6 +10,7 @@ import { PrismaModule } from '../../infra/prisma/prisma.module'
 import { PrismaService } from '../../infra/prisma/prisma.service'
 import { JwtAuthGuard } from '../auth/presentation/guards/jwt-auth.guard'
 import { TenantScopeGuard } from '../auth/presentation/guards/tenant-scope.guard'
+import { BudgetFollowUpDkwDispatchService } from './application/budget-follow-up-dkw-dispatch.service'
 import {
   BudgetKpiAvailabilityRepository,
   BudgetKpiAvailabilityUpdate,
@@ -60,11 +62,14 @@ import { CallKpiRefreshService } from './application/call-kpi-refresh.service'
 import { WhatsAppKpiQueryService } from './application/whatsapp-kpi-query.service'
 import { CallKpiController } from './presentation/call-kpi.controller'
 import { WhatsAppKpiController } from './presentation/whatsapp-kpi.controller'
+import { FetchBudgetFollowUpDkwWebhookClient } from './infrastructure/fetch-budget-follow-up-dkw-webhook.client'
+import { PrismaBudgetFollowUpDkwDispatchRepository } from './infrastructure/prisma-budget-follow-up-dkw-dispatch.repository'
 import { PrismaCallKpiRepository } from './infrastructure/prisma-call-kpi.repository'
 import { PrismaWhatsAppKpiRepository } from './infrastructure/prisma-whatsapp-kpi.repository'
+import { BranchScopeService } from '../companies/application/branch-scope.service'
 
 @Injectable()
-class PrismaBudgetKpiRepository
+export class PrismaBudgetKpiRepository
   implements BudgetKpiRefreshRepository, BudgetKpiAvailabilityRepository, BudgetKpiQueryRepository
 {
   constructor(private readonly prisma: PrismaService) {}
@@ -450,6 +455,7 @@ class PrismaBudgetKpiRepository
   async getBudgetFactRows(input: {
     clientId: string
     period: KpiPeriod
+    branchId?: number
     sellerId?: number
   }): Promise<BudgetFactRecord[]> {
     const prisma = this.prisma as any
@@ -463,6 +469,7 @@ class PrismaBudgetKpiRepository
           gte: from,
           lte: to,
         },
+        ...(input.branchId !== undefined ? { branchId: input.branchId } : {}),
         ...(input.sellerId !== undefined ? { sellerId: input.sellerId } : {}),
       },
       orderBy: [{ budgetDate: 'asc' }, { id: 'asc' }],
@@ -601,7 +608,7 @@ class PrismaBudgetKpiRepository
 }
 
 @Injectable()
-class PrismaSaleKpiRepository
+export class PrismaSaleKpiRepository
   implements SaleKpiRefreshRepository, SaleKpiAvailabilityRepository, SaleKpiQueryRepository
 {
   constructor(private readonly prisma: PrismaService) {}
@@ -932,7 +939,7 @@ class PrismaSaleKpiRepository
     )
   }
 
-  async getSaleFactRows(input: { clientId: string; period: KpiPeriod; sellerId?: number }): Promise<SaleFactRecord[]> {
+  async getSaleFactRows(input: { clientId: string; period: KpiPeriod; branchId?: number; sellerId?: number }): Promise<SaleFactRecord[]> {
     const prisma = this.prisma as any
     const from = KpiPeriod.toDatabaseDate(input.period.from)
     const to = KpiPeriod.toDatabaseDate(input.period.to)
@@ -944,6 +951,7 @@ class PrismaSaleKpiRepository
           gte: from,
           lte: to,
         },
+        ...(input.branchId !== undefined ? { branchId: input.branchId } : {}),
         ...(input.sellerId !== undefined ? { sellerId: input.sellerId } : {}),
       },
       orderBy: [{ saleDate: 'asc' }, { id: 'asc' }],
@@ -964,6 +972,7 @@ class PrismaSaleKpiRepository
   async getDrilldownRows(input: {
     clientId: string
     period: KpiPeriod
+    branchId?: number
     sellerId?: number
   }): Promise<SaleKpiDrilldownFactRow[]> {
     const prisma = this.prisma as any
@@ -977,6 +986,7 @@ class PrismaSaleKpiRepository
           gte: from,
           lte: to,
         },
+        ...(input.branchId !== undefined ? { branchId: input.branchId } : {}),
         ...(input.sellerId !== undefined ? { sellerId: input.sellerId } : {}),
       },
       orderBy: [{ saleDate: 'desc' }, { saleDatetime: 'desc' }, { id: 'desc' }],
@@ -1075,12 +1085,14 @@ class PrismaSaleKpiRepository
 }
 
 @Module({
-  imports: [PrismaModule, AuthModule, NormalizationModule],
+  imports: [PrismaModule, AuthModule, NormalizationModule, CompaniesModule],
   providers: [
     PrismaBudgetKpiRepository,
+    PrismaBudgetFollowUpDkwDispatchRepository,
     PrismaSaleKpiRepository,
     PrismaCallKpiRepository,
     PrismaWhatsAppKpiRepository,
+    FetchBudgetFollowUpDkwWebhookClient,
     JwtAuthGuard,
     TenantScopeGuard,
     {
@@ -1099,8 +1111,18 @@ class PrismaSaleKpiRepository
     },
     {
       provide: BudgetKpiQueryService,
-      useFactory: (repository: PrismaBudgetKpiRepository) => new BudgetKpiQueryService(repository),
-      inject: [PrismaBudgetKpiRepository],
+      useFactory: (repository: PrismaBudgetKpiRepository, branchScopeService: BranchScopeService) =>
+        new BudgetKpiQueryService(repository, branchScopeService),
+      inject: [PrismaBudgetKpiRepository, BranchScopeService],
+    },
+    {
+      provide: BudgetFollowUpDkwDispatchService,
+      useFactory: (
+        repository: PrismaBudgetFollowUpDkwDispatchRepository,
+        webhookClient: FetchBudgetFollowUpDkwWebhookClient,
+        branchScopeService: BranchScopeService,
+      ) => new BudgetFollowUpDkwDispatchService(repository, webhookClient, branchScopeService),
+      inject: [PrismaBudgetFollowUpDkwDispatchRepository, FetchBudgetFollowUpDkwWebhookClient, BranchScopeService],
     },
     {
       provide: SaleKpiAvailabilityService,
@@ -1118,8 +1140,9 @@ class PrismaSaleKpiRepository
     },
     {
       provide: SaleKpiQueryService,
-      useFactory: (repository: PrismaSaleKpiRepository) => new SaleKpiQueryService(repository),
-      inject: [PrismaSaleKpiRepository],
+      useFactory: (repository: PrismaSaleKpiRepository, branchScopeService: BranchScopeService) =>
+        new SaleKpiQueryService(repository, branchScopeService),
+      inject: [PrismaSaleKpiRepository, BranchScopeService],
     },
     {
       provide: CallKpiAvailabilityService,
@@ -1137,13 +1160,15 @@ class PrismaSaleKpiRepository
     },
     {
       provide: CallKpiQueryService,
-      useFactory: (repository: PrismaCallKpiRepository) => new CallKpiQueryService(repository),
-      inject: [PrismaCallKpiRepository],
+      useFactory: (repository: PrismaCallKpiRepository, branchScopeService: BranchScopeService) =>
+        new CallKpiQueryService(repository, branchScopeService),
+      inject: [PrismaCallKpiRepository, BranchScopeService],
     },
     {
       provide: WhatsAppKpiQueryService,
-      useFactory: (repository: PrismaWhatsAppKpiRepository) => new WhatsAppKpiQueryService(repository),
-      inject: [PrismaWhatsAppKpiRepository],
+      useFactory: (repository: PrismaWhatsAppKpiRepository, branchScopeService: BranchScopeService) =>
+        new WhatsAppKpiQueryService(repository, branchScopeService),
+      inject: [PrismaWhatsAppKpiRepository, BranchScopeService],
     },
   ],
   controllers: [KpiController, SalesKpiController, CallKpiController, WhatsAppKpiController],
@@ -1151,6 +1176,7 @@ class PrismaSaleKpiRepository
     BudgetKpiAvailabilityService,
     BudgetKpiRefreshService,
     BudgetKpiQueryService,
+    BudgetFollowUpDkwDispatchService,
     SaleKpiAvailabilityService,
     SaleKpiRefreshService,
     SaleKpiQueryService,

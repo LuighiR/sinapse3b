@@ -10,6 +10,7 @@ export type BudgetBasePeriodQuery = {
 }
 
 export type BudgetFactFiltersQuery = BudgetBasePeriodQuery & {
+  branchId?: number
   sellerId?: number
   status?: BudgetStatusQuery
   orderType?: string
@@ -41,6 +42,7 @@ const budgetBasePeriodSchema = z.object({
 })
 
 const budgetFactFiltersSchema = budgetBasePeriodSchema.extend({
+  branchId: numericIdSchema.optional(),
   sellerId: numericIdSchema.optional(),
   status: z.enum(['Cancelado', 'Baixado', 'Pendente']).optional(),
   orderType: orderTypeSchema,
@@ -69,6 +71,7 @@ export function parseBudgetFactFiltersQuery(
   const parsed = budgetFactFiltersSchema.safeParse({
     from: query.from,
     to: query.to,
+    branchId: query.branchId,
     sellerId: query.sellerId,
     status: query.status,
     orderType: query.orderType,

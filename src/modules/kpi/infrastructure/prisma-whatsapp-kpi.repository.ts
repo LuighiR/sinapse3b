@@ -68,6 +68,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
     clientId: string
     period: KpiPeriod
     chatId?: string
+    branchId?: number
   }): Promise<WhatsAppKpiSummaryCountsRow> {
     const [row] = await this.prisma.$queryRaw<SummarySqlRow[]>(Prisma.sql`
       select
@@ -81,6 +82,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
             ${input.chatId === undefined
               ? Prisma.empty
               : Prisma.sql`and lower(btrim(s.assigned_user_email)) = ${input.chatId}`}
+            ${this.buildBranchAssignedUserFilter(input, 's.assigned_user_email')}
         ) as total_conversations_count,
         (
           select count(*)::bigint
@@ -95,6 +97,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
             ${input.chatId === undefined
               ? Prisma.empty
               : Prisma.sql`and lower(btrim(s.assigned_user_email)) = ${input.chatId}`}
+            ${this.buildBranchAssignedUserFilter(input, 's.assigned_user_email')}
         ) as received_messages_count
     `)
 
@@ -108,6 +111,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
     clientId: string
     period: KpiPeriod
     chatId?: string
+    branchId?: number
   }): Promise<WhatsAppKpiAgentRankingSourceRow[]> {
     const rows = await this.prisma.$queryRaw<RankingSqlRow[]>(Prisma.sql`
       with session_ranking as (
@@ -137,6 +141,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
         where b.client_id = ${input.clientId}
           and e.chat_id is not null
           and btrim(e.chat_id) <> ''
+          ${input.branchId === undefined ? Prisma.empty : Prisma.sql`and e.branch_id = ${input.branchId}`}
         group by lower(btrim(e.chat_id))
       )
       select
@@ -150,6 +155,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
       left join employee_lookup
         on session_ranking.assigned_user_email is not null
        and employee_lookup.employee_chat_key = lower(session_ranking.assigned_user_email)
+      ${input.branchId === undefined ? Prisma.empty : Prisma.sql`where employee_lookup.employee_count = 1`}
       order by
         session_ranking.sessions_count desc,
         coalesce(
@@ -174,6 +180,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
     clientId: string
     period: KpiPeriod
     chatId?: string
+    branchId?: number
   }): Promise<WhatsAppKpiSessionsHourlySourceRow[]> {
     const rows = await this.prisma.$queryRaw<SessionsHourlySqlRow[]>(Prisma.sql`
       select
@@ -187,6 +194,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
         ${input.chatId === undefined
           ? Prisma.empty
           : Prisma.sql`and lower(btrim(s.assigned_user_email)) = ${input.chatId}`}
+        ${this.buildBranchAssignedUserFilter(input, 's.assigned_user_email')}
       group by 1
       order by 1 asc
     `)
@@ -201,6 +209,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
     clientId: string
     period: KpiPeriod
     chatId?: string
+    branchId?: number
   }): Promise<WhatsAppKpiMessagesHourlySourceRow[]> {
     const rows = await this.prisma.$queryRaw<MessagesHourlySqlRow[]>(Prisma.sql`
       select
@@ -217,6 +226,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
         ${input.chatId === undefined
           ? Prisma.empty
           : Prisma.sql`and lower(btrim(s.assigned_user_email)) = ${input.chatId}`}
+        ${this.buildBranchAssignedUserFilter(input, 's.assigned_user_email')}
       group by 1
       order by 1 asc
     `)
@@ -231,6 +241,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
     clientId: string
     period: KpiPeriod
     chatId?: string
+    branchId?: number
   }): Promise<WhatsAppKpiSessionsDailySourceRow[]> {
     const rows = await this.prisma.$queryRaw<SessionsDailySqlRow[]>(Prisma.sql`
       select
@@ -247,6 +258,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
         ${input.chatId === undefined
           ? Prisma.empty
           : Prisma.sql`and lower(btrim(s.assigned_user_email)) = ${input.chatId}`}
+        ${this.buildBranchAssignedUserFilter(input, 's.assigned_user_email')}
       group by 1
       order by 1 asc
     `)
@@ -261,6 +273,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
     clientId: string
     period: KpiPeriod
     chatId?: string
+    branchId?: number
   }): Promise<WhatsAppKpiMessagesDailySourceRow[]> {
     const rows = await this.prisma.$queryRaw<MessagesDailySqlRow[]>(Prisma.sql`
       select
@@ -280,6 +293,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
         ${input.chatId === undefined
           ? Prisma.empty
           : Prisma.sql`and lower(btrim(s.assigned_user_email)) = ${input.chatId}`}
+        ${this.buildBranchAssignedUserFilter(input, 's.assigned_user_email')}
       group by 1
       order by 1 asc
     `)
@@ -316,6 +330,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
     period: KpiPeriod
     tagId: bigint
     chatId?: string
+    branchId?: number
   }): Promise<WhatsAppKpiTagHourlySourceRow[]> {
     const rows = await this.prisma.$queryRaw<TagHourlySqlRow[]>(Prisma.sql`
       select
@@ -331,6 +346,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
         ${input.chatId === undefined
           ? Prisma.empty
           : Prisma.sql`and lower(btrim(s.assigned_user_email)) = ${input.chatId}`}
+        ${this.buildBranchAssignedUserFilter(input, 's.assigned_user_email')}
       group by 1
       order by 1 asc
     `)
@@ -346,6 +362,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
     period: KpiPeriod
     tagId: bigint
     chatId?: string
+    branchId?: number
     sellerId?: number
   }): Promise<WhatsAppKpiTagComparisonSourceRow[]> {
     const rows = await this.prisma.$queryRaw<TagComparisonSqlRow[]>(Prisma.sql`
@@ -363,6 +380,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
           ${input.chatId === undefined
             ? Prisma.empty
             : Prisma.sql`and lower(btrim(s.assigned_user_email)) = ${input.chatId}`}
+          ${this.buildBranchAssignedUserFilter(input, 's.assigned_user_email')}
         group by 1
       ),
       open_budgets as (
@@ -374,6 +392,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
           and bf.status_normalized = 'OPEN'
           and bf.budget_datetime >= ${input.period.from}
           and bf.budget_datetime < ${this.toExclusivePeriodEnd(input.period)}
+          ${input.branchId === undefined ? Prisma.empty : Prisma.sql`and bf.branch_id = ${input.branchId}`}
           ${input.sellerId === undefined ? Prisma.empty : Prisma.sql`and bf.seller_id = ${input.sellerId}`}
         group by 1
       )
@@ -397,5 +416,37 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
     const next = new Date(period.to.getTime())
     next.setUTCDate(next.getUTCDate() + 1)
     return next
+  }
+
+  private buildBranchAssignedUserFilter(
+    input: { clientId: string; branchId?: number },
+    assignedUserColumn: string,
+  ): Prisma.Sql {
+    if (input.branchId === undefined) {
+      return Prisma.empty
+    }
+
+    const assignedUserKey = Prisma.raw(`lower(btrim(${assignedUserColumn}))`)
+
+    return Prisma.sql`
+      and exists (
+        select 1
+        from (
+          select
+            lower(btrim(e.chat_id)) as employee_chat_key,
+            count(*)::bigint as employee_count
+          from core.employees e
+          join core.branches b on b.id = e.branch_id
+          where b.client_id = ${input.clientId}
+            and e.branch_id = ${input.branchId}
+            and e.chat_id is not null
+            and btrim(e.chat_id) <> ''
+          group by lower(btrim(e.chat_id))
+        ) employee_lookup
+        where ${assignedUserKey} is not null
+          and employee_lookup.employee_chat_key = ${assignedUserKey}
+          and employee_lookup.employee_count = 1
+      )
+    `
   }
 }

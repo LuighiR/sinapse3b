@@ -1,4 +1,5 @@
 import { BadRequestException } from '@nestjs/common'
+import { parseBudgetFollowUpDkwDispatchQuery } from './budget-follow-up-dkw-dispatch.query'
 import { parseBudgetFollowUpDailyQuery } from './budget-follow-up-daily.query'
 import { parseBudgetFollowUpDrilldownQuery } from './budget-follow-up-drilldown.query'
 import { parseBudgetFollowUpSummaryQuery } from './budget-follow-up-summary.query'
@@ -81,6 +82,7 @@ describe('budget follow-up query parsers', () => {
         from: '2026-01-01',
         to: '2026-01-31',
         referenceAt: ' 2026-01-31T18:30 ',
+        branchId: '5',
         sellerId: '7',
         orderType: '  Balcao  ',
       }),
@@ -88,6 +90,7 @@ describe('budget follow-up query parsers', () => {
       from: '2026-01-01',
       to: '2026-01-31',
       referenceAt: '2026-01-31T18:30',
+      branchId: 5,
       sellerId: 7,
       orderType: 'Balcao',
     })
@@ -159,5 +162,38 @@ describe('budget follow-up query parsers', () => {
         }),
       'Invalid budget follow-up drilldown query params',
     )
+  })
+
+  it('accepts branchId on drilldown queries', () => {
+    expect(
+      parseBudgetFollowUpDrilldownQuery({
+        from: '2026-01-01',
+        to: '2026-01-31',
+        referenceAt: '2026-01-31T18:30:00-03:00',
+        branchId: '12',
+      }),
+    ).toMatchObject({
+      branchId: 12,
+    })
+  })
+
+  it('parses the budget follow-up dkw dispatch query', () => {
+    expect(
+      parseBudgetFollowUpDkwDispatchQuery({
+        from: '2026-04-01',
+        to: '2026-04-02',
+        referenceAt: ' 2026-04-02T10:00 ',
+        sellerId: '7',
+        branchId: '5',
+        orderType: '  Balcao  ',
+      }),
+    ).toEqual({
+      from: '2026-04-01',
+      to: '2026-04-02',
+      referenceAt: '2026-04-02T10:00',
+      sellerId: 7,
+      branchId: 5,
+      orderType: 'Balcao',
+    })
   })
 })

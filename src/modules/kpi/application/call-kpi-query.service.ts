@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common'
 import { KpiPeriod } from '../domain/kpi-period'
+import { BranchScopeService } from '../../companies/application/branch-scope.service'
 import {
   CallFactRecord,
   CallKpiBreakdownRow,
@@ -13,6 +14,7 @@ export type CallKpiQueryPeriodInput = {
   to: string | Date
   extensionUuid?: string
   extensionNumber?: string
+  branchId?: number
 }
 
 export type CallKpiPeriodView = {
@@ -75,10 +77,11 @@ export type CallKpiQueryRepository = {
   getHourlyRows(input: { clientId: string; period: KpiPeriod }): Promise<CallKpiBreakdownRow[]>
   getAgentRankingRows(input: { clientId: string; period: KpiPeriod }): Promise<CallKpiBreakdownRow[]>
   getHourlyComparisonRows(input: { clientId: string; period: KpiPeriod }): Promise<CallKpiBreakdownRow[]>
-  getCallFactRows(input: { clientId: string; period: KpiPeriod }): Promise<CallFactRecord[]>
+  getCallFactRows(input: { clientId: string; period: KpiPeriod; branchId?: number }): Promise<CallFactRecord[]>
   getTelemarketingBudgetRows(input: {
     clientId: string
     period: KpiPeriod
+    branchId?: number
   }): Promise<TelemarketingBudgetFactRecord[]>
 }
 
@@ -95,15 +98,23 @@ type RankingBucket = {
 
 @Injectable()
 export class CallKpiQueryService {
-  constructor(private readonly repository: CallKpiQueryRepository) {}
+  constructor(
+    private readonly repository: CallKpiQueryRepository,
+    private readonly branchScopeService?: BranchScopeService,
+  ) {}
 
   async getSummary(input: CallKpiQueryPeriodInput): Promise<CallKpiSummaryResponse> {
     const period = this.toPeriod(input)
+    await this.assertBranchScope(input)
 
     if (this.hasFactFilters(input)) {
       const [callFacts, telemarketingBudgetRows] = await Promise.all([
         this.getFilteredFacts(input, period),
-        this.repository.getTelemarketingBudgetRows({ clientId: input.clientId, period }),
+        this.repository.getTelemarketingBudgetRows({
+          clientId: input.clientId,
+          period,
+          branchId: input.branchId,
+        }),
       ])
 
       return {
@@ -137,6 +148,7 @@ export class CallKpiQueryService {
 
   async getHourly(input: CallKpiQueryPeriodInput): Promise<CallKpiHourlyResponse> {
     const period = this.toPeriod(input)
+    await this.assertBranchScope(input)
 
     if (this.hasFactFilters(input)) {
       const callFacts = await this.getFilteredFacts(input, period)
@@ -167,6 +179,7 @@ export class CallKpiQueryService {
 
   async getAgentRanking(input: CallKpiQueryPeriodInput): Promise<CallKpiAgentRankingResponse> {
     const period = this.toPeriod(input)
+    await this.assertBranchScope(input)
 
     if (this.hasFactFilters(input)) {
       const callFacts = await this.getFilteredFacts(input, period)
@@ -197,11 +210,16 @@ export class CallKpiQueryService {
 
   async getHourlyComparison(input: CallKpiQueryPeriodInput): Promise<CallKpiHourlyComparisonResponse> {
     const period = this.toPeriod(input)
+    await this.assertBranchScope(input)
 
     if (this.hasFactFilters(input)) {
       const [callFacts, telemarketingBudgetRows] = await Promise.all([
         this.getFilteredFacts(input, period),
-        this.repository.getTelemarketingBudgetRows({ clientId: input.clientId, period }),
+        this.repository.getTelemarketingBudgetRows({
+          clientId: input.clientId,
+          period,
+          branchId: input.branchId,
+        }),
       ])
 
       return {
@@ -524,6 +542,7 @@ export class CallKpiQueryService {
     const callFacts = await this.repository.getCallFactRows({
       clientId: input.clientId,
       period,
+      branchId: input.branchId,
     })
 
     const extensionUuid = this.normalizeOptionalText(input.extensionUuid)
@@ -568,7 +587,11 @@ export class CallKpiQueryService {
   }
 
   private hasFactFilters(input: CallKpiQueryPeriodInput): boolean {
-    return input.extensionUuid !== undefined || input.extensionNumber !== undefined
+    return (
+      input.branchId !== undefined ||
+      input.extensionUuid !== undefined ||
+      input.extensionNumber !== undefined
+    )
   }
 
   private matchesCallFilter(
@@ -626,5 +649,13 @@ export class CallKpiQueryService {
 
     const normalized = value.trim()
     return normalized === '' ? null : normalized
+  }
+
+  private async assertBranchScope(input: CallKpiQueryPeriodInput): Promise<void> {
+    if (!this.branchScopeService) {
+      return
+    }
+
+    await this.branchScopeService.assertBranchScope(input.clientId, input.branchId)
   }
 }

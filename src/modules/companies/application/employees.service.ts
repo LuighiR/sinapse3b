@@ -1,6 +1,7 @@
-import { ForbiddenException, Inject, Injectable, Optional } from '@nestjs/common'
+import { Inject, Injectable, Optional } from '@nestjs/common'
 import { PrismaService } from '../../../infra/prisma/prisma.service'
 import { AUTH_TEST_FIXTURES } from '../../auth/application/user-membership.service'
+import { BranchScopeService } from './branch-scope.service'
 
 type EmployeeFixture = {
   id: number
@@ -23,11 +24,9 @@ type EmployeeFixtures = {
 }
 
 type PrismaEmployeeReader = {
-  branch: {
-    findUnique(args: unknown): Promise<{ id: number; clientId: string } | null>
-  }
-    employee: {
-      findMany(args: unknown): Promise<Array<{
+  employee: {
+    findMany(args: unknown): Promise<
+      Array<{
         id: number
         name: string
         extensionNumber: string
@@ -35,9 +34,10 @@ type PrismaEmployeeReader = {
         erpId: bigint
         chatId: string
         branchId: number
-      }>>
-    }
+      }>
+    >
   }
+}
 
 export type EmployeeFilters = {
   branchId?: number
@@ -57,6 +57,7 @@ export type EmployeeSummary = {
 @Injectable()
 export class EmployeesService {
   constructor(
+    private readonly branchScopeService?: BranchScopeService,
     @Optional()
     @Inject(AUTH_TEST_FIXTURES)
     private readonly fixtures: EmployeeFixtures | null = null,
@@ -65,43 +66,15 @@ export class EmployeesService {
   ) {}
 
   async listForClient(clientId: string, filters: EmployeeFilters): Promise<EmployeeSummary[]> {
-    await this.assertBranchScope(clientId, filters.branchId)
+    if (this.branchScopeService !== undefined) {
+      await this.branchScopeService.assertBranchScope(clientId, filters.branchId)
+    }
 
     if (this.fixtures !== null) {
       return this.listFromFixtures(clientId, filters)
     }
 
     return this.listFromPrisma(clientId, filters)
-  }
-
-  private async assertBranchScope(clientId: string, branchId?: number): Promise<void> {
-    if (branchId === undefined) {
-      return
-    }
-
-    if (this.fixtures !== null) {
-      const branch = this.fixtures?.branches?.find((candidate) => candidate.id === branchId)
-
-      if (branch === undefined || branch.clientId !== clientId) {
-        throw new ForbiddenException('Branch is outside the active client scope')
-      }
-
-      return
-    }
-
-    if (this.prisma === undefined) {
-      throw new ForbiddenException('Branch lookup is unavailable')
-    }
-
-    const prisma = this.prisma as unknown as PrismaEmployeeReader
-    const branch = await prisma.branch.findUnique({
-      where: { id: branchId },
-      select: { id: true, clientId: true },
-    })
-
-    if (branch === null || branch.clientId !== clientId) {
-      throw new ForbiddenException('Branch is outside the active client scope')
-    }
   }
 
   private listFromFixtures(clientId: string, filters: EmployeeFilters): EmployeeSummary[] {

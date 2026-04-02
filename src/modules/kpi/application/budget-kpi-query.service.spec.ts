@@ -151,6 +151,56 @@ describe('BudgetKpiQueryService', () => {
     })
   })
 
+  it('returns budget summary cards filtered by branchId from canonical facts', async () => {
+    const repository: jest.Mocked<BudgetKpiQueryRepository> = {
+      getSummaryRows: jest.fn(),
+      getDailyRows: jest.fn(),
+      getBudgetFactRows: jest.fn().mockResolvedValue([
+        {
+          id: 1n,
+          budgetDate: utcDate(2026, 0, 1),
+          sellerId: 7,
+          sellerName: 'Maria',
+          branchId: 5,
+          statusNormalized: 'WON',
+          valueAmount: '100.00',
+        },
+        {
+          id: 2n,
+          budgetDate: utcDate(2026, 0, 2),
+          sellerId: 7,
+          sellerName: 'Maria',
+          branchId: 5,
+          statusNormalized: 'OPEN',
+          valueAmount: '50.00',
+        },
+      ] as any),
+      getDrilldownRows: jest.fn(),
+    }
+
+    const service = new BudgetKpiQueryService(repository)
+
+    const result = await service.getSummary({
+      clientId: 'c1',
+      from: '2026-01-01',
+      to: '2026-01-31',
+      branchId: '5',
+    })
+
+    expect(repository.getSummaryRows).not.toHaveBeenCalled()
+    expect(repository.getBudgetFactRows).toHaveBeenCalledWith({
+      clientId: 'c1',
+      period: expect.objectContaining({
+        from: saoPauloPeriodDate(2026, 0, 1),
+        to: saoPauloPeriodDate(2026, 0, 31),
+      }),
+      branchId: 5,
+    })
+    expect(result.total).toEqual({ count: 2, value: '150.0000' })
+    expect(result.open).toEqual({ count: 1, value: '50.0000' })
+    expect(result.won).toEqual({ count: 1, value: '100.0000' })
+  })
+
   it('returns a zero-filled daily series for each day in the period', async () => {
     const repository: jest.Mocked<BudgetKpiQueryRepository> = {
       getSummaryRows: jest.fn(),
@@ -328,7 +378,84 @@ describe('BudgetKpiQueryService', () => {
     })
   })
 
-  it('returns drilldown rows scoped by seller and branch name', async () => {
+  it('returns a branch-filtered daily series from canonical facts', async () => {
+    const repository: jest.Mocked<BudgetKpiQueryRepository> = {
+      getSummaryRows: jest.fn(),
+      getDailyRows: jest.fn(),
+      getBudgetFactRows: jest.fn().mockResolvedValue([
+        {
+          id: 1n,
+          budgetDate: utcDate(2026, 0, 1),
+          branchId: 5,
+          sellerId: 7,
+          sellerName: 'Maria',
+          statusNormalized: 'WON',
+          valueAmount: '100.00',
+        },
+        {
+          id: 2n,
+          budgetDate: utcDate(2026, 0, 3),
+          branchId: 5,
+          sellerId: 7,
+          sellerName: 'Maria',
+          statusNormalized: 'OPEN',
+          valueAmount: '25.00',
+        },
+      ] as any),
+      getDrilldownRows: jest.fn(),
+    }
+
+    const service = new BudgetKpiQueryService(repository)
+
+    const result = await service.getDailySeries({
+      clientId: 'c1',
+      from: '2026-01-01',
+      to: '2026-01-03',
+      branchId: '5',
+    })
+
+    expect(repository.getBudgetFactRows).toHaveBeenCalledWith({
+      clientId: 'c1',
+      period: expect.objectContaining({
+        from: saoPauloPeriodDate(2026, 0, 1),
+        to: saoPauloPeriodDate(2026, 0, 3),
+      }),
+      branchId: 5,
+    })
+    expect(result.series).toEqual([
+      { date: '2026-01-01', count: 1, value: '100.0000' },
+      { date: '2026-01-02', count: 0, value: '0.0000' },
+      { date: '2026-01-03', count: 1, value: '25.0000' },
+    ])
+  })
+
+  it('validates branch scope before querying budget summary rows', async () => {
+    const repository: jest.Mocked<BudgetKpiQueryRepository> = {
+      getSummaryRows: jest.fn().mockResolvedValue([]),
+      getDailyRows: jest.fn(),
+      getBudgetFactRows: jest.fn().mockResolvedValue([]),
+      getDrilldownRows: jest.fn(),
+    }
+    const branchScopeService = {
+      assertBranchScope: jest.fn().mockRejectedValue(new Error('Branch is outside the active client scope')),
+    }
+
+    const service = new (BudgetKpiQueryService as any)(repository, branchScopeService)
+
+    await expect(
+      service.getSummary({
+        clientId: 'c1',
+        from: '2026-01-01',
+        to: '2026-01-31',
+        branchId: '9',
+      }),
+    ).rejects.toThrow('Branch is outside the active client scope')
+
+    expect(branchScopeService.assertBranchScope).toHaveBeenCalledWith('c1', 9)
+    expect(repository.getSummaryRows).not.toHaveBeenCalled()
+  })
+
+  it('returns drilldown rows scoped by seller, branch, and branch name', async () => {
     const budgetDatetime = utcDate(2026, 0, 2, 9, 30)
     const repository: jest.Mocked<BudgetKpiQueryRepository> = {
       getSummaryRows: jest.fn(),
@@ -369,6 +496,7 @@ describe('BudgetKpiQueryService', () => {
       from: '2026-01-01',
       to: '2026-01-31',
       sellerId: '7',
+      branchId: '5',
       branchName: 'Matriz',
     })
 
@@ -379,6 +507,7 @@ describe('BudgetKpiQueryService', () => {
         to: saoPauloPeriodDate(2026, 0, 31),
       }),
       sellerId: 7,
+      branchId: 5,
       branchName: 'Matriz',
     })
     expect(result).toEqual({
@@ -389,6 +518,7 @@ describe('BudgetKpiQueryService', () => {
       },
       filters: {
         sellerId: 7,
+        branchId: 5,
         branchName: 'Matriz',
       },
       rows: [
@@ -639,6 +769,7 @@ describe('BudgetKpiQueryService', () => {
       followUpWindow: 'after24h',
       followUpStatus: 'open',
       sellerId: '7',
+      branchId: '5',
       orderType: 'Balcao',
     })
 
@@ -649,7 +780,7 @@ describe('BudgetKpiQueryService', () => {
         to: saoPauloPeriodDate(2026, 0, 31),
       }),
       sellerId: 7,
-      branchId: undefined,
+      branchId: 5,
       branchName: undefined,
     })
     expect(result.filters).toEqual({
@@ -658,6 +789,7 @@ describe('BudgetKpiQueryService', () => {
       followUpWindow: 'after24h',
       followUpStatus: 'open',
       sellerId: 7,
+      branchId: 5,
       orderType: 'Balcao',
     })
     expect(result.rows).toHaveLength(2)
@@ -1214,6 +1346,7 @@ describe('BudgetKpiQueryService', () => {
       from: '2026-01-05',
       to: '2026-01-06',
       referenceAt: '2026-01-06T09:00:00-03:00',
+      branchId: '5',
       sellerId: '7',
       orderType: 'Balcao',
     })
@@ -1224,6 +1357,7 @@ describe('BudgetKpiQueryService', () => {
         from: saoPauloPeriodDate(2026, 0, 5),
         to: saoPauloPeriodDate(2026, 0, 6),
       }),
+      branchId: 5,
       sellerId: 7,
     })
     expect(result.rows).toHaveLength(12)

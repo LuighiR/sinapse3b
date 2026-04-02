@@ -68,8 +68,13 @@ export type CallKpiCalculationRunUpdate = {
 
 export type CallKpiRefreshRepository = {
   ensureDefinitions(): Promise<CallKpiDefinitionSet>
-  listCallFacts(input: { clientId: string; from: Date; to: Date }): Promise<CallFactRecord[]>
-  listTelemarketingBudgetFacts(input: { clientId: string; from: Date; to: Date }): Promise<TelemarketingBudgetFactRecord[]>
+  listCallFacts(input: { clientId: string; from: Date; to: Date; branchId?: number }): Promise<CallFactRecord[]>
+  listTelemarketingBudgetFacts(input: {
+    clientId: string
+    from: Date
+    to: Date
+    branchId?: number
+  }): Promise<TelemarketingBudgetFactRecord[]>
   createCalculationRun(input: CallKpiCalculationRunInput): Promise<{ id: bigint }>
   completeCalculationRun(input: CallKpiCalculationRunUpdate): Promise<void>
   failCalculationRun(input: CallKpiCalculationRunUpdate): Promise<void>

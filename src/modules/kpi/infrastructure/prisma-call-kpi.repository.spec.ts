@@ -42,11 +42,13 @@ describe('PrismaCallKpiRepository', () => {
       employee: {
         findMany: jest.fn().mockResolvedValue([
           {
+            id: 1,
             name: 'Maria',
             extensionUuid: 'ext-1',
             extensionNumber: '104',
           },
           {
+            id: 2,
             name: 'Joao',
             extensionUuid: 'ext-2',
             extensionNumber: '104',
@@ -118,6 +120,253 @@ describe('PrismaCallKpiRepository', () => {
         employeeName: 'Maria',
       }),
     ])
+  })
+
+  it('filters call facts by the selected branch using employee-derived identity and excludes ambiguous matches', async () => {
+    const prisma = {
+      callFact: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 1,
+            startedAt: utcDate(2026, 0, 5, 8, 10),
+            isInboundToCompany: true,
+            isReceived: true,
+            isLost: false,
+            agentResolutionType: 'EXTENSION_UUID',
+            agentResolutionKey: 'ext-1',
+            agentExtensionNumber: '104',
+            extensionUuid: 'ext-1',
+          },
+          {
+            id: 2,
+            startedAt: utcDate(2026, 0, 5, 8, 20),
+            isInboundToCompany: true,
+            isReceived: false,
+            isLost: true,
+            agentResolutionType: 'EXTENSION_NUMBER',
+            agentResolutionKey: '104',
+            agentExtensionNumber: '104',
+            extensionUuid: null,
+          },
+          {
+            id: 3,
+            startedAt: utcDate(2026, 0, 5, 8, 30),
+            isInboundToCompany: true,
+            isReceived: true,
+            isLost: false,
+            agentResolutionType: 'EXTENSION_NUMBER',
+            agentResolutionKey: '108',
+            agentExtensionNumber: '108',
+            extensionUuid: null,
+          },
+          {
+            id: 4,
+            startedAt: utcDate(2026, 0, 5, 8, 40),
+            isInboundToCompany: true,
+            isReceived: true,
+            isLost: false,
+            agentResolutionType: 'EXTENSION_UUID',
+            agentResolutionKey: 'missing',
+            agentExtensionNumber: '999',
+            extensionUuid: 'missing',
+          },
+        ]),
+      },
+      employee: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 1,
+            name: 'Maria',
+            extensionUuid: 'ext-1',
+            extensionNumber: '104',
+          },
+          {
+            id: 2,
+            name: 'Joao',
+            extensionUuid: 'ext-2',
+            extensionNumber: '104',
+          },
+          {
+            id: 3,
+            name: 'Ana',
+            extensionUuid: 'ext-3',
+            extensionNumber: '108',
+          },
+        ]),
+      },
+    }
+
+    const repository = new PrismaCallKpiRepository(prisma as any)
+
+    await expect(
+      repository.getCallFactRows({
+        clientId: 'client-1',
+        period: {
+          from: utcDate(2026, 0, 5),
+          to: utcDate(2026, 0, 5),
+          key: '2026-01-05_2026-01-05',
+        } as any,
+        branchId: 10,
+      } as any),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        id: 1,
+        employeeName: 'Maria',
+      }),
+      expect.objectContaining({
+        id: 3,
+        employeeName: 'Ana',
+      }),
+    ])
+  })
+
+  it('drops branch call facts when the primary extension number is ambiguous even if the secondary key is unique', async () => {
+    const prisma = {
+      callFact: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 1,
+            startedAt: utcDate(2026, 0, 5, 8, 10),
+            isInboundToCompany: true,
+            isReceived: true,
+            isLost: false,
+            agentResolutionType: 'EXTENSION_NUMBER',
+            agentResolutionKey: '104',
+            agentExtensionNumber: '999',
+            extensionUuid: null,
+          },
+        ]),
+      },
+      employee: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 1,
+            name: 'Maria',
+            extensionUuid: 'ext-1',
+            extensionNumber: '999',
+          },
+          {
+            id: 2,
+            name: 'Joao',
+            extensionUuid: 'ext-2',
+            extensionNumber: '999',
+          },
+          {
+            id: 3,
+            name: 'Ana',
+            extensionUuid: 'ext-3',
+            extensionNumber: '104',
+          },
+        ]),
+      },
+    }
+
+    const repository = new PrismaCallKpiRepository(prisma as any)
+
+    await expect(
+      repository.listCallFacts({
+        clientId: 'client-1',
+        from: utcDate(2026, 0, 5),
+        to: utcDate(2026, 0, 5),
+        branchId: 10,
+      }),
+    ).resolves.toEqual([])
+  })
+
+  it('drops branch call facts when the extension uuid mapping is ambiguous even if extension number matches', async () => {
+    const prisma = {
+      callFact: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 1,
+            startedAt: utcDate(2026, 0, 5, 8, 10),
+            isInboundToCompany: true,
+            isReceived: true,
+            isLost: false,
+            agentResolutionType: 'EXTENSION_UUID',
+            agentResolutionKey: 'ext-1',
+            agentExtensionNumber: '104',
+            extensionUuid: 'ext-1',
+          },
+        ]),
+      },
+      employee: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 1,
+            name: 'Maria',
+            extensionUuid: 'ext-1',
+            extensionNumber: '104',
+          },
+          {
+            id: 2,
+            name: 'Joao',
+            extensionUuid: 'ext-1',
+            extensionNumber: '107',
+          },
+        ]),
+      },
+    }
+
+    const repository = new PrismaCallKpiRepository(prisma as any)
+
+    await expect(
+      repository.listCallFacts({
+        clientId: 'client-1',
+        from: utcDate(2026, 0, 5),
+        to: utcDate(2026, 0, 5),
+        branchId: 10,
+      }),
+    ).resolves.toEqual([])
+  })
+
+  it('filters telemarketing budgets by branchId when requested', async () => {
+    const prisma = {
+      budgetFact: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            budgetDatetime: utcDate(2026, 0, 5, 8, 10),
+            statusNormalized: 'OPEN',
+          },
+        ]),
+      },
+    }
+
+    const repository = new PrismaCallKpiRepository(prisma as any)
+
+    await expect(
+      repository.getTelemarketingBudgetRows({
+        clientId: 'client-1',
+        period: {
+          from: utcDate(2026, 0, 5),
+          to: utcDate(2026, 0, 5),
+          key: '2026-01-05_2026-01-05',
+        } as any,
+        branchId: 10,
+      } as any),
+    ).resolves.toEqual([
+      {
+        budgetDatetime: utcDate(2026, 0, 5, 8, 10),
+        statusNormalized: 'OPEN',
+      },
+    ])
+
+    expect(prisma.budgetFact.findMany).toHaveBeenCalledWith({
+      where: {
+        clientId: 'client-1',
+        channel: 'Pedido Televendas',
+        budgetDatetime: {
+          gte: utcDate(2026, 0, 5),
+          lt: utcDate(2026, 0, 6),
+        },
+        branchId: 10,
+      },
+      orderBy: [{ budgetDatetime: 'asc' }, { id: 'asc' }],
+      select: {
+        budgetDatetime: true,
+        statusNormalized: true,
+      },
+    })
   })
 
   it('extends the interactive transaction timeout when persisting materialization', async () => {

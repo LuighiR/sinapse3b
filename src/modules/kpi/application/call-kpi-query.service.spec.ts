@@ -287,7 +287,9 @@ describe('CallKpiQueryService', () => {
 
   it('filters summary facts by extensionUuid with extensionNumber fallback for lost calls', async () => {
     const repository: jest.Mocked<CallKpiQueryRepository> = {
-      getSummaryRows: jest.fn(),
+      getSummaryRows: jest.fn().mockResolvedValue([
+        { metricKey: 'received.count', metricValue: '99', dimensionsJson: { family: 'calls' } },
+      ]),
       getHourlyRows: jest.fn(),
       getAgentRankingRows: jest.fn(),
       getHourlyComparisonRows: jest.fn(),
@@ -364,7 +366,15 @@ describe('CallKpiQueryService', () => {
       getSummaryRows: jest.fn(),
       getHourlyRows: jest.fn(),
       getAgentRankingRows: jest.fn(),
-      getHourlyComparisonRows: jest.fn(),
+      getHourlyComparisonRows: jest.fn().mockResolvedValue([
+        {
+          dimensionKey: '08',
+          dimensionLabel: '08',
+          metricKey: 'received.count',
+          metricValue: '1',
+          payloadJson: { hour: '08' },
+        },
+      ]),
       getCallFactRows: jest.fn().mockResolvedValue([
         {
           id: 1n,
@@ -435,6 +445,113 @@ describe('CallKpiQueryService', () => {
           totalInboundCount: 2,
         },
       ],
+    })
+  })
+
+  it('validates branch scope and filters summary facts by branchId', async () => {
+    const repository: jest.Mocked<CallKpiQueryRepository> = {
+      getSummaryRows: jest.fn(),
+      getHourlyRows: jest.fn(),
+      getAgentRankingRows: jest.fn(),
+      getHourlyComparisonRows: jest.fn(),
+      getCallFactRows: jest.fn().mockResolvedValue([
+        {
+          id: 1n,
+          startedAt: utcDate(2026, 0, 5, 8, 10),
+          isInboundToCompany: true,
+          isReceived: true,
+          isLost: false,
+          agentResolutionType: 'EXTENSION_UUID',
+          agentResolutionKey: 'ext-1',
+          agentExtensionNumber: '104',
+          extensionUuid: 'ext-1',
+          employeeName: 'Maria',
+        },
+      ]),
+      getTelemarketingBudgetRows: jest.fn().mockResolvedValue([
+        { budgetDatetime: utcDate(2026, 0, 5, 8, 30), statusNormalized: 'OPEN' },
+      ]),
+    }
+    const branchScopeService = {
+      assertBranchScope: jest.fn().mockResolvedValue(undefined),
+    }
+
+    const service = new (CallKpiQueryService as any)(repository, branchScopeService)
+
+    const result = await service.getSummary({
+      clientId: 'c1',
+      from: '2026-01-05',
+      to: '2026-01-05',
+      branchId: 12,
+    } as any)
+
+    expect(branchScopeService.assertBranchScope).toHaveBeenCalledWith('c1', 12)
+    expect(repository.getSummaryRows).not.toHaveBeenCalled()
+    expect(repository.getCallFactRows).toHaveBeenCalledWith({
+      clientId: 'c1',
+      period: expect.objectContaining({
+        from: saoPauloPeriodDate(2026, 0, 5),
+        to: saoPauloPeriodDate(2026, 0, 5),
+      }),
+      branchId: 12,
+    })
+    expect(repository.getTelemarketingBudgetRows).toHaveBeenCalledWith({
+      clientId: 'c1',
+      period: expect.objectContaining({
+        from: saoPauloPeriodDate(2026, 0, 5),
+        to: saoPauloPeriodDate(2026, 0, 5),
+      }),
+      branchId: 12,
+    })
+    expect(result.totalInbound).toEqual({ count: 1 })
+  })
+
+  it('passes branchId to telemarketing budget lookups for hourly comparison', async () => {
+    const repository: jest.Mocked<CallKpiQueryRepository> = {
+      getSummaryRows: jest.fn(),
+      getHourlyRows: jest.fn(),
+      getAgentRankingRows: jest.fn(),
+      getHourlyComparisonRows: jest.fn(),
+      getCallFactRows: jest.fn().mockResolvedValue([
+        {
+          id: 1n,
+          startedAt: utcDate(2026, 0, 5, 8, 10),
+          isInboundToCompany: true,
+          isReceived: true,
+          isLost: false,
+          agentResolutionType: 'EXTENSION_UUID',
+          agentResolutionKey: 'ext-1',
+          agentExtensionNumber: '104',
+          extensionUuid: 'ext-1',
+          employeeName: 'Maria',
+        },
+      ]),
+      getTelemarketingBudgetRows: jest.fn().mockResolvedValue([
+        { budgetDatetime: utcDate(2026, 0, 5, 8, 30), statusNormalized: 'OPEN' },
+      ]),
+    }
+    const branchScopeService = {
+      assertBranchScope: jest.fn().mockResolvedValue(undefined),
+    }
+
+    const service = new (CallKpiQueryService as any)(repository, branchScopeService)
+
+    await service.getHourlyComparison({
+      clientId: 'c1',
+      from: '2026-01-05',
+      to: '2026-01-05',
+      branchId: 12,
+    } as any)
+
+    expect(branchScopeService.assertBranchScope).toHaveBeenCalledWith('c1', 12)
+    expect(repository.getHourlyComparisonRows).not.toHaveBeenCalled()
+    expect(repository.getTelemarketingBudgetRows).toHaveBeenCalledWith({
+      clientId: 'c1',
+      period: expect.objectContaining({
+        from: saoPauloPeriodDate(2026, 0, 5),
+        to: saoPauloPeriodDate(2026, 0, 5),
+      }),
+      branchId: 12,
     })
   })
 })

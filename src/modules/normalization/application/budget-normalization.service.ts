@@ -1,5 +1,6 @@
-import { Inject, Injectable } from '@nestjs/common'
+import { Inject, Injectable, Optional } from '@nestjs/common'
 import { PrismaService } from '../../../infra/prisma/prisma.service'
+import { EMPLOYEE_BRANCH_LOOKUP_READER, type EmployeeBranchLookupReader } from './employee-branch-lookup.service'
 import { mapBudgetStatus, type NormalizedBudgetStatus } from './budget-status.mapper'
 
 export const RAW_FERRACO_BUDGET_READER = 'RAW_FERRACO_BUDGET_READER'
@@ -142,6 +143,16 @@ export class PrismaBudgetFactUpsertRepository implements BudgetFactUpsertReposit
 
   async bulkUpsertClient(clientId: string): Promise<void> {
     await this.prisma.$executeRaw`
+      WITH employee_branch_lookup AS (
+        SELECT
+          e.erp_id AS seller_id,
+          CASE WHEN count(*) = 1 THEN min(e.branch_id) ELSE NULL::integer END AS branch_id,
+          CASE WHEN count(*) = 1 THEN min(b.name) ELSE NULL::text END AS branch_name
+        FROM core.employees AS e
+        JOIN core.branches AS b ON b.id = e.branch_id
+        WHERE b.client_id = ${clientId}
+        GROUP BY e.erp_id
+      )
       INSERT INTO core.budget_facts (
         client_id,
         source_table,
@@ -170,8 +181,8 @@ export class PrismaBudgetFactUpsertRepository implements BudgetFactUpsertReposit
         budget.client_id,
         'raw.ferraco_budgets',
         budget.id,
-        COALESCE(budget.branch, ''),
-        NULL::integer,
+        COALESCE(employee_branch.branch_name, COALESCE(budget.branch, '')),
+        employee_branch.branch_id,
         budget.seller_id,
         COALESCE(budget.seller_name, ''),
         budget.opening_date,
@@ -196,6 +207,8 @@ export class PrismaBudgetFactUpsertRepository implements BudgetFactUpsertReposit
         budget.sequential_linked_sale,
         row_to_json(budget)
       FROM raw.ferraco_budgets AS budget
+      LEFT JOIN employee_branch_lookup AS employee_branch
+        ON employee_branch.seller_id = budget.seller_id
       WHERE budget.client_id = ${clientId}
       ON CONFLICT (client_id, source_table, source_record_id)
       DO UPDATE SET
@@ -233,6 +246,9 @@ export class BudgetNormalizationService {
     private readonly rawReader: RawFerracoBudgetReader,
     @Inject(BUDGET_FACT_UPSERT_REPOSITORY)
     private readonly budgetFactRepository: BudgetFactUpsertRepository,
+    @Optional()
+    @Inject(EMPLOYEE_BRANCH_LOOKUP_READER)
+    private readonly employeeBranchLookupReader?: EmployeeBranchLookupReader,
   ) {}
 
   async normalizeClientBudgets(clientId: string): Promise<BudgetNormalizationResult> {
@@ -255,7 +271,8 @@ export class BudgetNormalizationService {
     }
 
     const budgets = await this.rawReader.findByClientId(clientId)
-    const normalizedBudgets = budgets.map((budget) => this.normalizeBudget(clientId, budget))
+    const employeeBranchLookup = await this.buildEmployeeBranchLookup(clientId)
+    const normalizedBudgets = budgets.map((budget) => this.normalizeBudget(clientId, budget, employeeBranchLookup))
 
     for (let index = 0; index < normalizedBudgets.length; index += this.upsertBatchSize) {
       const batch = normalizedBudgets.slice(index, index + this.upsertBatchSize)
@@ -292,14 +309,43 @@ export class BudgetNormalizationService {
     return budgets.length
   }
 
-  private normalizeBudget(clientId: string, budget: RawFerracoBudgetRecord): BudgetFactWritePayload {
+  private async buildEmployeeBranchLookup(
+    clientId: string,
+  ): Promise<Map<number, { branchId: number | null; branchName: string | null }>> {
+    if (this.employeeBranchLookupReader === undefined) {
+      return new Map()
+    }
+
+    const rows = await this.employeeBranchLookupReader.findByClientId(clientId)
+
+    return new Map(
+      rows
+        .filter((row) => Number.isFinite(row.sellerId))
+        .map((row) => [
+          row.sellerId,
+          {
+            branchId: row.branchId,
+            branchName: row.branchName,
+          },
+        ]),
+    )
+  }
+
+  private normalizeBudget(
+    clientId: string,
+    budget: RawFerracoBudgetRecord,
+    employeeBranchLookup: Map<number, { branchId: number | null; branchName: string | null }>,
+  ): BudgetFactWritePayload {
+    const sellerId = this.parseNumber(budget.sellerId, 'sellerId')
+    const branchMatch = employeeBranchLookup.get(sellerId)
+
     return {
       clientId,
       sourceTable: this.sourceTable,
       sourceRecordId: this.parseNumber(budget.id, 'id'),
-      branchId: null,
-      branchName: budget.branch ?? '',
-      sellerId: this.parseNumber(budget.sellerId, 'sellerId'),
+      branchId: branchMatch?.branchId ?? null,
+      branchName: branchMatch?.branchName ?? budget.branch ?? '',
+      sellerId,
       sellerName: budget.sellerName ?? '',
       budgetDate: this.parseDateOnly(budget.openingDate),
       budgetDatetime: this.parseBudgetDatetime(budget.openingDate, budget.openingTime),

@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common'
+import { BranchScopeService } from '../../companies/application/branch-scope.service'
 import { KpiPeriod } from '../domain/kpi-period'
 
 export type WhatsAppKpiQueryPeriodInput = {
@@ -6,6 +7,7 @@ export type WhatsAppKpiQueryPeriodInput = {
   from: string | Date
   to: string | Date
   chatId?: string
+  branchId?: number
 }
 
 export type WhatsAppKpiTagsInput = {
@@ -177,31 +179,37 @@ export type WhatsAppKpiQueryRepository = {
     clientId: string
     period: KpiPeriod
     chatId?: string
+    branchId?: number
   }): Promise<WhatsAppKpiSummaryCountsRow>
   getAgentRankingRows(input: {
     clientId: string
     period: KpiPeriod
     chatId?: string
+    branchId?: number
   }): Promise<WhatsAppKpiAgentRankingSourceRow[]>
   getSessionsHourlyRows(input: {
     clientId: string
     period: KpiPeriod
     chatId?: string
+    branchId?: number
   }): Promise<WhatsAppKpiSessionsHourlySourceRow[]>
   getMessagesHourlyRows(input: {
     clientId: string
     period: KpiPeriod
     chatId?: string
+    branchId?: number
   }): Promise<WhatsAppKpiMessagesHourlySourceRow[]>
   getSessionsDailyRows(input: {
     clientId: string
     period: KpiPeriod
     chatId?: string
+    branchId?: number
   }): Promise<WhatsAppKpiSessionsDailySourceRow[]>
   getMessagesDailyRows(input: {
     clientId: string
     period: KpiPeriod
     chatId?: string
+    branchId?: number
   }): Promise<WhatsAppKpiMessagesDailySourceRow[]>
   listTags(input: WhatsAppKpiTagsInput): Promise<WhatsAppKpiTagSourceRow[]>
   getTagHourlyRows(input: {
@@ -209,27 +217,34 @@ export type WhatsAppKpiQueryRepository = {
     period: KpiPeriod
     tagId: bigint
     chatId?: string
+    branchId?: number
   }): Promise<WhatsAppKpiTagHourlySourceRow[]>
   getTagHourlyComparisonRows(input: {
     clientId: string
     period: KpiPeriod
     tagId: bigint
     chatId?: string
+    branchId?: number
     sellerId?: number
   }): Promise<WhatsAppKpiTagComparisonSourceRow[]>
 }
 
 @Injectable()
 export class WhatsAppKpiQueryService {
-  constructor(private readonly repository: WhatsAppKpiQueryRepository) {}
+  constructor(
+    private readonly repository: WhatsAppKpiQueryRepository,
+    private readonly branchScopeService?: BranchScopeService,
+  ) {}
 
   async getSummary(input: WhatsAppKpiQueryPeriodInput): Promise<WhatsAppKpiSummaryResponse> {
     const period = this.toPeriod(input)
     const chatId = this.normalizeChatId(input.chatId)
+    const branchId = await this.resolveBranchScope(input.clientId, input.branchId)
     const row = await this.repository.getSummaryCounts({
       clientId: input.clientId,
       period,
       chatId,
+      branchId,
     })
 
     return {
@@ -242,10 +257,12 @@ export class WhatsAppKpiQueryService {
   async getAgentRanking(input: WhatsAppKpiQueryPeriodInput): Promise<WhatsAppKpiAgentRankingResponse> {
     const period = this.toPeriod(input)
     const chatId = this.normalizeChatId(input.chatId)
+    const branchId = await this.resolveBranchScope(input.clientId, input.branchId)
     const rows = await this.repository.getAgentRankingRows({
       clientId: input.clientId,
       period,
       chatId,
+      branchId,
     })
 
     return {
@@ -265,10 +282,12 @@ export class WhatsAppKpiQueryService {
   async getSessionsHourly(input: WhatsAppKpiQueryPeriodInput): Promise<WhatsAppKpiSessionsHourlyResponse> {
     const period = this.toPeriod(input)
     const chatId = this.normalizeChatId(input.chatId)
+    const branchId = await this.resolveBranchScope(input.clientId, input.branchId)
     const rows = await this.repository.getSessionsHourlyRows({
       clientId: input.clientId,
       period,
       chatId,
+      branchId,
     })
 
     return {
@@ -280,10 +299,12 @@ export class WhatsAppKpiQueryService {
   async getMessagesHourly(input: WhatsAppKpiQueryPeriodInput): Promise<WhatsAppKpiMessagesHourlyResponse> {
     const period = this.toPeriod(input)
     const chatId = this.normalizeChatId(input.chatId)
+    const branchId = await this.resolveBranchScope(input.clientId, input.branchId)
     const rows = await this.repository.getMessagesHourlyRows({
       clientId: input.clientId,
       period,
       chatId,
+      branchId,
     })
 
     return {
@@ -295,10 +316,12 @@ export class WhatsAppKpiQueryService {
   async getSessionsDaily(input: WhatsAppKpiQueryPeriodInput): Promise<WhatsAppKpiSessionsDailyResponse> {
     const period = this.toPeriod(input)
     const chatId = this.normalizeChatId(input.chatId)
+    const branchId = await this.resolveBranchScope(input.clientId, input.branchId)
     const rows = await this.repository.getSessionsDailyRows({
       clientId: input.clientId,
       period,
       chatId,
+      branchId,
     })
 
     return {
@@ -310,10 +333,12 @@ export class WhatsAppKpiQueryService {
   async getMessagesDaily(input: WhatsAppKpiQueryPeriodInput): Promise<WhatsAppKpiMessagesDailyResponse> {
     const period = this.toPeriod(input)
     const chatId = this.normalizeChatId(input.chatId)
+    const branchId = await this.resolveBranchScope(input.clientId, input.branchId)
     const rows = await this.repository.getMessagesDailyRows({
       clientId: input.clientId,
       period,
       chatId,
+      branchId,
     })
 
     return {
@@ -340,11 +365,13 @@ export class WhatsAppKpiQueryService {
     const period = this.toPeriod(input)
     const tagId = this.normalizeTagId(input.tagId)
     const chatId = this.normalizeChatId(input.chatId)
+    const branchId = await this.resolveBranchScope(input.clientId, input.branchId)
     const rows = await this.repository.getTagHourlyRows({
       clientId: input.clientId,
       period,
       tagId,
       chatId,
+      branchId,
     })
 
     return {
@@ -360,12 +387,14 @@ export class WhatsAppKpiQueryService {
     const period = this.toPeriod(input)
     const tagId = this.normalizeTagId(input.tagId)
     const chatId = this.normalizeChatId(input.chatId)
+    const branchId = await this.resolveBranchScope(input.clientId, input.branchId)
     const sellerId = this.normalizeSellerId(input.sellerId)
     const rows = await this.repository.getTagHourlyComparisonRows({
       clientId: input.clientId,
       period,
       tagId,
       chatId,
+      branchId,
       sellerId,
     })
 
@@ -616,6 +645,14 @@ export class WhatsAppKpiQueryService {
 
     const trimmed = value.trim().toLocaleLowerCase()
     return trimmed.length === 0 ? undefined : trimmed
+  }
+
+  private async resolveBranchScope(clientId: string, branchId?: number): Promise<number | undefined> {
+    if (branchId !== undefined && this.branchScopeService !== undefined) {
+      await this.branchScopeService.assertBranchScope(clientId, branchId)
+    }
+
+    return branchId
   }
 
   private toPeriod(input: WhatsAppKpiQueryPeriodInput): KpiPeriod {

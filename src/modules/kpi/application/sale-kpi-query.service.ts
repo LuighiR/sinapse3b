@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
+import { BranchScopeService } from '../../companies/application/branch-scope.service'
 import { KpiPeriod } from '../domain/kpi-period'
 import { SaleFactRecord, SaleKpiBreakdownRow, SaleKpiSnapshotRow } from './sale-kpi-refresh.service'
 
@@ -9,6 +10,7 @@ export type SaleKpiQueryPeriodInput = {
   clientId: string
   from: string | Date
   to: string | Date
+  branchId?: string | number | bigint
   sellerId?: string | number | bigint
   status?: SaleStatusFilter
   orderType?: string
@@ -87,6 +89,7 @@ export type SaleKpiTicketAverageResponse = {
 export type SaleKpiDrilldownInput = SaleKpiQueryPeriodInput
 
 export type SaleKpiDrilldownFilters = {
+  branchId?: number
   sellerId?: number
   status?: SaleStatusFilter
   orderType?: string
@@ -151,8 +154,8 @@ export type SaleKpiDrilldownResponse = {
 export type SaleKpiQueryRepository = {
   getSummaryRows(input: { clientId: string; period: KpiPeriod }): Promise<SaleKpiSnapshotRow[]>
   getDailyRows(input: { clientId: string; period: KpiPeriod }): Promise<SaleKpiBreakdownRow[]>
-  getSaleFactRows(input: { clientId: string; period: KpiPeriod; sellerId?: number }): Promise<SaleFactRecord[]>
-  getDrilldownRows(input: { clientId: string; period: KpiPeriod; sellerId?: number }): Promise<SaleKpiDrilldownFactRow[]>
+  getSaleFactRows(input: { clientId: string; period: KpiPeriod; branchId?: number; sellerId?: number }): Promise<SaleFactRecord[]>
+  getDrilldownRows(input: { clientId: string; period: KpiPeriod; branchId?: number; sellerId?: number }): Promise<SaleKpiDrilldownFactRow[]>
 }
 
 type SaleSummaryBucket = 'total' | 'active' | 'canceled'
@@ -162,7 +165,10 @@ const MISSING_ORDER_TYPE_LABEL = 'Nao identificado'
 
 @Injectable()
 export class SaleKpiQueryService {
-  constructor(private readonly repository: SaleKpiQueryRepository) {}
+  constructor(
+    private readonly repository: SaleKpiQueryRepository,
+    private readonly branchScopeService?: BranchScopeService,
+  ) {}
 
   async getSummary(input: SaleKpiQueryPeriodInput): Promise<SaleKpiSummaryResponse> {
     const period = this.toPeriod(input)
@@ -365,9 +371,11 @@ export class SaleKpiQueryService {
   async getDrilldown(input: SaleKpiDrilldownInput): Promise<SaleKpiDrilldownResponse> {
     const period = this.toPeriod(input)
     const sellerId = this.normalizeSellerId(input.sellerId)
+    const branchId = await this.resolveBranchScope(input.clientId, input.branchId)
     const rows = await this.repository.getDrilldownRows({
       clientId: input.clientId,
       period,
+      branchId,
       sellerId,
     })
     const filteredRows = rows
@@ -390,16 +398,18 @@ export class SaleKpiQueryService {
 
     return {
       period: this.toPeriodView(period),
-      filters: this.buildDrilldownFilters({ ...input, sellerId }),
+      filters: this.buildDrilldownFilters({ ...input, sellerId, branchId }),
       rows: filteredRows.map((row) => this.toDrilldownRow(row)),
     }
   }
 
   private async getFilteredFacts(input: SaleKpiQueryPeriodInput, period: KpiPeriod): Promise<SaleFactRecord[]> {
     const sellerId = this.normalizeSellerId(input.sellerId)
+    const branchId = await this.resolveBranchScope(input.clientId, input.branchId)
     const facts = await this.repository.getSaleFactRows({
       clientId: input.clientId,
       period,
+      branchId,
       sellerId,
     })
 
@@ -422,6 +432,7 @@ export class SaleKpiQueryService {
 
   private hasFactFilters(input: SaleKpiQueryPeriodInput): boolean {
     return (
+      input.branchId !== undefined ||
       input.sellerId !== undefined ||
       input.status !== undefined ||
       input.orderType !== undefined ||
@@ -430,12 +441,17 @@ export class SaleKpiQueryService {
   }
 
   private buildDrilldownFilters(input: {
+    branchId?: number
     sellerId?: number
     status?: SaleStatusFilter
     orderType?: string
     hasLinkedBudget?: boolean
   }): SaleKpiDrilldownFilters {
     const filters: SaleKpiDrilldownFilters = {}
+
+    if (input.branchId !== undefined) {
+      filters.branchId = input.branchId
+    }
 
     if (input.sellerId !== undefined) {
       filters.sellerId = input.sellerId
@@ -764,5 +780,63 @@ export class SaleKpiQueryService {
     }
 
     throw new Error(`Invalid sellerId: ${value}`)
+  }
+
+  private async resolveBranchScope(
+    clientId: string,
+    value: SaleKpiQueryPeriodInput['branchId'],
+  ): Promise<number | undefined> {
+    const branchId = this.normalizeBranchId(value)
+
+    if (branchId !== undefined && this.branchScopeService !== undefined) {
+      await this.branchScopeService.assertBranchScope(clientId, branchId)
+    }
+
+    return branchId
+  }
+
+  private normalizeBranchId(value: SaleKpiQueryPeriodInput['branchId']): number | undefined {
+    if (value === undefined) {
+      return undefined
+    }
+
+    if (typeof value === 'number') {
+      if (Number.isInteger(value) && Number.isSafeInteger(value)) {
+        return value
+      }
+
+      throw new Error(`Invalid branchId: ${value}`)
+    }
+
+    if (typeof value === 'bigint') {
+      const max = BigInt(Number.MAX_SAFE_INTEGER)
+      const min = BigInt(Number.MIN_SAFE_INTEGER)
+
+      if (value >= min && value <= max) {
+        return Number(value)
+      }
+
+      throw new Error(`Invalid branchId: ${value.toString()}`)
+    }
+
+    const trimmed = value.trim()
+
+    if (trimmed.length === 0) {
+      throw new Error('Invalid branchId: empty value')
+    }
+
+    try {
+      const parsed = BigInt(trimmed)
+      const max = BigInt(Number.MAX_SAFE_INTEGER)
+      const min = BigInt(Number.MIN_SAFE_INTEGER)
+
+      if (parsed >= min && parsed <= max) {
+        return Number(parsed)
+      }
+    } catch {
+      // Fall through to the error below.
+    }
+
+    throw new Error(`Invalid branchId: ${value}`)
   }
 }
