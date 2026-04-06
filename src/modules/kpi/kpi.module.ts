@@ -11,6 +11,8 @@ import { PrismaService } from '../../infra/prisma/prisma.service'
 import { JwtAuthGuard } from '../auth/presentation/guards/jwt-auth.guard'
 import { TenantScopeGuard } from '../auth/presentation/guards/tenant-scope.guard'
 import { BudgetFollowUpDkwDispatchService } from './application/budget-follow-up-dkw-dispatch.service'
+import { InternalKpiJobTenantResolverService } from './application/internal-kpi-job-tenant-resolver.service'
+import { InternalKpiRefreshJobService } from './application/internal-kpi-refresh-job.service'
 import {
   BudgetKpiAvailabilityRepository,
   BudgetKpiAvailabilityUpdate,
@@ -61,6 +63,7 @@ import { CallKpiQueryService } from './application/call-kpi-query.service'
 import { CallKpiRefreshService } from './application/call-kpi-refresh.service'
 import { WhatsAppKpiQueryService } from './application/whatsapp-kpi-query.service'
 import { CallKpiController } from './presentation/call-kpi.controller'
+import { InternalKpiRefreshJobController } from './presentation/internal-kpi-refresh-job.controller'
 import { WhatsAppKpiController } from './presentation/whatsapp-kpi.controller'
 import { FetchBudgetFollowUpDkwWebhookClient } from './infrastructure/fetch-budget-follow-up-dkw-webhook.client'
 import { PrismaBudgetFollowUpDkwDispatchRepository } from './infrastructure/prisma-budget-follow-up-dkw-dispatch.repository'
@@ -1093,6 +1096,8 @@ export class PrismaSaleKpiRepository
     PrismaCallKpiRepository,
     PrismaWhatsAppKpiRepository,
     FetchBudgetFollowUpDkwWebhookClient,
+    InternalKpiJobTenantResolverService,
+    InternalKpiRefreshJobService,
     JwtAuthGuard,
     TenantScopeGuard,
     {
@@ -1171,7 +1176,13 @@ export class PrismaSaleKpiRepository
       inject: [PrismaWhatsAppKpiRepository, BranchScopeService],
     },
   ],
-  controllers: [KpiController, SalesKpiController, CallKpiController, WhatsAppKpiController],
+  controllers: [
+    KpiController,
+    SalesKpiController,
+    CallKpiController,
+    WhatsAppKpiController,
+    InternalKpiRefreshJobController,
+  ],
   exports: [
     BudgetKpiAvailabilityService,
     BudgetKpiRefreshService,

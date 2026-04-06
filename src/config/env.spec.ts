@@ -1,6 +1,7 @@
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { ZodError } from 'zod'
 
 import { loadEnv } from './env'
 
@@ -11,6 +12,7 @@ describe('loadEnv', () => {
       AUTH_JWT_SECRET: 'super-secret',
       AUTH_JWT_ISSUER: 'sinapse3',
       AUTH_JWT_AUDIENCE: 'sinapse3-web',
+      INTERNAL_JOB_KEY: 'job-secret',
     })
 
     expect(env).toEqual({
@@ -18,6 +20,7 @@ describe('loadEnv', () => {
       AUTH_JWT_SECRET: 'super-secret',
       AUTH_JWT_ISSUER: 'sinapse3',
       AUTH_JWT_AUDIENCE: 'sinapse3-web',
+      INTERNAL_JOB_KEY: 'job-secret',
       BUDGET_FOLLOW_UP_DKW_WEBHOOK_URL: '',
       AUTH_REFRESH_JWT_SECRET: '',
       AUTH_ACCESS_TOKEN_TTL_MINUTES: 60,
@@ -35,6 +38,7 @@ describe('loadEnv', () => {
       AUTH_JWT_SECRET: process.env.AUTH_JWT_SECRET,
       AUTH_JWT_ISSUER: process.env.AUTH_JWT_ISSUER,
       AUTH_JWT_AUDIENCE: process.env.AUTH_JWT_AUDIENCE,
+      INTERNAL_JOB_KEY: process.env.INTERNAL_JOB_KEY,
       BUDGET_FOLLOW_UP_DKW_WEBHOOK_URL: process.env.BUDGET_FOLLOW_UP_DKW_WEBHOOK_URL,
       AUTH_REFRESH_JWT_SECRET: process.env.AUTH_REFRESH_JWT_SECRET,
       AUTH_ACCESS_TOKEN_TTL_MINUTES: process.env.AUTH_ACCESS_TOKEN_TTL_MINUTES,
@@ -51,6 +55,7 @@ describe('loadEnv', () => {
         'AUTH_JWT_SECRET=super-secret',
         'AUTH_JWT_ISSUER=sinapse3',
         'AUTH_JWT_AUDIENCE=sinapse3-web',
+        'INTERNAL_JOB_KEY=job-secret',
         'BUDGET_FOLLOW_UP_DKW_WEBHOOK_URL=https://atende-api.corz.com.br/webhook/leads/test',
         'AUTH_REFRESH_JWT_SECRET=refresh-secret',
         'AUTH_ACCESS_TOKEN_TTL_MINUTES=45',
@@ -66,6 +71,7 @@ describe('loadEnv', () => {
       delete process.env.AUTH_JWT_SECRET
       delete process.env.AUTH_JWT_ISSUER
       delete process.env.AUTH_JWT_AUDIENCE
+      delete process.env.INTERNAL_JOB_KEY
       delete process.env.BUDGET_FOLLOW_UP_DKW_WEBHOOK_URL
       delete process.env.AUTH_REFRESH_JWT_SECRET
       delete process.env.AUTH_ACCESS_TOKEN_TTL_MINUTES
@@ -81,6 +87,7 @@ describe('loadEnv', () => {
         AUTH_JWT_SECRET: 'super-secret',
         AUTH_JWT_ISSUER: 'sinapse3',
         AUTH_JWT_AUDIENCE: 'sinapse3-web',
+        INTERNAL_JOB_KEY: 'job-secret',
         BUDGET_FOLLOW_UP_DKW_WEBHOOK_URL: 'https://atende-api.corz.com.br/webhook/leads/test',
         AUTH_REFRESH_JWT_SECRET: 'refresh-secret',
         AUTH_ACCESS_TOKEN_TTL_MINUTES: 45,
@@ -94,6 +101,7 @@ describe('loadEnv', () => {
       restoreEnvValue('AUTH_JWT_SECRET', originalEnv.AUTH_JWT_SECRET)
       restoreEnvValue('AUTH_JWT_ISSUER', originalEnv.AUTH_JWT_ISSUER)
       restoreEnvValue('AUTH_JWT_AUDIENCE', originalEnv.AUTH_JWT_AUDIENCE)
+      restoreEnvValue('INTERNAL_JOB_KEY', originalEnv.INTERNAL_JOB_KEY)
       restoreEnvValue('BUDGET_FOLLOW_UP_DKW_WEBHOOK_URL', originalEnv.BUDGET_FOLLOW_UP_DKW_WEBHOOK_URL)
       restoreEnvValue('AUTH_REFRESH_JWT_SECRET', originalEnv.AUTH_REFRESH_JWT_SECRET)
       restoreEnvValue('AUTH_ACCESS_TOKEN_TTL_MINUTES', originalEnv.AUTH_ACCESS_TOKEN_TTL_MINUTES)
@@ -103,6 +111,18 @@ describe('loadEnv', () => {
       restoreEnvValue('PORT', originalEnv.PORT)
       process.chdir(cwd)
     }
+  })
+
+  it('rejects a blank internal job key', () => {
+    expect(() =>
+      loadEnv({
+        DATABASE_URL: 'postgresql://user:pass@localhost:5432/app',
+        AUTH_JWT_SECRET: 'super-secret',
+        AUTH_JWT_ISSUER: 'sinapse3',
+        AUTH_JWT_AUDIENCE: 'sinapse3-web',
+        INTERNAL_JOB_KEY: '   ',
+      }),
+    ).toThrow(ZodError)
   })
 })
 

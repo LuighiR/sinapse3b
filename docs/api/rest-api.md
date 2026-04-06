@@ -1411,6 +1411,79 @@ Response `200`:
 }
 ```
 
+## Internal Jobs
+
+### `POST /internal/jobs/kpis/refresh`
+
+Descricao:
+endpoint interno para automacao backend-only que executa os refreshs com suporte atual de `budgets`, `sales` e `calls` para um unico tenant resolvido por `slug`.
+
+Este endpoint:
+
+- e destinado a cron, scheduler ou automacao de servidor
+- nao usa JWT
+- nao exige `Authorization`
+- nao exige `X-Tenant-Id`
+- exige `X-Job-Key`
+- resolve o `clientId` real via `tenant.backendClientId`
+
+Headers:
+
+- `X-Job-Key` required
+
+Query Params:
+
+- `slug` required
+- `from` required
+- `to` required
+
+Response `200`:
+
+```json
+{
+  "slug": "ferracosul-kpi-dev",
+  "clientId": "ferracosul",
+  "from": "2026-04-01",
+  "to": "2026-04-06",
+  "overallStatus": "partial_success",
+  "results": [
+    {
+      "job": "budgets",
+      "status": "success",
+      "startedAt": "2026-04-06T17:00:00.000Z",
+      "finishedAt": "2026-04-06T17:00:03.000Z"
+    },
+    {
+      "job": "sales",
+      "status": "failed",
+      "startedAt": "2026-04-06T17:00:03.000Z",
+      "finishedAt": "2026-04-06T17:00:05.000Z",
+      "error": "Sale refresh failed"
+    },
+    {
+      "job": "calls",
+      "status": "success",
+      "startedAt": "2026-04-06T17:00:05.000Z",
+      "finishedAt": "2026-04-06T17:00:08.000Z"
+    }
+  ]
+}
+```
+
+Semantica de status:
+
+- `success`: os tres refreshs completaram com sucesso
+- `partial_success`: pelo menos um refresh teve sucesso e pelo menos um falhou
+- `failed`: todos os refreshs falharam
+
+Status HTTP:
+
+- `200` quando a requisicao foi autenticada e o job executou, inclusive com falha parcial
+- `400` para query params invalidos
+- `401` para `X-Job-Key` ausente ou invalido
+- `404` para `slug` inexistente ou tenant inativo
+- `409` para tenant sem `backendClientId` ou com backend client inativo
+
 ## WhatsApp KPI
 
 ### Filters
