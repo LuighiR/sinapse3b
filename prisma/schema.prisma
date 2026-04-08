@@ -37,6 +37,7 @@ model Tenant {
   backendSyncStatus String       @default("PENDING") @map("backend_sync_status")
   backendClient     SinapseClient? @relation("TenantBackendClient", fields: [backendClientId], references: [id])
   memberships       Membership[]
+  refreshJobs       RefreshJob[]
 
   @@index([backendClientId], map: "tenants_backend_client_id_idx")
   @@map("tenants")
@@ -79,6 +80,7 @@ model SinapseClient {
   kpiBreakdowns KpiBreakdown[]
   kpiCalculationRuns KpiCalculationRun[]
   kpiSnapshots KpiSnapshot[]
+  refreshJobs RefreshJob[]
   tenants    Tenant[] @relation("TenantBackendClient")
 
   @@map("sinapse_clients")
@@ -245,6 +247,32 @@ model ContactTag {
   @@index([contactId], map: "contact_tags_contact_id_idx")
   @@index([tagId], map: "contact_tags_tag_id_idx")
   @@map("contact_tags")
+  @@schema("core")
+}
+
+model RefreshJob {
+  id            BigInt        @id @default(autoincrement())
+  tenantId      String        @map("tenant_id")
+  clientId      String        @map("client_id")
+  slug          String
+  triggerType   String        @map("trigger_type")
+  requestedFrom DateTime      @map("requested_from") @db.Date
+  requestedTo   DateTime      @map("requested_to") @db.Date
+  status        String
+  requestedAt   DateTime      @default(now()) @map("requested_at")
+  startedAt     DateTime?     @map("started_at")
+  finishedAt    DateTime?     @map("finished_at")
+  errorMessage  String?       @map("error_message")
+  resultsJson   Json?         @map("results_json")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @default(now()) @map("updated_at")
+  tenant        Tenant        @relation(fields: [tenantId], references: [id])
+  client        SinapseClient @relation(fields: [clientId], references: [id])
+
+  @@index([tenantId, requestedAt], map: "refresh_jobs_tenant_requested_idx")
+  @@index([clientId, requestedAt], map: "refresh_jobs_client_requested_idx")
+  @@index([status, requestedAt], map: "refresh_jobs_status_requested_idx")
+  @@map("refresh_jobs")
   @@schema("core")
 }
 

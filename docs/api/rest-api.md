@@ -1416,7 +1416,7 @@ Response `200`:
 ### `POST /internal/jobs/kpis/refresh`
 
 Descricao:
-endpoint interno para automacao backend-only que executa os refreshs com suporte atual de `budgets`, `sales` e `calls` para um unico tenant resolvido por `slug`.
+endpoint interno para automacao backend-only que aceita um refresh assíncrono com suporte atual de `budgets`, `sales` e `calls` para um unico tenant resolvido por `slug`.
 
 Este endpoint:
 
@@ -1426,6 +1426,7 @@ Este endpoint:
 - nao exige `X-Tenant-Id`
 - exige `X-Job-Key`
 - resolve o `clientId` real via `tenant.backendClientId`
+- persiste um `refresh_job` e responde sem esperar a execucao terminar
 
 Headers:
 
@@ -1437,52 +1438,98 @@ Query Params:
 - `from` required
 - `to` required
 
-Response `200`:
+Response `202`:
 
 ```json
 {
-  "slug": "ferracosul-kpi-dev",
-  "clientId": "ferracosul",
-  "from": "2026-04-01",
-  "to": "2026-04-06",
-  "overallStatus": "partial_success",
-  "results": [
-    {
-      "job": "budgets",
-      "status": "success",
-      "startedAt": "2026-04-06T17:00:00.000Z",
-      "finishedAt": "2026-04-06T17:00:03.000Z"
-    },
-    {
-      "job": "sales",
-      "status": "failed",
-      "startedAt": "2026-04-06T17:00:03.000Z",
-      "finishedAt": "2026-04-06T17:00:05.000Z",
-      "error": "Sale refresh failed"
-    },
-    {
-      "job": "calls",
-      "status": "success",
-      "startedAt": "2026-04-06T17:00:05.000Z",
-      "finishedAt": "2026-04-06T17:00:08.000Z"
-    }
-  ]
+  "status": "accepted",
+  "message": "task initiated",
+  "jobId": "41"
 }
 ```
 
-Semantica de status:
-
-- `success`: os tres refreshs completaram com sucesso
-- `partial_success`: pelo menos um refresh teve sucesso e pelo menos um falhou
-- `failed`: todos os refreshs falharam
-
 Status HTTP:
 
-- `200` quando a requisicao foi autenticada e o job executou, inclusive com falha parcial
+- `202` quando a requisicao foi autenticada, o tenant foi resolvido e o job foi persistido para execucao em background
 - `400` para query params invalidos
 - `401` para `X-Job-Key` ausente ou invalido
 - `404` para `slug` inexistente ou tenant inativo
 - `409` para tenant sem `backendClientId` ou com backend client inativo
+
+### `GET /internal/jobs/kpis/refresh/:jobId`
+
+Descricao:
+consulta o status persistido de um `refresh_job` aceito anteriormente.
+
+Headers:
+
+- `X-Job-Key` required
+
+Path Params:
+
+- `jobId` required
+
+Response `200`:
+
+```json
+{
+  "jobId": "41",
+  "status": "PARTIAL_SUCCESS",
+  "slug": "ferracosul-kpi-dev",
+  "tenantId": "tenant-1",
+  "clientId": "ferracosul",
+  "from": "2026-04-01",
+  "to": "2026-04-06",
+  "triggerType": "api",
+  "requestedAt": "2026-04-08T12:00:00.000Z",
+  "startedAt": "2026-04-08T12:00:01.000Z",
+  "finishedAt": "2026-04-08T12:00:09.000Z",
+  "errorMessage": "sales: Sale refresh failed",
+  "results": {
+    "overallStatus": "partial_success",
+    "results": [
+      {
+        "job": "budgets",
+        "status": "success",
+        "startedAt": "2026-04-08T12:00:01.000Z",
+        "finishedAt": "2026-04-08T12:00:03.000Z"
+      },
+      {
+        "job": "sales",
+        "status": "failed",
+        "startedAt": "2026-04-08T12:00:03.000Z",
+        "finishedAt": "2026-04-08T12:00:05.000Z",
+        "error": "Sale refresh failed"
+      },
+      {
+        "job": "calls",
+        "status": "success",
+        "startedAt": "2026-04-08T12:00:05.000Z",
+        "finishedAt": "2026-04-08T12:00:09.000Z"
+      }
+    ]
+  }
+}
+```
+
+Observacoes:
+
+- `results` fica `null` enquanto o job estiver em `PENDING` ou `RUNNING`
+- este fluxo permanece backend-only e nao usa JWT
+- o contrato HTTP permite migrar a execucao em memoria para fila ou worker depois sem quebrar a API
+
+Semantica de status:
+
+- `SUCCESS`: os tres refreshs completaram com sucesso
+- `PARTIAL_SUCCESS`: pelo menos um refresh teve sucesso e pelo menos um falhou
+- `FAILED`: todos os refreshs falharam
+
+Status HTTP:
+
+- `200` quando o job existe e o status foi lido
+- `400` para `jobId` invalido
+- `401` para `X-Job-Key` ausente ou invalido
+- `404` para `jobId` inexistente
 
 ## WhatsApp KPI
 

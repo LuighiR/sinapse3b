@@ -11,8 +11,19 @@ import { PrismaService } from '../../infra/prisma/prisma.service'
 import { JwtAuthGuard } from '../auth/presentation/guards/jwt-auth.guard'
 import { TenantScopeGuard } from '../auth/presentation/guards/tenant-scope.guard'
 import { BudgetFollowUpDkwDispatchService } from './application/budget-follow-up-dkw-dispatch.service'
+import { InternalKpiJobKeyAuthorizerService } from './application/internal-kpi-job-key-authorizer.service'
 import { InternalKpiJobTenantResolverService } from './application/internal-kpi-job-tenant-resolver.service'
-import { InternalKpiRefreshJobService } from './application/internal-kpi-refresh-job.service'
+import { InternalKpiRefreshJobCreateService } from './application/internal-kpi-refresh-job-create.service'
+import { InternalKpiRefreshJobExecuteService } from './application/internal-kpi-refresh-job-execute.service'
+import {
+  CompleteInternalKpiRefreshJobInput,
+  CreateInternalKpiRefreshJobInput,
+  InternalKpiRefreshJobRecord,
+  InternalKpiRefreshJobRepository,
+  InternalKpiRefreshJobResultsJson,
+  MarkInternalKpiRefreshJobRunningInput,
+} from './application/internal-kpi-refresh-job.repository'
+import { InternalKpiRefreshJobStatusService } from './application/internal-kpi-refresh-job-status.service'
 import {
   BudgetKpiAvailabilityRepository,
   BudgetKpiAvailabilityUpdate,
@@ -1087,6 +1098,100 @@ export class PrismaSaleKpiRepository
   }
 }
 
+@Injectable()
+export class PrismaInternalKpiRefreshJobRepository extends InternalKpiRefreshJobRepository {
+  constructor(private readonly prisma: PrismaService) {
+    super()
+  }
+
+  async create(input: CreateInternalKpiRefreshJobInput): Promise<{ id: bigint }> {
+    const prisma = this.prisma as any
+    const refreshJob = await prisma.refreshJob.create({
+      data: {
+        tenantId: input.tenantId,
+        clientId: input.clientId,
+        slug: input.slug,
+        triggerType: input.triggerType,
+        requestedFrom: input.requestedFrom,
+        requestedTo: input.requestedTo,
+        status: input.status,
+      },
+      select: {
+        id: true,
+      },
+    })
+
+    return {
+      id: refreshJob.id,
+    }
+  }
+
+  async findById(jobId: bigint): Promise<InternalKpiRefreshJobRecord | null> {
+    const prisma = this.prisma as any
+    const refreshJob = await prisma.refreshJob.findUnique({
+      where: {
+        id: jobId,
+      },
+      select: {
+        id: true,
+        tenantId: true,
+        clientId: true,
+        slug: true,
+        triggerType: true,
+        requestedFrom: true,
+        requestedTo: true,
+        status: true,
+        requestedAt: true,
+        startedAt: true,
+        finishedAt: true,
+        errorMessage: true,
+        resultsJson: true,
+      },
+    })
+
+    if (refreshJob === null) {
+      return null
+    }
+
+    return {
+      ...refreshJob,
+      resultsJson: (refreshJob.resultsJson ?? null) as InternalKpiRefreshJobResultsJson | null,
+    }
+  }
+
+  async markRunning(input: MarkInternalKpiRefreshJobRunningInput): Promise<void> {
+    const prisma = this.prisma as any
+
+    await prisma.refreshJob.update({
+      where: {
+        id: input.jobId,
+      },
+      data: {
+        status: 'RUNNING',
+        startedAt: input.startedAt,
+        updatedAt: input.startedAt,
+      },
+    })
+  }
+
+  async complete(input: CompleteInternalKpiRefreshJobInput): Promise<void> {
+    const prisma = this.prisma as any
+
+    await prisma.refreshJob.update({
+      where: {
+        id: input.jobId,
+      },
+      data: {
+        status: input.status,
+        finishedAt: input.finishedAt,
+        errorMessage: input.errorMessage,
+        resultsJson: input.resultsJson,
+        updatedAt: input.finishedAt,
+      },
+    })
+  }
+}
+
 @Module({
   imports: [PrismaModule, AuthModule, NormalizationModule, CompaniesModule],
   providers: [
@@ -1095,11 +1200,19 @@ export class PrismaSaleKpiRepository
     PrismaSaleKpiRepository,
     PrismaCallKpiRepository,
     PrismaWhatsAppKpiRepository,
+    PrismaInternalKpiRefreshJobRepository,
     FetchBudgetFollowUpDkwWebhookClient,
+    InternalKpiJobKeyAuthorizerService,
     InternalKpiJobTenantResolverService,
-    InternalKpiRefreshJobService,
+    InternalKpiRefreshJobCreateService,
+    InternalKpiRefreshJobExecuteService,
+    InternalKpiRefreshJobStatusService,
     JwtAuthGuard,
     TenantScopeGuard,
+    {
+      provide: InternalKpiRefreshJobRepository,
+      useExisting: PrismaInternalKpiRefreshJobRepository,
+    },
     {
       provide: BudgetKpiAvailabilityService,
       useFactory: (repository: PrismaBudgetKpiRepository) => new BudgetKpiAvailabilityService(repository),

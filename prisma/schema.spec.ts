@@ -30,4 +30,23 @@ describe('prisma schema', () => {
     expect(schema).toContain('enum SessionType')
     expect(schema).toContain('enum MessageSenderType')
   })
+
+  it('models the core refresh jobs table for asynchronous KPI refresh execution', () => {
+    const schema = readFileSync(join(__dirname, 'schema.prisma'), 'utf-8')
+
+    expect(schema).toContain('model RefreshJob')
+    expect(schema).toContain('tenantId')
+    expect(schema).toContain('clientId')
+    expect(schema).toContain('triggerType')
+    expect(schema).toContain('requestedFrom')
+    expect(schema).toContain('requestedTo')
+    expect(schema).toContain('status')
+    expect(schema).toContain('requestedAt')
+    expect(schema).toContain('startedAt')
+    expect(schema).toContain('finishedAt')
+    expect(schema).toContain('errorMessage')
+    expect(schema).toContain('resultsJson')
+    expect(schema).toContain('@@map("refresh_jobs")')
+    expect(schema).toContain('@@schema("core")')
+  })
 })

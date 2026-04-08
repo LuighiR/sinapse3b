@@ -1,13 +1,17 @@
 import { ConflictException, INestApplication, NotFoundException, UnauthorizedException } from '@nestjs/common'
 import { Test } from '@nestjs/testing'
 import request from 'supertest'
-import { InternalKpiRefreshJobService } from '../application/internal-kpi-refresh-job.service'
+import { InternalKpiRefreshJobCreateService } from '../application/internal-kpi-refresh-job-create.service'
+import { InternalKpiRefreshJobStatusService } from '../application/internal-kpi-refresh-job-status.service'
 import { InternalKpiRefreshJobController } from './internal-kpi-refresh-job.controller'
 
 describe('InternalKpiRefreshJobController', () => {
   let app: INestApplication
-  const service = {
-    run: jest.fn(),
+  const createService = {
+    create: jest.fn(),
+  }
+  const statusService = {
+    getStatus: jest.fn(),
   }
 
   beforeEach(async () => {
@@ -17,8 +21,12 @@ describe('InternalKpiRefreshJobController', () => {
       controllers: [InternalKpiRefreshJobController],
       providers: [
         {
-          provide: InternalKpiRefreshJobService,
-          useValue: service,
+          provide: InternalKpiRefreshJobCreateService,
+          useValue: createService,
+        },
+        {
+          provide: InternalKpiRefreshJobStatusService,
+          useValue: statusService,
         },
       ],
     }).compile()
@@ -31,34 +39,71 @@ describe('InternalKpiRefreshJobController', () => {
     await app.close()
   })
 
-  it('returns 200 without Authorization or X-Tenant-Id when the job runs', async () => {
-    service.run.mockResolvedValue({
-      slug: 'ferracosul-kpi-dev',
-      clientId: 'ferracosul',
-      from: '2026-04-01',
-      to: '2026-04-06',
-      overallStatus: 'success',
-      results: [],
+  it('returns 202 without Authorization or X-Tenant-Id when the job is accepted', async () => {
+    createService.create.mockResolvedValue({
+      status: 'accepted',
+      message: 'task initiated',
+      jobId: '41',
     })
 
     await request(app.getHttpServer())
       .post('/internal/jobs/kpis/refresh?slug=ferracosul-kpi-dev&from=2026-04-01&to=2026-04-06')
       .set('X-Job-Key', 'job-secret')
-      .expect(200)
+      .expect(202)
       .expect({
-        slug: 'ferracosul-kpi-dev',
-        clientId: 'ferracosul',
-        from: '2026-04-01',
-        to: '2026-04-06',
-        overallStatus: 'success',
-        results: [],
+        status: 'accepted',
+        message: 'task initiated',
+        jobId: '41',
       })
 
-    expect(service.run).toHaveBeenCalledWith({
+    expect(createService.create).toHaveBeenCalledWith({
       jobKey: 'job-secret',
       slug: 'ferracosul-kpi-dev',
       from: '2026-04-01',
       to: '2026-04-06',
+    })
+  })
+
+  it('returns persisted job status from GET without Authorization or X-Tenant-Id', async () => {
+    statusService.getStatus.mockResolvedValue({
+      jobId: '41',
+      status: 'RUNNING',
+      slug: 'ferracosul-kpi-dev',
+      tenantId: 'tenant-1',
+      clientId: 'client-1',
+      from: '2026-04-01',
+      to: '2026-04-06',
+      triggerType: 'api',
+      requestedAt: '2026-04-08T12:00:00.000Z',
+      startedAt: '2026-04-08T12:00:01.000Z',
+      finishedAt: null,
+      errorMessage: null,
+      results: null,
+    })
+
+    await request(app.getHttpServer())
+      .get('/internal/jobs/kpis/refresh/41')
+      .set('X-Job-Key', 'job-secret')
+      .expect(200)
+      .expect({
+        jobId: '41',
+        status: 'RUNNING',
+        slug: 'ferracosul-kpi-dev',
+        tenantId: 'tenant-1',
+        clientId: 'client-1',
+        from: '2026-04-01',
+        to: '2026-04-06',
+        triggerType: 'api',
+        requestedAt: '2026-04-08T12:00:00.000Z',
+        startedAt: '2026-04-08T12:00:01.000Z',
+        finishedAt: null,
+        errorMessage: null,
+        results: null,
+      })
+
+    expect(statusService.getStatus).toHaveBeenCalledWith({
+      jobId: '41',
+      jobKey: 'job-secret',
     })
   })
 
@@ -67,11 +112,11 @@ describe('InternalKpiRefreshJobController', () => {
       .post('/internal/jobs/kpis/refresh?slug=ferracosul-kpi-dev&from=2026-04-01&to=2026-04-06')
       .expect(401)
 
-    expect(service.run).not.toHaveBeenCalled()
+    expect(createService.create).not.toHaveBeenCalled()
   })
 
-  it('returns 401 when the job key is invalid', async () => {
-    service.run.mockRejectedValue(new UnauthorizedException('Invalid job key'))
+  it('returns 401 when the post job key is invalid', async () => {
+    createService.create.mockRejectedValue(new UnauthorizedException('Invalid job key'))
 
     await request(app.getHttpServer())
       .post('/internal/jobs/kpis/refresh?slug=ferracosul-kpi-dev&from=2026-04-01&to=2026-04-06')
@@ -79,8 +124,17 @@ describe('InternalKpiRefreshJobController', () => {
       .expect(401)
   })
 
+  it('returns 401 when the get job key is invalid', async () => {
+    statusService.getStatus.mockRejectedValue(new UnauthorizedException('Invalid job key'))
+
+    await request(app.getHttpServer())
+      .get('/internal/jobs/kpis/refresh/41')
+      .set('X-Job-Key', 'wrong-key')
+      .expect(401)
+  })
+
   it('returns 404 when the slug is unknown', async () => {
-    service.run.mockRejectedValue(new NotFoundException('Active tenant not found'))
+    createService.create.mockRejectedValue(new NotFoundException('Active tenant not found'))
 
     await request(app.getHttpServer())
       .post('/internal/jobs/kpis/refresh?slug=missing&from=2026-04-01&to=2026-04-06')
@@ -89,7 +143,7 @@ describe('InternalKpiRefreshJobController', () => {
   })
 
   it('returns 409 when the tenant backend client is misconfigured', async () => {
-    service.run.mockRejectedValue(new ConflictException('Tenant backend client is not configured'))
+    createService.create.mockRejectedValue(new ConflictException('Tenant backend client is not configured'))
 
     await request(app.getHttpServer())
       .post('/internal/jobs/kpis/refresh?slug=ferracosul-kpi-dev&from=2026-04-01&to=2026-04-06')
@@ -103,33 +157,15 @@ describe('InternalKpiRefreshJobController', () => {
       .set('X-Job-Key', 'job-secret')
       .expect(400)
 
-    expect(service.run).not.toHaveBeenCalled()
+    expect(createService.create).not.toHaveBeenCalled()
   })
 
-  it('returns 200 when the job completes with partial failures', async () => {
-    service.run.mockResolvedValue({
-      slug: 'ferracosul-kpi-dev',
-      clientId: 'ferracosul',
-      from: '2026-04-01',
-      to: '2026-04-06',
-      overallStatus: 'partial_success',
-      results: [
-        {
-          job: 'budgets',
-          status: 'failed',
-          startedAt: '2026-04-06T17:00:00.000Z',
-          finishedAt: '2026-04-06T17:00:01.000Z',
-          error: 'Budget refresh failed',
-        },
-      ],
-    })
+  it('returns 404 when the job id does not exist', async () => {
+    statusService.getStatus.mockRejectedValue(new NotFoundException('Refresh job not found'))
 
     await request(app.getHttpServer())
-      .post('/internal/jobs/kpis/refresh?slug=ferracosul-kpi-dev&from=2026-04-01&to=2026-04-06')
+      .get('/internal/jobs/kpis/refresh/999')
       .set('X-Job-Key', 'job-secret')
-      .expect(200)
-      .expect((response) => {
-        expect(response.body.overallStatus).toBe('partial_success')
-      })
+      .expect(404)
   })
 })
