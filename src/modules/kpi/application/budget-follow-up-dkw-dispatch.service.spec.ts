@@ -61,10 +61,10 @@ describe('BudgetFollowUpDkwDispatchService', () => {
         name: 'ACME LTDA',
         email: 'joao@gmail.com',
         phone: '5551999999999',
-        valor_orcamento: '250.00',
+        valor_orcamento: 'R$ 250,00',
         codigo_dav: '9001',
         vendedor: 'Maria',
-        data_hora_abertura: '2026-04-01T08:00:00',
+        data_hora_abertura: '01/04/2026',
       }),
     )
     expect(repository.markAsSent).toHaveBeenCalledTimes(1)

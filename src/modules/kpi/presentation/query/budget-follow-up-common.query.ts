@@ -36,6 +36,12 @@ const orderTypeSchema = z
   .transform((value) => (value === '' ? undefined : value))
   .optional()
 
+export const optionalSlugSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .optional()
+
 const referenceAtSchema = z
   .string()
   .trim()

@@ -45,6 +45,7 @@ import {
   BudgetKpiSnapshotRow,
 } from './application/budget-kpi-refresh.service'
 import { KpiPeriod } from './domain/kpi-period'
+import { BudgetFollowUpDkwDispatchAuthGuard } from './presentation/guards/budget-follow-up-dkw-dispatch-auth.guard'
 import { KpiController } from './presentation/kpi.controller'
 import {
   SaleKpiAvailabilityRepository,
@@ -1202,6 +1203,7 @@ export class PrismaInternalKpiRefreshJobRepository extends InternalKpiRefreshJob
     PrismaWhatsAppKpiRepository,
     PrismaInternalKpiRefreshJobRepository,
     FetchBudgetFollowUpDkwWebhookClient,
+    BudgetFollowUpDkwDispatchAuthGuard,
     InternalKpiJobKeyAuthorizerService,
     InternalKpiJobTenantResolverService,
     InternalKpiRefreshJobCreateService,

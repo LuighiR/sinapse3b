@@ -201,10 +201,10 @@ export class BudgetFollowUpDkwDispatchService {
       name: row.customerName,
       ...(email === undefined ? {} : { email }),
       phone: resolvedPhone,
-      valor_orcamento: row.valueAmount,
+      valor_orcamento: this.formatCurrency(row.valueAmount),
       codigo_dav: row.davId,
       vendedor: row.sellerName,
-      data_hora_abertura: row.openingDatetime,
+      data_hora_abertura: this.formatOpeningDate(row.openingDatetime),
       ...(missingPhone ? { mensagem: 'Sem telefone registrado' } : {}),
     }
   }
@@ -257,5 +257,30 @@ export class BudgetFollowUpDkwDispatchService {
     }
 
     return parsed
+  }
+
+  private formatCurrency(value: string): string {
+    const parsed = Number.parseFloat(value)
+
+    if (Number.isNaN(parsed)) {
+      return value
+    }
+
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(parsed).replace(/\u00A0/g, ' ')
+  }
+
+  private formatOpeningDate(value: string): string {
+    const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/)
+
+    if (match === null) {
+      return value
+    }
+
+    return `${match[3]}/${match[2]}/${match[1]}`
   }
 }

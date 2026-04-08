@@ -758,8 +758,15 @@ Authorization: Bearer <jwt>
 X-Tenant-Id: <tenant-id>
 ```
 
+Ou, para automacao backend-only:
+
+```http
+X-Job-Key: <job-key>
+```
+
 Query Params:
 
+- `slug` optional no modo JWT, required quando usar `X-Job-Key`
 - `from` required: inicio do recorte de aberturas
 - `to` required: fim do recorte de aberturas
 - `referenceAt` required: data e hora de referencia da classificacao
@@ -779,6 +786,7 @@ Regra:
 - em erro de um item, a API continua; se houver 3 erros seguidos, a execucao aborta
 - o payload usa `cell_phone`, fallback `phone`, fallback final `Sem registro`
 - quando nao houver telefone em nenhum dos dois campos, a API tambem envia `mensagem = "Sem telefone registrado"`
+- o payload enviado ao DKW formata `valor_orcamento` como moeda BRL (`R$ 0,00`) e `data_hora_abertura` como `dd/MM/yyyy`
 - `referenceAt` aceita timestamp com offset (`-03:00`) ou, nas formas sem offset que o backend normaliza (`YYYY-MM-DDTHH:mm` ou `YYYY-MM-DDTHH:mm:ss`, com `T` ou espaco), a API assume `America/Sao_Paulo` (`UTC-3`)
 - `referenceAt` tambem aceita `YYYY-MM-DD`; nesse caso, a API interpreta o valor como o fim do dia em `America/Sao_Paulo` (`23:59:59.999`)
 
@@ -786,6 +794,12 @@ Exemplo:
 
 ```text
 POST /kpis/budgets/follow-up/dkw-dispatch?from=2026-04-01&to=2026-04-02&referenceAt=2026-04-02T10:00:00-03:00&sellerId=7&branchId=5&orderType=Balcao
+```
+
+Exemplo com automacao:
+
+```text
+POST /kpis/budgets/follow-up/dkw-dispatch?slug=ferracosul-kpi-dev&from=2026-04-01&to=2026-04-08&referenceAt=2026-04-08T16:00:00-03:00
 ```
 
 Response `200`:
@@ -801,6 +815,15 @@ Response `200`:
   "status": "completed"
 }
 ```
+
+Status HTTP:
+
+- `200` quando o dispatch conclui o processamento do lote
+- `400` para query params invalidos
+- `401` para JWT invalido ou ausente, ou `X-Job-Key` invalida
+- `403` quando `branchId` nao pertence ao escopo da empresa no modo autenticado por usuario
+- `404` para `slug` inexistente ou tenant inativo no modo `X-Job-Key`
+- `409` para tenant sem `backendClientId` ou com backend client inativo no modo `X-Job-Key`
 
 ### `GET /kpis/budgets/hourly`
 

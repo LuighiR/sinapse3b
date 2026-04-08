@@ -180,6 +180,7 @@ describe('budget follow-up query parsers', () => {
   it('parses the budget follow-up dkw dispatch query', () => {
     expect(
       parseBudgetFollowUpDkwDispatchQuery({
+        slug: 'ferracosul-kpi-dev',
         from: '2026-04-01',
         to: '2026-04-02',
         referenceAt: ' 2026-04-02T10:00 ',
@@ -188,6 +189,7 @@ describe('budget follow-up query parsers', () => {
         orderType: '  Balcao  ',
       }),
     ).toEqual({
+      slug: 'ferracosul-kpi-dev',
       from: '2026-04-01',
       to: '2026-04-02',
       referenceAt: '2026-04-02T10:00',
