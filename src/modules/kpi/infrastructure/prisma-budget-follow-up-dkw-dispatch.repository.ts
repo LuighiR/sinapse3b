@@ -60,10 +60,20 @@ export class PrismaBudgetFollowUpDkwDispatchRepository implements BudgetFollowUp
         raw.dav_id::text AS "davId",
         coalesce(raw.seller_name, fact.seller_name) AS "sellerName",
         (raw.opening_date::timestamp + coalesce(raw.opening_time, time '00:00:00'))::text AS "openingDatetime",
-        raw.sent_dkw_at AS "sentDkwAt"
+        raw.sent_dkw_at AS "sentDkwAt",
+        employee.dkw_webhook AS "dkwWebhook"
       FROM core.budget_facts AS fact
       JOIN raw.ferraco_budgets AS raw
         ON raw.id = fact.source_record_id
+      LEFT JOIN LATERAL (
+        SELECT employees.dkw_webhook
+        FROM core.employees AS employees
+        WHERE employees.erp_id = fact.seller_id
+          AND employees.branch_id = fact.branch_id
+        ORDER BY employees.id ASC
+        LIMIT 1
+      ) AS employee
+        ON TRUE
       WHERE ${Prisma.join(filters, ' AND ')}
       ORDER BY fact.budget_datetime DESC, fact.id DESC
     `)

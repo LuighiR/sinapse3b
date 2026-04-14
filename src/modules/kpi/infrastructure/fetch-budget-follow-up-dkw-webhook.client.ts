@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common'
-import { loadEnv } from '../../../config/env'
 import {
   type BudgetFollowUpDkwWebhookClient,
   type BudgetFollowUpDkwWebhookPayload,
@@ -7,14 +6,12 @@ import {
 
 @Injectable()
 export class FetchBudgetFollowUpDkwWebhookClient implements BudgetFollowUpDkwWebhookClient {
-  private readonly webhookUrl = loadEnv().BUDGET_FOLLOW_UP_DKW_WEBHOOK_URL
-
-  async sendLead(payload: BudgetFollowUpDkwWebhookPayload): Promise<void> {
-    if (this.webhookUrl.length === 0) {
-      throw new Error('BUDGET_FOLLOW_UP_DKW_WEBHOOK_URL is not configured')
+  async sendLead(url: string, payload: BudgetFollowUpDkwWebhookPayload): Promise<void> {
+    if (url.trim().length === 0) {
+      throw new Error('DKW webhook URL is not configured')
     }
 
-    const response = await fetch(this.webhookUrl, {
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

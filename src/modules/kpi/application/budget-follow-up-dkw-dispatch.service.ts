@@ -50,6 +50,7 @@ export type BudgetFollowUpDkwDispatchCandidate = {
   sellerName: string
   openingDatetime: string
   sentDkwAt: Date | string | null
+  dkwWebhook: string | null
 }
 
 export type BudgetFollowUpDkwWebhookPayload = {
@@ -75,7 +76,7 @@ export type BudgetFollowUpDkwDispatchRepository = {
 }
 
 export type BudgetFollowUpDkwWebhookClient = {
-  sendLead(payload: BudgetFollowUpDkwWebhookPayload): Promise<void>
+  sendLead(url: string, payload: BudgetFollowUpDkwWebhookPayload): Promise<void>
 }
 
 export class BudgetFollowUpDkwDispatchService {
@@ -83,6 +84,7 @@ export class BudgetFollowUpDkwDispatchService {
     private readonly repository: BudgetFollowUpDkwDispatchRepository,
     private readonly webhookClient: BudgetFollowUpDkwWebhookClient,
     private readonly branchScopeService?: BranchScopeService,
+    private readonly fallbackWebhookUrl?: string,
   ) {}
 
   async dispatch(input: BudgetFollowUpDkwDispatchInput): Promise<BudgetFollowUpDkwDispatchResponse> {
@@ -143,8 +145,9 @@ export class BudgetFollowUpDkwDispatchService {
       }
 
       try {
+        const webhookUrl = this.resolveWebhookUrl(row)
         const payload = this.toWebhookPayload(row)
-        await this.webhookClient.sendLead(payload)
+        await this.webhookClient.sendLead(webhookUrl, payload)
 
         const sentAt = new Date()
         await this.repository.markAsSent({
@@ -207,6 +210,20 @@ export class BudgetFollowUpDkwDispatchService {
       data_hora_abertura: this.formatOpeningDate(row.openingDatetime),
       ...(missingPhone ? { mensagem: 'Sem telefone registrado' } : {}),
     }
+  }
+
+  private resolveWebhookUrl(row: BudgetFollowUpDkwDispatchCandidate): string {
+    const webhookUrl = this.firstNonBlank(
+      row.dkwWebhook,
+      this.fallbackWebhookUrl,
+      process.env.BUDGET_FOLLOW_UP_DKW_WEBHOOK_URL,
+    )
+
+    if (webhookUrl === undefined) {
+      throw new Error('No DKW webhook URL configured')
+    }
+
+    return webhookUrl
   }
 
   private firstNonBlank(...values: Array<string | null | undefined>): string | undefined {

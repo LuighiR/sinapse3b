@@ -26,6 +26,7 @@ describe('PrismaBudgetFollowUpDkwDispatchRepository', () => {
           sellerName: 'Maria',
           openingDatetime: '2026-04-01T08:00:00',
           sentDkwAt: null,
+          dkwWebhook: 'https://employee.example/lead',
         },
       ]),
     }
@@ -46,6 +47,7 @@ describe('PrismaBudgetFollowUpDkwDispatchRepository', () => {
         clientId: 'ferracosul',
         sellerId: 7,
         email: 'joao@gmail.com',
+        dkwWebhook: 'https://employee.example/lead',
       }),
     ])
 

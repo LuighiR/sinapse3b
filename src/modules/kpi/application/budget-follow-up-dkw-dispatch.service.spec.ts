@@ -6,13 +6,13 @@ describe('BudgetFollowUpDkwDispatchService', () => {
     markAsSent: jest.fn<Promise<void>, [unknown]>(),
   }
   const webhook = {
-    sendLead: jest.fn<Promise<void>, [unknown]>(),
+    sendLead: jest.fn<Promise<void>, [string, unknown]>(),
   }
   const branchScopeService = {
     assertBranchScope: jest.fn<Promise<void>, [string, number]>(),
   }
-
-  const service = new BudgetFollowUpDkwDispatchService(repository, webhook, branchScopeService as any)
+  const makeService = (fallbackWebhookUrl = 'https://fallback.example/lead') =>
+    new BudgetFollowUpDkwDispatchService(repository, webhook, branchScopeService as any, fallbackWebhookUrl)
 
   const validInput = {
     clientId: 'client-1',
@@ -29,11 +29,14 @@ describe('BudgetFollowUpDkwDispatchService', () => {
   })
 
   it('sends only rows classified as after24h open and marks them as sent', async () => {
+    const service = makeService()
+
     repository.listDispatchCandidates.mockResolvedValue([
       makeCandidate({
         rawBudgetId: 10,
         sentDkwAt: null,
         cellPhone: '5551999999999',
+        dkwWebhook: 'https://employee.example/lead',
         budgetDatetime: '2026-04-01T08:00:00.000Z',
       }),
       makeCandidate({
@@ -57,6 +60,7 @@ describe('BudgetFollowUpDkwDispatchService', () => {
     })
     expect(webhook.sendLead).toHaveBeenCalledTimes(1)
     expect(webhook.sendLead).toHaveBeenCalledWith(
+      'https://employee.example/lead',
       expect.objectContaining({
         name: 'ACME LTDA',
         email: 'joao@gmail.com',
@@ -75,6 +79,8 @@ describe('BudgetFollowUpDkwDispatchService', () => {
   })
 
   it('uses phone fallback and mensagem when both phones are missing', async () => {
+    const service = makeService()
+
     repository.listDispatchCandidates.mockResolvedValue([
       makeCandidate({
         rawBudgetId: 20,
@@ -87,6 +93,7 @@ describe('BudgetFollowUpDkwDispatchService', () => {
     await service.dispatch(validInput)
 
     expect(webhook.sendLead).toHaveBeenCalledWith(
+      'https://fallback.example/lead',
       expect.objectContaining({
         phone: 'Sem registro',
         mensagem: 'Sem telefone registrado',
@@ -95,6 +102,8 @@ describe('BudgetFollowUpDkwDispatchService', () => {
   })
 
   it('skips rows already sent in raw', async () => {
+    const service = makeService()
+
     repository.listDispatchCandidates.mockResolvedValue([
       makeCandidate({
         rawBudgetId: 30,
@@ -109,6 +118,8 @@ describe('BudgetFollowUpDkwDispatchService', () => {
   })
 
   it('aborts after three consecutive webhook failures', async () => {
+    const service = makeService()
+
     repository.listDispatchCandidates.mockResolvedValue([
       makeCandidate({ rawBudgetId: 1, sentDkwAt: null }),
       makeCandidate({ rawBudgetId: 2, sentDkwAt: null }),
@@ -125,6 +136,8 @@ describe('BudgetFollowUpDkwDispatchService', () => {
   })
 
   it('resets the consecutive failure counter after a success', async () => {
+    const service = makeService()
+
     repository.listDispatchCandidates.mockResolvedValue([
       makeCandidate({ rawBudgetId: 1, sentDkwAt: null }),
       makeCandidate({ rawBudgetId: 2, sentDkwAt: null }),
@@ -142,6 +155,63 @@ describe('BudgetFollowUpDkwDispatchService', () => {
     expect(result.status).toBe('completed')
     expect(webhook.sendLead).toHaveBeenCalledTimes(4)
     expect(repository.markAsSent).toHaveBeenCalledTimes(2)
+  })
+
+  it('falls back to the env webhook when the employee webhook is missing', async () => {
+    const service = makeService()
+
+    repository.listDispatchCandidates.mockResolvedValue([
+      makeCandidate({
+        rawBudgetId: 40,
+        dkwWebhook: null,
+      }),
+    ])
+
+    await service.dispatch(validInput)
+
+    expect(webhook.sendLead).toHaveBeenCalledWith(
+      'https://fallback.example/lead',
+      expect.objectContaining({
+        codigo_dav: '9001',
+      }),
+    )
+  })
+
+  it('falls back to the env webhook when the employee webhook is blank', async () => {
+    const service = makeService()
+
+    repository.listDispatchCandidates.mockResolvedValue([
+      makeCandidate({
+        rawBudgetId: 41,
+        dkwWebhook: '   ',
+      }),
+    ])
+
+    await service.dispatch(validInput)
+
+    expect(webhook.sendLead).toHaveBeenCalledWith(
+      'https://fallback.example/lead',
+      expect.objectContaining({
+        codigo_dav: '9001',
+      }),
+    )
+  })
+
+  it('treats a missing employee and missing env webhook as a normal item failure', async () => {
+    const service = makeService('')
+
+    repository.listDispatchCandidates.mockResolvedValue([
+      makeCandidate({
+        rawBudgetId: 42,
+        dkwWebhook: null,
+      }),
+    ])
+
+    const result = await service.dispatch(validInput)
+
+    expect(result.status).toBe('completed')
+    expect(webhook.sendLead).not.toHaveBeenCalled()
+    expect(repository.markAsSent).not.toHaveBeenCalled()
   })
 })
 
@@ -169,6 +239,7 @@ function makeCandidate(
     sellerName: 'Maria',
     openingDatetime: '2026-04-01T08:00:00',
     sentDkwAt: null,
+    dkwWebhook: null,
     ...overrides,
   }
 }

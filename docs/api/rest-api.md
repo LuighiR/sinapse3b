@@ -782,6 +782,7 @@ Regra:
 - somente orcamentos classificados como `after24h` e `open` entram no disparo
 - o estado de envio fica em `raw.ferraco_budgets.sent_dkw_at`
 - se `sent_dkw_at` ja estiver preenchido, o registro e ignorado
+- o destino do webhook prioriza `core.employees.dkw_webhook` para o vendedor da filial; sem valor, a API usa `BUDGET_FOLLOW_UP_DKW_WEBHOOK_URL` como fallback
 - em sucesso no webhook, a API grava `sent_dkw_at`
 - em erro de um item, a API continua; se houver 3 erros seguidos, a execucao aborta
 - o payload usa `cell_phone`, fallback `phone`, fallback final `Sem registro`
