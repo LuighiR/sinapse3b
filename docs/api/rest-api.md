@@ -288,6 +288,172 @@ Response `200`:
 ]
 ```
 
+## Tenant Users
+
+### Access Rules
+
+Administracao de usuarios por tenant segue estas regras:
+
+- exige `Authorization: Bearer <jwt>`
+- exige `X-Tenant-Id: <tenant-id>`
+- usa sempre o tenant ativo do header
+- permite acesso apenas para memberships `OWNER` e `ADMIN`
+
+### `GET /tenant-users`
+
+Descricao:
+lista os usuarios vinculados ao tenant ativo, incluindo status do usuario e status da membership naquele tenant.
+
+Headers:
+
+```http
+Authorization: Bearer <jwt>
+X-Tenant-Id: <tenant-id>
+```
+
+Response `200`:
+
+```json
+[
+  {
+    "id": "u-admin",
+    "email": "admin@example.com",
+    "name": "Admin",
+    "isActive": true,
+    "role": "ADMIN",
+    "membershipIsActive": true
+  },
+  {
+    "id": "u-viewer",
+    "email": "viewer@example.com",
+    "name": "Viewer",
+    "isActive": true,
+    "role": "VIEWER",
+    "membershipIsActive": true
+  }
+]
+```
+
+Response `403`:
+
+```json
+{
+  "statusCode": 403,
+  "message": "Tenant user administration requires owner or admin membership"
+}
+```
+
+### `POST /tenant-users`
+
+Descricao:
+cria um novo usuario no tenant ativo ou reaproveita um usuario existente pelo email, atualizando senha e reativando a membership do tenant atual.
+
+Headers:
+
+```http
+Authorization: Bearer <jwt>
+X-Tenant-Id: <tenant-id>
+```
+
+Request body:
+
+```json
+{
+  "email": "new.user@example.com",
+  "name": "New User",
+  "password": "secret-123",
+  "role": "VIEWER"
+}
+```
+
+Campos:
+
+- `email` required
+- `password` required
+- `role` required: `OWNER`, `ADMIN`, `MANAGER`, `VIEWER`
+- `name` optional
+- `isActive` optional, default `true`
+
+Response `201`:
+
+```json
+{
+  "id": "9b2f7c7c-fb55-4f4e-88e8-d1b9867f1111",
+  "email": "new.user@example.com",
+  "name": "New User",
+  "isActive": true,
+  "role": "VIEWER",
+  "membershipIsActive": true
+}
+```
+
+Response `400`:
+
+```json
+{
+  "statusCode": 400,
+  "message": "Invalid tenant user payload"
+}
+```
+
+### `PATCH /tenant-users/:userId`
+
+Descricao:
+atualiza o usuario e a membership do tenant ativo para o `userId` informado.
+
+Headers:
+
+```http
+Authorization: Bearer <jwt>
+X-Tenant-Id: <tenant-id>
+```
+
+Path Params:
+
+- `userId` required
+
+Request body:
+
+```json
+{
+  "name": "Viewer Updated",
+  "password": "after-123",
+  "role": "MANAGER",
+  "isActive": true,
+  "membershipIsActive": false
+}
+```
+
+Todos os campos do body sao opcionais, mas pelo menos um deles precisa ser enviado:
+
+- `name`
+- `password`
+- `role`
+- `isActive`
+- `membershipIsActive`
+
+Response `200`:
+
+```json
+{
+  "id": "u-viewer",
+  "email": "viewer@example.com",
+  "name": "Viewer Updated",
+  "isActive": true,
+  "role": "MANAGER",
+  "membershipIsActive": false
+}
+```
+
+Response `404`:
+
+```json
+{
+  "statusCode": 404,
+  "message": "Tenant user not found"
+}
+```
+
 ## Companies
 
 ### `GET /companies/current`
@@ -1894,6 +2060,34 @@ curl -X POST "http://localhost:3000/auth/login" ^
 curl -X POST "http://localhost:3000/auth/refresh" ^
   -H "Content-Type: application/json" ^
   -d "{\"refreshToken\":\"<refresh-token>\"}"
+```
+
+### Tenant Users List
+
+```bash
+curl -X GET "http://localhost:3000/tenant-users" ^
+  -H "Authorization: Bearer <jwt>" ^
+  -H "X-Tenant-Id: tenant-ferracosul-kpi-dev"
+```
+
+### Tenant Users Create
+
+```bash
+curl -X POST "http://localhost:3000/tenant-users" ^
+  -H "Authorization: Bearer <jwt>" ^
+  -H "X-Tenant-Id: tenant-ferracosul-kpi-dev" ^
+  -H "Content-Type: application/json" ^
+  -d "{\"email\":\"new.user@example.com\",\"name\":\"New User\",\"password\":\"secret-123\",\"role\":\"VIEWER\"}"
+```
+
+### Tenant Users Update
+
+```bash
+curl -X PATCH "http://localhost:3000/tenant-users/u-viewer" ^
+  -H "Authorization: Bearer <jwt>" ^
+  -H "X-Tenant-Id: tenant-ferracosul-kpi-dev" ^
+  -H "Content-Type: application/json" ^
+  -d "{\"name\":\"Viewer Updated\",\"password\":\"after-123\",\"role\":\"MANAGER\",\"isActive\":true,\"membershipIsActive\":false}"
 ```
 
 ### Budget Summary

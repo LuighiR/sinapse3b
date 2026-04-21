@@ -22,6 +22,6 @@ import { TenantScopeGuard } from './presentation/guards/tenant-scope.guard'
     JwtAuthGuard,
     TenantScopeGuard,
   ],
-  exports: [AuthSessionService, JwtAuthService, RequestContextService, UserMembershipService],
+  exports: [AuthSessionService, JwtAuthService, PasswordHashService, RequestContextService, UserMembershipService],
 })
 export class AuthModule {}

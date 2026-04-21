@@ -1,8 +1,15 @@
-import { scryptSync, timingSafeEqual } from 'node:crypto'
+import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
 import { Injectable } from '@nestjs/common'
 
 @Injectable()
 export class PasswordHashService {
+  hash(password: string): string {
+    const salt = randomBytes(16).toString('hex')
+    const derivedKey = scryptSync(password, salt, 64).toString('hex')
+
+    return `scrypt$${salt}$${derivedKey}`
+  }
+
   verify(password: string, passwordHash: string): boolean {
     const parts = passwordHash.split('$')
 
