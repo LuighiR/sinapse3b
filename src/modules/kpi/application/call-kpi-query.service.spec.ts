@@ -217,6 +217,122 @@ describe('CallKpiQueryService', () => {
     })
   })
 
+  it('filters materialized agent ranking rows to registered employees when requested', async () => {
+    const repository: jest.Mocked<CallKpiQueryRepository> = {
+      getSummaryRows: jest.fn(),
+      getHourlyRows: jest.fn(),
+      getAgentRankingRows: jest.fn().mockResolvedValue([
+        {
+          dimensionKey: 'employee:ext-1',
+          dimensionLabel: 'Maria',
+          metricKey: 'received.count',
+          metricValue: '2',
+          payloadJson: {
+            agentType: 'EMPLOYEE',
+            employeeName: 'Maria',
+            extensionNumber: '104',
+            extensionUuid: 'ext-1',
+          },
+        },
+        {
+          dimensionKey: 'extension:107',
+          dimensionLabel: '107',
+          metricKey: 'received.count',
+          metricValue: '3',
+          payloadJson: {
+            agentType: 'EXTENSION',
+            employeeName: null,
+            extensionNumber: '107',
+            extensionUuid: null,
+          },
+        },
+      ]),
+      getHourlyComparisonRows: jest.fn(),
+      getCallFactRows: jest.fn(),
+      getTelemarketingBudgetRows: jest.fn(),
+    }
+
+    const service = new CallKpiQueryService(repository)
+
+    const result = await service.getAgentRanking({
+      clientId: 'c1',
+      from: '2026-01-05',
+      to: '2026-01-05',
+      registeredEmployeesOnly: true,
+    })
+
+    expect(result.rows).toEqual([
+      {
+        agentType: 'EMPLOYEE',
+        agentKey: 'employee:ext-1',
+        agentLabel: 'Maria',
+        employeeName: 'Maria',
+        extensionNumber: '104',
+        receivedCount: 2,
+        lostCount: 0,
+        totalInboundCount: 2,
+      },
+    ])
+  })
+
+  it('filters fallback agent ranking facts to registered employees when requested', async () => {
+    const repository: jest.Mocked<CallKpiQueryRepository> = {
+      getSummaryRows: jest.fn(),
+      getHourlyRows: jest.fn(),
+      getAgentRankingRows: jest.fn().mockResolvedValue([]),
+      getHourlyComparisonRows: jest.fn(),
+      getCallFactRows: jest.fn().mockResolvedValue([
+        {
+          id: 1n,
+          startedAt: utcDate(2026, 0, 5, 8, 10),
+          isInboundToCompany: true,
+          isReceived: true,
+          isLost: false,
+          agentResolutionType: 'EXTENSION_UUID',
+          agentResolutionKey: 'ext-1',
+          agentExtensionNumber: '104',
+          extensionUuid: 'ext-1',
+          employeeName: 'Maria',
+        },
+        {
+          id: 2n,
+          startedAt: utcDate(2026, 0, 5, 8, 20),
+          isInboundToCompany: true,
+          isReceived: false,
+          isLost: true,
+          agentResolutionType: 'EXTENSION_NUMBER',
+          agentResolutionKey: '107',
+          agentExtensionNumber: '107',
+          extensionUuid: null,
+          employeeName: null,
+        },
+      ]),
+      getTelemarketingBudgetRows: jest.fn(),
+    }
+
+    const service = new CallKpiQueryService(repository)
+
+    const result = await service.getAgentRanking({
+      clientId: 'c1',
+      from: '2026-01-05',
+      to: '2026-01-05',
+      registeredEmployeesOnly: true,
+    })
+
+    expect(result.rows).toEqual([
+      {
+        agentType: 'EMPLOYEE',
+        agentKey: 'employee:ext-1',
+        agentLabel: 'Maria',
+        employeeName: 'Maria',
+        extensionNumber: '104',
+        receivedCount: 1,
+        lostCount: 0,
+        totalInboundCount: 1,
+      },
+    ])
+  })
+
   it('returns a zero-filled hourly comparison series', async () => {
     const repository: jest.Mocked<CallKpiQueryRepository> = {
       getSummaryRows: jest.fn(),

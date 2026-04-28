@@ -23,11 +23,13 @@ type EmployeeLookupRow = {
   name: string
   extensionUuid: string
   extensionNumber: string
+  isNonCommercial?: boolean
 }
 
 type BranchEmployeeLookupMatch = {
   employeeId: number
   employeeName: string
+  isNonCommercial: boolean
 }
 
 type CallFactEmployeeCandidate = Omit<CallFactRecord, 'employeeName'>
@@ -583,46 +585,59 @@ export class PrismaCallKpiRepository
         name: true,
         extensionUuid: true,
         extensionNumber: true,
+        isNonCommercial: true,
       },
     })) as EmployeeLookupRow[]
 
-    const byExtensionUuid = new Map<string, string | null>()
-    const byExtensionNumber = new Map<string, string | null>()
+    const byExtensionUuid = new Map<string, EmployeeLookupRow | null>()
+    const byExtensionNumber = new Map<string, EmployeeLookupRow | null>()
 
     for (const employee of employees) {
       if (this.hasText(employee.extensionUuid)) {
-        this.storeUniqueEmployeeName(byExtensionUuid, employee.extensionUuid, employee.name)
+        this.storeUniqueEmployeeLookup(byExtensionUuid, employee.extensionUuid, employee)
       }
 
       if (this.hasText(employee.extensionNumber)) {
-        this.storeUniqueEmployeeName(byExtensionNumber, employee.extensionNumber, employee.name)
+        this.storeUniqueEmployeeLookup(byExtensionNumber, employee.extensionNumber, employee)
       }
     }
 
-    return facts.map((fact) => {
-      const employeeNameByUuid =
+    return facts.flatMap((fact) => {
+      const employeeByUuid =
         fact.extensionUuid && byExtensionUuid.has(fact.extensionUuid)
           ? byExtensionUuid.get(fact.extensionUuid)
           : undefined
 
-      if (employeeNameByUuid !== undefined) {
-        return {
-          ...fact,
-          employeeName: employeeNameByUuid,
+      if (employeeByUuid !== undefined) {
+        if (this.isNonCommercialLookup(employeeByUuid)) {
+          return []
         }
+
+        return [
+          {
+            ...fact,
+            employeeName: employeeByUuid?.name ?? null,
+          },
+        ]
       }
 
-      const employeeNameByExtension =
+      const employeeByExtension =
         fact.agentExtensionNumber && byExtensionNumber.has(fact.agentExtensionNumber)
           ? byExtensionNumber.get(fact.agentExtensionNumber)
           : fact.agentResolutionKey && byExtensionNumber.has(fact.agentResolutionKey)
             ? byExtensionNumber.get(fact.agentResolutionKey)
             : undefined
 
-      return {
-        ...fact,
-        employeeName: employeeNameByExtension ?? null,
+      if (this.isNonCommercialLookup(employeeByExtension)) {
+        return []
       }
+
+      return [
+        {
+          ...fact,
+          employeeName: employeeByExtension?.name ?? null,
+        },
+      ]
     })
   }
 
@@ -636,6 +651,7 @@ export class PrismaCallKpiRepository
     const employees = (await prisma.employee.findMany({
       where: {
         branchId,
+        isNonCommercial: false,
       },
       orderBy: [{ id: 'asc' }],
       select: {
@@ -643,6 +659,7 @@ export class PrismaCallKpiRepository
         name: true,
         extensionUuid: true,
         extensionNumber: true,
+        isNonCommercial: true,
       },
     })) as EmployeeLookupRow[]
 
@@ -808,6 +825,7 @@ export class PrismaCallKpiRepository
       map.set(key, {
         employeeId: employee.id,
         employeeName: employee.name,
+        isNonCommercial: employee.isNonCommercial ?? false,
       })
       return
     }
@@ -822,17 +840,21 @@ export class PrismaCallKpiRepository
     }
   }
 
-  private storeUniqueEmployeeName(map: Map<string, string | null>, key: string, name: string): void {
+  private storeUniqueEmployeeLookup(map: Map<string, EmployeeLookupRow | null>, key: string, employee: EmployeeLookupRow): void {
     if (!map.has(key)) {
-      map.set(key, name)
+      map.set(key, employee)
       return
     }
 
     const current = map.get(key)
 
-    if (current !== name) {
+    if (current?.name !== employee.name) {
       map.set(key, null)
     }
+  }
+
+  private isNonCommercialLookup(employee: EmployeeLookupRow | null | undefined): boolean {
+    return employee?.isNonCommercial === true
   }
 
   private addDays(value: Date, days: number): Date {

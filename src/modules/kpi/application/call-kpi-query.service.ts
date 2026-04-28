@@ -15,6 +15,7 @@ export type CallKpiQueryPeriodInput = {
   extensionUuid?: string
   extensionNumber?: string
   branchId?: number
+  registeredEmployeesOnly?: boolean
 }
 
 export type CallKpiPeriodView = {
@@ -185,7 +186,7 @@ export class CallKpiQueryService {
       const callFacts = await this.getFilteredFacts(input, period)
       return {
         period: this.toPeriodView(period),
-        rows: this.buildRankingFromFacts(callFacts),
+        rows: this.filterRegisteredEmployeeRankingRows(this.buildRankingFromFacts(callFacts), input),
       }
     }
 
@@ -198,13 +199,13 @@ export class CallKpiQueryService {
       const callFacts = await this.repository.getCallFactRows({ clientId: input.clientId, period })
       return {
         period: this.toPeriodView(period),
-        rows: this.buildRankingFromFacts(callFacts),
+        rows: this.filterRegisteredEmployeeRankingRows(this.buildRankingFromFacts(callFacts), input),
       }
     }
 
     return {
       period: this.toPeriodView(period),
-      rows: this.buildRankingFromRows(rows),
+      rows: this.filterRegisteredEmployeeRankingRows(this.buildRankingFromRows(rows), input),
     }
   }
 
@@ -415,6 +416,17 @@ export class CallKpiQueryService {
     }
 
     return this.sortRankingRows([...grouped.values()])
+  }
+
+  private filterRegisteredEmployeeRankingRows(
+    rows: CallKpiAgentRankingRow[],
+    input: Pick<CallKpiQueryPeriodInput, 'registeredEmployeesOnly'>,
+  ): CallKpiAgentRankingRow[] {
+    if (input.registeredEmployeesOnly !== true) {
+      return rows
+    }
+
+    return rows.filter((row) => row.agentType === 'EMPLOYEE')
   }
 
   private buildHourlyComparisonFromRows(rows: CallKpiBreakdownRow[]): CallKpiHourlyComparisonRow[] {

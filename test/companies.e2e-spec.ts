@@ -109,6 +109,7 @@ describe('companies', () => {
           extensionUuid: 'ext-101',
           erpId: 500n,
           chatId: 'chat-20',
+          isNonCommercial: true,
         },
         {
           id: 21,
@@ -147,6 +148,7 @@ describe('companies', () => {
             extensionNumber: '101',
             extensionUuid: 'ext-101',
             chatId: 'chat-20',
+            isNonCommercial: true,
           },
         ])
     } finally {

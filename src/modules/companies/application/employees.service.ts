@@ -10,6 +10,7 @@ type EmployeeFixture = {
   extensionUuid?: string
   erpId?: bigint
   chatId?: string
+  isNonCommercial?: boolean
   branchId: number
 }
 
@@ -33,6 +34,7 @@ type PrismaEmployeeReader = {
         extensionUuid: string
         erpId: bigint
         chatId: string
+        isNonCommercial: boolean
         branchId: number
       }>
     >
@@ -52,6 +54,7 @@ export type EmployeeSummary = {
   extensionNumber: string
   extensionUuid: string
   chatId: string
+  isNonCommercial: boolean
 }
 
 @Injectable()
@@ -98,6 +101,7 @@ export class EmployeesService {
         extensionNumber: employee.extensionNumber ?? '',
         extensionUuid: employee.extensionUuid ?? '',
         chatId: employee.chatId ?? '',
+        isNonCommercial: employee.isNonCommercial ?? false,
       }))
   }
 
@@ -120,6 +124,7 @@ export class EmployeesService {
         extensionUuid: true,
         erpId: true,
         chatId: true,
+        isNonCommercial: true,
         branchId: true,
       },
       orderBy: { id: 'asc' },

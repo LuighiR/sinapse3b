@@ -59,6 +59,7 @@ export type TestEmployee = {
   extensionUuid?: string
   erpId?: bigint
   chatId?: string
+  isNonCommercial?: boolean
   branchId: number
 }
 

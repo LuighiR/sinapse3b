@@ -122,6 +122,68 @@ describe('PrismaCallKpiRepository', () => {
     ])
   })
 
+  it('excludes call facts resolved to non-commercial employees from all call KPIs', async () => {
+    const prisma = {
+      callFact: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 1,
+            startedAt: utcDate(2026, 0, 5, 8, 10),
+            isInboundToCompany: true,
+            isReceived: true,
+            isLost: false,
+            agentResolutionType: 'EXTENSION_UUID',
+            agentResolutionKey: 'ext-1',
+            agentExtensionNumber: '104',
+            extensionUuid: 'ext-1',
+          },
+          {
+            id: 2,
+            startedAt: utcDate(2026, 0, 5, 8, 20),
+            isInboundToCompany: true,
+            isReceived: true,
+            isLost: false,
+            agentResolutionType: 'EXTENSION_UUID',
+            agentResolutionKey: 'ext-2',
+            agentExtensionNumber: '105',
+            extensionUuid: 'ext-2',
+          },
+        ]),
+      },
+      employee: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            name: 'Maria',
+            extensionUuid: 'ext-1',
+            extensionNumber: '104',
+            isNonCommercial: false,
+          },
+          {
+            name: 'Backoffice',
+            extensionUuid: 'ext-2',
+            extensionNumber: '105',
+            isNonCommercial: true,
+          },
+        ]),
+      },
+    }
+
+    const repository = new PrismaCallKpiRepository(prisma as any)
+
+    await expect(
+      repository.listCallFacts({
+        clientId: 'client-1',
+        from: utcDate(2026, 0, 5),
+        to: utcDate(2026, 0, 5),
+      }),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        id: 1,
+        employeeName: 'Maria',
+      }),
+    ])
+  })
+
   it('filters call facts by the selected branch using employee-derived identity and excludes ambiguous matches', async () => {
     const prisma = {
       callFact: {
@@ -218,6 +280,56 @@ describe('PrismaCallKpiRepository', () => {
         employeeName: 'Ana',
       }),
     ])
+  })
+
+  it('does not use non-commercial employees to scope branch call facts', async () => {
+    const prisma = {
+      callFact: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      employee: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 1,
+            name: 'Maria',
+            extensionUuid: 'ext-1',
+            extensionNumber: '104',
+            isNonCommercial: false,
+          },
+        ]),
+      },
+    }
+
+    const repository = new PrismaCallKpiRepository(prisma as any)
+
+    await expect(
+      repository.listCallFacts({
+        clientId: 'client-1',
+        from: utcDate(2026, 0, 5),
+        to: utcDate(2026, 0, 5),
+        branchId: 10,
+      }),
+    ).resolves.toEqual([])
+
+    expect(prisma.employee.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          branchId: 10,
+          isNonCommercial: false,
+        },
+      }),
+    )
+    expect(prisma.callFact.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          OR: [
+            { extensionUuid: { in: ['ext-1'] } },
+            { agentExtensionNumber: { in: ['104'] } },
+            { agentResolutionKey: { in: ['104'] } },
+          ],
+        }),
+      }),
+    )
   })
 
   it('drops branch call facts when the primary extension number is ambiguous even if the secondary key is unique', async () => {

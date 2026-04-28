@@ -49,4 +49,12 @@ describe('prisma schema', () => {
     expect(schema).toContain('@@map("refresh_jobs")')
     expect(schema).toContain('@@schema("core")')
   })
+
+  it('maps the employee non-commercial flag to core employees', () => {
+    const schema = readFileSync(join(__dirname, 'schema.prisma'), 'utf-8')
+
+    expect(schema).toContain('model Employee')
+    expect(schema).toContain('isNonCommercial Boolean  @default(false) @map("is_non_commercial")')
+    expect(schema).toContain('@@map("employees")')
+  })
 })

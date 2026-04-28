@@ -218,6 +218,22 @@ describe('Call KPI endpoints', () => {
     })
   })
 
+  it('passes registeredEmployeesOnly through the call agent ranking endpoint', async () => {
+    await request(app.getHttpServer())
+      .get('/kpis/calls/agents/ranking')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Tenant-Id', 'tenant-1')
+      .query({ from: '2026-01-01', to: '2026-01-31', registeredEmployeesOnly: 'true' })
+      .expect(200)
+
+    expect(queryService.getAgentRanking).toHaveBeenCalledWith({
+      clientId: 'client-1',
+      from: '2026-01-01',
+      to: '2026-01-31',
+      registeredEmployeesOnly: true,
+    })
+  })
+
   it('returns the hourly comparison for the active tenant client', async () => {
     await request(app.getHttpServer())
       .get('/kpis/calls/hourly/comparison')
