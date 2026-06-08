@@ -433,6 +433,12 @@ Tabela facts:
 
 - `core.call_facts`
 
+Importacao e ownership:
+
+- `raw.ferraco_calls.domain_uuid` casa com `core.branches.telephony_domain_uuid`
+- `core.branches.client_id` define o cliente/tenant backend da chamada
+- `core.sinapse_clients` continua representando o cliente backend, nao cada filial
+
 Regras principais de normalizacao:
 
 - so entra como chamada inbound para a empresa quando `direction = inbound`
@@ -444,6 +450,8 @@ Regras principais de normalizacao:
 
 Campos importantes em `core.call_facts`:
 
+- `domain_uuid`: dominio original vindo de `raw.ferraco_calls`
+- `branch_id`: filial dona do dominio de telefonia, resolvida na normalizacao
 - `started_at`
 - `ended_at`
 - `duration_seconds`
@@ -550,8 +558,28 @@ Detalhe importante:
 
 Filtro por filial:
 
-- depende da resolucao do ramal para funcionarios da filial
-- quando o mapeamento do ramal na filial for ambiguo, o registro pode ser descartado do resultado filtrado
+- e fact-native: usa `core.call_facts.branch_id`
+- o lookup de `core.employees` por `extension_uuid` ou ramal fica apenas para nomes, agent labels e exclusoes de funcionarios nao comerciais
+
+### Backfill e rollout de `calls`
+
+Antes de rodar refresh de chamadas em producao:
+
+- popular `core.branches.telephony_domain_uuid` para todas as filiais
+- reprocessar intervalos historicos afetados depois do deploy
+- backfillar `core.call_facts.branch_id` antes de confiar em dashboards historicos filtrados por filial
+
+SQL de backfill:
+
+```sql
+UPDATE core.call_facts AS fact
+SET branch_id = branch.id,
+    updated_at = NOW()
+FROM core.branches AS branch
+WHERE fact.domain_uuid = branch.telephony_domain_uuid
+  AND fact.client_id = branch.client_id
+  AND fact.branch_id IS DISTINCT FROM branch.id;
+```
 
 ## Familia `whatsapp`
 
@@ -678,7 +706,7 @@ Detalhes:
 | --- | --- | --- | --- | --- |
 | `budgets` | `raw.ferraco_budgets` | `core.budget_facts` | Sim | Summary e daily sao materializados; follow-up e canais sao on demand |
 | `sales` | `raw.ferraco_sales` | `core.sale_facts` | Sim | Summary e daily sao materializados; ticket medio e canais sao on demand |
-| `calls` | `raw.ferraco_calls` | `core.call_facts` | Sim | Usa tambem `core.budget_facts` para comparativo e telemarketing open budgets |
+| `calls` | `raw.ferraco_calls` | `core.call_facts` | Sim | Importa por `branches.telephony_domain_uuid` e filtra filial por `call_facts.branch_id` |
 | `whatsapp` | Nao usa `raw.*` neste modulo | Nao ha facts dedicados | Nao | Tudo e lido direto das tabelas canonicas `core.*` |
 
 ## Pontos de atencao encontrados no codigo
@@ -687,5 +715,6 @@ Detalhes:
 2. `sales/ticket-average` hoje usa o conjunto filtrado de `sale_facts`; se o usuario nao mandar `status`, o calculo inclui vendas ativas e canceladas.
 3. Os KPIs de `whatsapp` sao live query. Nao ha hoje refresh, `availability`, `snapshots` ou `breakdowns` especificos dessa familia.
 4. Em `calls`, o KPI `telemarketingOpenBudgets` e o comparativo horario dependem de `core.budget_facts`, nao de alguma tabela de calls.
-5. Em `budgets/follow-up`, horarios ausentes de fechamento ou cancelamento caem para o fim do dia, o que pode alterar a classificacao entre `within24h` e `after24h`.
+5. Em `calls`, o filtro por filial usa `core.call_facts.branch_id`; resolucao por ramal/funcionario fica para rotulos de agente.
+6. Em `budgets/follow-up`, horarios ausentes de fechamento ou cancelamento caem para o fim do dia, o que pode alterar a classificacao entre `within24h` e `after24h`.
 

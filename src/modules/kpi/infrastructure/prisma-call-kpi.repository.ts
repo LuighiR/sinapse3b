@@ -651,7 +651,6 @@ export class PrismaCallKpiRepository
     const employees = (await prisma.employee.findMany({
       where: {
         branchId,
-        isNonCommercial: false,
       },
       orderBy: [{ id: 'asc' }],
       select: {
@@ -664,30 +663,12 @@ export class PrismaCallKpiRepository
     })) as EmployeeLookupRow[]
 
     const uniqueLookup = this.buildUniqueBranchEmployeeLookup(employees)
-    const uniqueExtensionUuids = [...uniqueLookup.byExtensionUuid.entries()]
-      .filter(([, value]) => value !== null)
-      .map(([key]) => key)
-    const uniqueExtensionNumbers = [...uniqueLookup.byExtensionNumber.entries()]
-      .filter(([, value]) => value !== null)
-      .map(([key]) => key)
-
-    if (uniqueExtensionUuids.length === 0 && uniqueExtensionNumbers.length === 0) {
-      return []
-    }
 
     const candidates = (await prisma.callFact.findMany({
       where: {
         clientId,
+        branchId,
         startedAt: this.toTimestampWhere(from, to),
-        OR: [
-          ...(uniqueExtensionUuids.length > 0 ? [{ extensionUuid: { in: uniqueExtensionUuids } }] : []),
-          ...(uniqueExtensionNumbers.length > 0
-            ? [
-                { agentExtensionNumber: { in: uniqueExtensionNumbers } },
-                { agentResolutionKey: { in: uniqueExtensionNumbers } },
-              ]
-            : []),
-        ],
       },
       orderBy: [{ startedAt: 'asc' }, { id: 'asc' }],
       select: {
@@ -703,14 +684,22 @@ export class PrismaCallKpiRepository
       },
     })) as CallFactRecord[]
 
-    return candidates.flatMap((fact) => {
+    return candidates.flatMap((fact): CallFactRecord[] => {
+      const baseFact: CallFactRecord = {
+        ...fact,
+        employeeName: null,
+      }
       const employeeNameByUuid = this.resolveEmployeeByExtensionUuid(uniqueLookup.byExtensionUuid, fact.extensionUuid)
 
       if (employeeNameByUuid === null) {
-        return []
+        return [baseFact]
       }
 
       if (employeeNameByUuid !== undefined) {
+        if (employeeNameByUuid.isNonCommercial) {
+          return []
+        }
+
         return [
           {
             ...fact,
@@ -727,7 +716,15 @@ export class PrismaCallKpiRepository
           primaryExtensionNumber,
         )
 
+        if (employeeNameByPrimary === null) {
+          return [baseFact]
+        }
+
         if (employeeNameByPrimary === undefined) {
+          return [baseFact]
+        }
+
+        if (employeeNameByPrimary.isNonCommercial) {
           return []
         }
 
@@ -747,7 +744,15 @@ export class PrismaCallKpiRepository
           secondaryExtensionNumber,
         )
 
+        if (employeeNameBySecondary === null) {
+          return [baseFact]
+        }
+
         if (employeeNameBySecondary !== undefined) {
+          if (employeeNameBySecondary.isNonCommercial) {
+            return []
+          }
+
           return [
             {
               ...fact,
@@ -757,7 +762,7 @@ export class PrismaCallKpiRepository
         }
       }
 
-      return []
+      return [baseFact]
     })
   }
 
@@ -803,7 +808,7 @@ export class PrismaCallKpiRepository
   private resolveEmployeeByExtensionNumber(
     map: Map<string, BranchEmployeeLookupMatch | null>,
     extensionNumber: string | null,
-  ): BranchEmployeeLookupMatch | undefined {
+  ): BranchEmployeeLookupMatch | null | undefined {
     if (!this.hasText(extensionNumber)) {
       return undefined
     }
@@ -813,7 +818,7 @@ export class PrismaCallKpiRepository
     }
 
     const value = map.get(extensionNumber)
-    return value === null ? undefined : value
+    return value
   }
 
   private storeUniqueBranchEmployeeMatch(

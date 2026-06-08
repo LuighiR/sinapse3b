@@ -502,6 +502,12 @@ Response `200`:
 ]
 ```
 
+Notas para o frontend:
+
+- usar `id` como `branchId` nas rotas de KPI
+- nao usar `domainUuid` do client para filtrar chamadas
+- o Domain ID da telefonia fica no backend em `core.branches.telephony_domain_uuid` e nao precisa ser enviado pelo frontend
+
 ### `GET /companies/current/employees`
 
 Descricao:
@@ -1440,17 +1446,29 @@ Calls aceitam:
 
 - `from` required
 - `to` required
+- `branchId` optional
 - `extensionUuid` optional
 - `extensionNumber` optional
 
-As ligacoes sao calculadas a partir de `raw.ferraco_calls`, considerando somente chamadas `inbound` para ramais numericos curtos.
+As ligacoes sao calculadas a partir de `raw.ferraco_calls`, considerando somente chamadas `inbound` para ramais numericos curtos. A importacao casa `raw.ferraco_calls.domain_uuid` com `core.branches.telephony_domain_uuid`; `core.sinapse_clients` continua sendo o cliente/tenant backend, nao a filial.
+Quando `branchId` e informado, a API filtra diretamente por `core.call_facts.branch_id`, salvo durante a normalizacao.
 Quando `extensionUuid` e informado, a API filtra diretamente por `call_facts.extension_uuid`.
 Quando `extensionNumber` e informado, a API tambem inclui chamadas perdidas sem `extension_uuid`, desde que o ramal resolvido em `agent_extension_number` / `agent_resolution_key` bata com o valor enviado.
+Lookup de employee/ramal em calls fica para nomes, agent labels e exclusoes de funcionarios nao comerciais; nao decide ownership da filial.
+
+Contrato para o frontend:
+
+- listar filiais em `GET /companies/current/branches`
+- enviar `branchId=<branch.id>` quando o usuario selecionar uma filial
+- nao enviar `domainUuid` em filtros de calls; ele e um detalhe interno de importacao
+- sem `branchId`, as rotas de calls retornam o consolidado de todas as filiais do tenant ativo
 
 ### `POST /kpis/calls/refresh`
 
 Descricao:
 normaliza ligacoes e recalcula a materializacao do periodo.
+
+O refresh continua resolvido pelo `clientId` do tenant ativo. Para calls, ele importa todos os dominios de telefonia configurados nas filiais desse cliente via `core.branches.telephony_domain_uuid`.
 
 Headers:
 
@@ -1477,6 +1495,24 @@ Response `200`:
   "breakdownsCreated": 153,
   "availabilityEnabled": true
 }
+```
+
+Notas operacionais:
+
+- antes de rodar refresh de chamadas em producao, popular `core.branches.telephony_domain_uuid` para todas as filiais
+- reprocessar intervalos historicos afetados depois de preencher/corrigir dominios de telefonia
+- backfillar `core.call_facts.branch_id` antes de confiar em dashboards historicos filtrados por filial
+
+SQL de backfill:
+
+```sql
+UPDATE core.call_facts AS fact
+SET branch_id = branch.id,
+    updated_at = NOW()
+FROM core.branches AS branch
+WHERE fact.domain_uuid = branch.telephony_domain_uuid
+  AND fact.client_id = branch.client_id
+  AND fact.branch_id IS DISTINCT FROM branch.id;
 ```
 
 ### `GET /kpis/calls/summary`
@@ -2125,7 +2161,7 @@ curl -X POST "http://localhost:3000/kpis/sales/refresh?from=2026-03-01&to=2026-0
 ### Calls Summary
 
 ```bash
-curl -X GET "http://localhost:3000/kpis/calls/summary?from=2026-01-01&to=2026-01-31&extensionUuid=ext-101&extensionNumber=101" ^
+curl -X GET "http://localhost:3000/kpis/calls/summary?from=2026-01-01&to=2026-01-31&branchId=1&extensionUuid=ext-101&extensionNumber=101" ^
   -H "Authorization: Bearer <jwt>" ^
   -H "X-Tenant-Id: tenant-ferracosul-kpi-dev"
 ```

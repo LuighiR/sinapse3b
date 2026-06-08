@@ -7,6 +7,7 @@ export const CALL_FACT_UPSERT_REPOSITORY = 'CALL_FACT_UPSERT_REPOSITORY'
 export type RawFerracoCallRecord = {
   id: number | string
   clientId: string
+  branchId: number | string
   domainUuid: string | null
   xmlCdrUuid: string | null
   extensionUuid: string | null
@@ -25,6 +26,7 @@ export type RawFerracoCallRecord = {
 
 export type CallFactWritePayload = {
   clientId: string
+  branchId: number
   sourceTable: string
   sourceRecordId: number
   domainUuid: string | null
@@ -90,8 +92,10 @@ export class PrismaRawFerracoCallReader implements RawFerracoCallReader {
     const rows = await this.prisma.$queryRaw<Array<{ count: string | number | bigint }>>`
       SELECT count(*)::text AS count
       FROM raw.ferraco_calls AS call
+      INNER JOIN core.branches AS branch
+        ON branch.telephony_domain_uuid = call.domain_uuid
       INNER JOIN core.sinapse_clients AS client
-        ON client.domain_uuid = call.domain_uuid
+        ON client.id = branch.client_id
       WHERE client.id = ${clientId}
     `
 
@@ -103,6 +107,7 @@ export class PrismaRawFerracoCallReader implements RawFerracoCallReader {
       SELECT
         call.id,
         client.id AS "clientId",
+        branch.id AS "branchId",
         call.domain_uuid AS "domainUuid",
         call.xml_cdr_uuid AS "xmlCdrUuid",
         call.extension_uuid AS "extensionUuid",
@@ -118,8 +123,10 @@ export class PrismaRawFerracoCallReader implements RawFerracoCallReader {
         call.sip_hangup_disposition AS "sipHangupDisposition",
         row_to_json(call) AS payload
       FROM raw.ferraco_calls AS call
+      INNER JOIN core.branches AS branch
+        ON branch.telephony_domain_uuid = call.domain_uuid
       INNER JOIN core.sinapse_clients AS client
-        ON client.domain_uuid = call.domain_uuid
+        ON client.id = branch.client_id
       WHERE client.id = ${clientId}
       ORDER BY call.id ASC
     `
@@ -141,6 +148,7 @@ export class PrismaCallFactUpsertRepository implements CallFactUpsertRepository 
       `
       INSERT INTO core.call_facts (
         client_id,
+        branch_id,
         source_table,
         source_record_id,
         domain_uuid,
@@ -166,6 +174,7 @@ export class PrismaCallFactUpsertRepository implements CallFactUpsertRepository 
       )
       SELECT
         client.id,
+        branch.id,
         'raw.ferraco_calls',
         call.id,
         call.domain_uuid,
@@ -229,11 +238,14 @@ export class PrismaCallFactUpsertRepository implements CallFactUpsertRepository 
         END,
         row_to_json(call)
       FROM raw.ferraco_calls AS call
+      INNER JOIN core.branches AS branch
+        ON branch.telephony_domain_uuid = call.domain_uuid
       INNER JOIN core.sinapse_clients AS client
-        ON client.domain_uuid = call.domain_uuid
+        ON client.id = branch.client_id
       WHERE client.id = $1
       ON CONFLICT (client_id, source_table, source_record_id)
       DO UPDATE SET
+        branch_id = EXCLUDED.branch_id,
         domain_uuid = EXCLUDED.domain_uuid,
         xml_cdr_uuid = EXCLUDED.xml_cdr_uuid,
         direction = EXCLUDED.direction,
@@ -338,6 +350,7 @@ export class CallNormalizationService {
 
     return {
       clientId,
+      branchId: this.parseNumber(call.branchId, 'branchId'),
       sourceTable: this.sourceTable,
       sourceRecordId: this.parseNumber(call.id, 'id'),
       domainUuid: this.normalizeOptionalText(call.domainUuid),

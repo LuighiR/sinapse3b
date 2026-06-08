@@ -88,15 +88,17 @@ model SinapseClient {
 }
 
 model Branch {
-  id       Int           @id @default(autoincrement())
-  name     String
-  address  String
-  phone    String
-  cnpj     String
-  clientId String        @map("client_id")
-  erpId    BigInt        @map("erp_id")
-  client   SinapseClient @relation(fields: [clientId], references: [id])
+  id                  Int           @id @default(autoincrement())
+  name                String
+  address             String
+  phone               String
+  cnpj                String
+  clientId            String        @map("client_id")
+  erpId               BigInt        @map("erp_id")
+  telephonyDomainUuid String?       @map("telephony_domain_uuid")
+  client              SinapseClient @relation(fields: [clientId], references: [id])
   budgetFacts BudgetFact[]
+  callFacts   CallFact[]
   saleFacts SaleFact[]
   employees Employee[]
 
@@ -281,6 +283,7 @@ model RefreshJob {
 model CallFact {
   id                 BigInt        @id @default(autoincrement())
   clientId           String        @map("client_id")
+  branchId           Int?          @map("branch_id")
   sourceTable        String        @map("source_table")
   sourceRecordId     Int           @map("source_record_id")
   domainUuid         String?       @map("domain_uuid")
@@ -305,10 +308,13 @@ model CallFact {
   payloadJson        Json          @default("{}") @map("payload_json")
   createdAt          DateTime      @default(now()) @map("created_at")
   updatedAt          DateTime      @default(now()) @map("updated_at")
+  branch             Branch?       @relation(fields: [branchId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   client             SinapseClient @relation(fields: [clientId], references: [id])
 
   @@unique([clientId, sourceTable, sourceRecordId], map: "call_facts_client_source_record_key")
   @@index([clientId, startedAt], map: "call_facts_client_started_at_idx")
+  @@index([clientId, branchId, startedAt], map: "call_facts_client_branch_started_at_idx")
+  @@index([clientId, branchId, isInboundToCompany, startedAt], map: "call_facts_client_branch_inbound_started_idx")
   @@index([clientId, isInboundToCompany, startedAt], map: "call_facts_client_inbound_started_idx")
   @@index([clientId, isReceived, startedAt], map: "call_facts_client_received_started_idx")
   @@index([clientId, isLost, startedAt], map: "call_facts_client_lost_started_idx")
