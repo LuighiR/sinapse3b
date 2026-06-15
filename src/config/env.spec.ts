@@ -26,6 +26,9 @@ describe('loadEnv', () => {
       AUTH_ACCESS_TOKEN_TTL_MINUTES: 60,
       AUTH_REFRESH_TOKEN_TTL_DAYS: 30,
       CORS_ALLOWED_ORIGINS: '',
+      FLW_CHAT_API_BASE_URL: 'https://api.wts.chat/chat',
+      FLW_CHAT_CORE_BASE_URL: 'https://api.wts.chat/core',
+      FLW_CHAT_API_TOKEN: '',
       NODE_ENV: 'development',
       PORT: 3000,
     })
@@ -93,6 +96,9 @@ describe('loadEnv', () => {
         AUTH_ACCESS_TOKEN_TTL_MINUTES: 45,
         AUTH_REFRESH_TOKEN_TTL_DAYS: 14,
         CORS_ALLOWED_ORIGINS: 'https://dashboard.example.com, https://app.example.com',
+        FLW_CHAT_API_BASE_URL: 'https://api.wts.chat/chat',
+        FLW_CHAT_CORE_BASE_URL: 'https://api.wts.chat/core',
+        FLW_CHAT_API_TOKEN: '',
         NODE_ENV: 'development',
         PORT: 3000,
       })

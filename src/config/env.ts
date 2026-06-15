@@ -14,6 +14,9 @@ export const envSchema = z.object({
   AUTH_ACCESS_TOKEN_TTL_MINUTES: z.coerce.number().int().min(1).default(60),
   AUTH_REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).default(30),
   CORS_ALLOWED_ORIGINS: z.string().default('').transform((value) => value.trim()),
+  FLW_CHAT_API_BASE_URL: z.string().default('https://api.wts.chat/chat').transform((v) => v.trim()),
+  FLW_CHAT_CORE_BASE_URL: z.string().default('https://api.wts.chat/core').transform((v) => v.trim()),
+  FLW_CHAT_API_TOKEN: z.string().default('').transform((v) => v.trim()),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
 })
