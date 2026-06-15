@@ -96,11 +96,13 @@ model Branch {
   clientId            String        @map("client_id")
   erpId               BigInt        @map("erp_id")
   telephonyDomainUuid String?       @map("telephony_domain_uuid")
+  flwDepartmentId     String?       @unique(map: "branches_flw_department_id_key") @map("flw_department_id") @db.Uuid
   client              SinapseClient @relation(fields: [clientId], references: [id])
   budgetFacts BudgetFact[]
   callFacts   CallFact[]
   saleFacts SaleFact[]
   employees Employee[]
+  messagingSessions MessagingSession[]
 
   @@map("branches")
   @@schema("core")
@@ -563,6 +565,32 @@ enum MessageSenderType {
   @@schema("core")
 }
 
+enum MessagingProvider {
+  FLW
+  DKW
+
+  @@map("messaging_provider")
+  @@schema("core")
+}
+
+enum MessagingDirection {
+  INBOUND
+  OUTBOUND
+
+  @@map("messaging_direction")
+  @@schema("core")
+}
+
+enum MessagingSenderType {
+  HUMAN
+  SYSTEM
+  AI
+  BOT
+
+  @@map("messaging_sender_type")
+  @@schema("core")
+}
+
 model FlwSessionRaw {
   id          String   @id @db.Uuid
   clientId    String   @map("client_id")
@@ -598,5 +626,56 @@ model MessagingSyncState {
   updatedAt         DateTime  @default(now()) @updatedAt @map("updated_at")
 
   @@map("messaging_sync_states")
+  @@schema("core")
+}
+
+model MessagingSession {
+  id                  String             @id
+  clientId            String             @map("client_id")
+  branchId            Int?               @map("branch_id")
+  provider            MessagingProvider
+  externalSessionId   String             @map("external_session_id")
+  contactExternalId   String?            @map("contact_external_id")
+  assignedAgentEmail  String?            @map("assigned_agent_email")
+  assignedAgentUserId String?            @map("assigned_agent_user_id")
+  status              String?
+  startedAt           DateTime           @map("started_at")
+  endedAt             DateTime?          @map("ended_at")
+  rawJson             Json?              @map("raw_json")
+  createdAt           DateTime           @default(now()) @map("created_at")
+  updatedAt           DateTime           @default(now()) @updatedAt @map("updated_at")
+  branch              Branch?            @relation(fields: [branchId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  messages            MessagingMessage[]
+
+  @@unique([clientId, provider, externalSessionId], map: "messaging_sessions_client_provider_external_key")
+  @@index([clientId, startedAt], map: "messaging_sessions_client_started_at_idx")
+  @@index([clientId, branchId, startedAt], map: "messaging_sessions_client_branch_started_at_idx")
+  @@map("messaging_sessions")
+  @@schema("core")
+}
+
+model MessagingMessage {
+  id                String              @id
+  clientId          String              @map("client_id")
+  sessionId         String              @map("session_id")
+  provider          MessagingProvider
+  externalMessageId String              @map("external_message_id")
+  direction         MessagingDirection
+  senderType        MessagingSenderType @map("sender_type")
+  messageType       String              @map("message_type")
+  bodyText          String              @default("") @map("body_text")
+  mediaUrl          String?             @map("media_url")
+  mediaType         String?             @map("media_type")
+  createdAtExternal DateTime            @map("created_at_external")
+  updatedAtExternal DateTime            @map("updated_at_external")
+  rawJson           Json?               @map("raw_json")
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @default(now()) @updatedAt @map("updated_at")
+  session           MessagingSession    @relation(fields: [sessionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([clientId, provider, externalMessageId], map: "messaging_messages_client_provider_external_key")
+  @@index([sessionId, createdAtExternal], map: "messaging_messages_session_created_at_external_idx")
+  @@index([clientId, createdAtExternal], map: "messaging_messages_client_created_at_external_idx")
+  @@map("messaging_messages")
   @@schema("core")
 }

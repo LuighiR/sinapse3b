@@ -66,4 +66,13 @@ describe('prisma schema', () => {
     expect(schema).toContain('model MessagingSyncState')
     expect(schema).toContain('@@schema("raw")')
   })
+
+  it('maps canonical messaging tables and branch FLW department id', () => {
+    const schema = readFileSync(join(__dirname, 'schema.prisma'), 'utf-8')
+
+    expect(schema).toContain('model MessagingSession')
+    expect(schema).toContain('model MessagingMessage')
+    expect(schema).toContain('flwDepartmentId')
+    expect(schema).toContain('enum MessagingProvider')
+  })
 })
