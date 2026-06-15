@@ -17,6 +17,7 @@ export const envSchema = z.object({
   FLW_CHAT_API_BASE_URL: z.string().default('https://api.wts.chat/chat').transform((v) => v.trim()),
   FLW_CHAT_CORE_BASE_URL: z.string().default('https://api.wts.chat/core').transform((v) => v.trim()),
   FLW_CHAT_API_TOKEN: z.string().default('').transform((v) => v.trim()),
+  FLW_WEBHOOK_SECRET: z.string().default('').transform((v) => v.trim()),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
 })
