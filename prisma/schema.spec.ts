@@ -57,4 +57,13 @@ describe('prisma schema', () => {
     expect(schema).toContain('isNonCommercial Boolean  @default(false) @map("is_non_commercial")')
     expect(schema).toContain('@@map("employees")')
   })
+
+  it('maps raw FLW messaging tables and sync state', () => {
+    const schema = readFileSync(join(__dirname, 'schema.prisma'), 'utf-8')
+
+    expect(schema).toContain('model FlwSessionRaw')
+    expect(schema).toContain('model FlwMessageRaw')
+    expect(schema).toContain('model MessagingSyncState')
+    expect(schema).toContain('@@schema("raw")')
+  })
 })
