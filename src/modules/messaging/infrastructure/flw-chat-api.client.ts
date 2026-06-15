@@ -15,6 +15,7 @@ export interface FlwSession {
   endAt: string | null
   contactId: string | null
   userId: string | null
+  departmentId?: string | null
   agentDetails?: FlwAgentDetails | null
   status: string
 }
@@ -35,6 +36,7 @@ export interface FlwMessage {
   text: string | null
   userId: string | null
   createdAt: string
+  updatedAt?: string
   details?: FlwMessageDetails | null
 }
 
