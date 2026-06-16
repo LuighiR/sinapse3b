@@ -14,6 +14,7 @@ import {
   WhatsAppKpiTagHourlySourceRow,
   WhatsAppKpiTagSourceRow,
 } from '../application/whatsapp-kpi-query.service'
+import { getWhatsAppKpiSource } from './whatsapp-kpi-source'
 
 type SummarySqlRow = {
   total_conversations_count: string | number | bigint
@@ -70,6 +71,28 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
     chatId?: string
     branchId?: number
   }): Promise<WhatsAppKpiSummaryCountsRow> {
+    const source = getWhatsAppKpiSource()
+
+    if (source === 'canonical') {
+      return this.getSummaryCountsCanonical(input)
+    }
+
+    const legacy = await this.getSummaryCountsLegacy(input)
+
+    if (source === 'dual') {
+      const canonical = await this.getSummaryCountsCanonical(input)
+      this.logDualMismatch('getSummaryCounts', legacy, canonical)
+    }
+
+    return legacy
+  }
+
+  private async getSummaryCountsLegacy(input: {
+    clientId: string
+    period: KpiPeriod
+    chatId?: string
+    branchId?: number
+  }): Promise<WhatsAppKpiSummaryCountsRow> {
     const [row] = await this.prisma.$queryRaw<SummarySqlRow[]>(Prisma.sql`
       select
         (
@@ -107,7 +130,70 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
     }
   }
 
+  private async getSummaryCountsCanonical(input: {
+    clientId: string
+    period: KpiPeriod
+    chatId?: string
+    branchId?: number
+  }): Promise<WhatsAppKpiSummaryCountsRow> {
+    const [row] = await this.prisma.$queryRaw<SummarySqlRow[]>(Prisma.sql`
+      select
+        (
+          select count(*)::bigint
+          from core.messaging_sessions ms
+          where ms.client_id = ${input.clientId}
+            and ms.started_at >= ${input.period.from}
+            and ms.started_at < ${this.toExclusivePeriodEnd(input.period)}
+            ${input.chatId === undefined
+              ? Prisma.empty
+              : Prisma.sql`and lower(btrim(ms.assigned_agent_email)) = ${input.chatId}`}
+            ${this.buildCanonicalBranchFilter(input)}
+        ) as total_conversations_count,
+        (
+          select count(*)::bigint
+          from core.messaging_messages mm
+          join core.messaging_sessions ms on ms.id = mm.session_id
+          where mm.client_id = ${input.clientId}
+            and mm.created_at_external >= ${input.period.from}
+            and mm.created_at_external < ${this.toExclusivePeriodEnd(input.period)}
+            and mm.direction = 'INBOUND'::core.messaging_direction
+            and mm.sender_type = 'HUMAN'::core.messaging_sender_type
+            ${input.chatId === undefined
+              ? Prisma.empty
+              : Prisma.sql`and lower(btrim(ms.assigned_agent_email)) = ${input.chatId}`}
+            ${this.buildCanonicalBranchFilter(input)}
+        ) as received_messages_count
+    `)
+
+    return {
+      totalConversationsCount: row?.total_conversations_count ?? 0,
+      receivedMessagesCount: row?.received_messages_count ?? 0,
+    }
+  }
+
   async getAgentRankingRows(input: {
+    clientId: string
+    period: KpiPeriod
+    chatId?: string
+    branchId?: number
+  }): Promise<WhatsAppKpiAgentRankingSourceRow[]> {
+    const source = getWhatsAppKpiSource()
+
+    if (source === 'canonical') {
+      return this.getAgentRankingRowsCanonical(input)
+    }
+
+    const legacy = await this.getAgentRankingRowsLegacy(input)
+
+    if (source === 'dual') {
+      const canonical = await this.getAgentRankingRowsCanonical(input)
+      this.logDualMismatch('getAgentRankingRows', legacy, canonical)
+    }
+
+    return legacy
+  }
+
+  private async getAgentRankingRowsLegacy(input: {
     clientId: string
     period: KpiPeriod
     chatId?: string
@@ -176,7 +262,97 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
     }))
   }
 
+  private async getAgentRankingRowsCanonical(input: {
+    clientId: string
+    period: KpiPeriod
+    chatId?: string
+    branchId?: number
+  }): Promise<WhatsAppKpiAgentRankingSourceRow[]> {
+    const rows = await this.prisma.$queryRaw<RankingSqlRow[]>(Prisma.sql`
+      with session_ranking as (
+        select
+          null::text as assigned_user_name,
+          nullif(btrim(ms.assigned_agent_email), '') as assigned_user_email,
+          count(*)::bigint as sessions_count
+        from core.messaging_sessions ms
+        where ms.client_id = ${input.clientId}
+          and ms.started_at >= ${input.period.from}
+          and ms.started_at < ${this.toExclusivePeriodEnd(input.period)}
+          ${input.chatId === undefined
+            ? Prisma.empty
+            : Prisma.sql`and lower(btrim(ms.assigned_agent_email)) = ${input.chatId}`}
+          ${this.buildCanonicalBranchFilter(input)}
+        group by 1, 2
+      ),
+      employee_lookup as (
+        select
+          lower(btrim(e.chat_id)) as employee_chat_key,
+          min(e.id)::bigint as employee_id,
+          case when count(*) = 1 then min(e.name) else null end as employee_name,
+          case when count(*) = 1 then min(e.chat_id) else null end as employee_chat_id,
+          count(*)::bigint as employee_count
+        from core.employees e
+        join core.branches b on b.id = e.branch_id
+        where b.client_id = ${input.clientId}
+          and e.chat_id is not null
+          and btrim(e.chat_id) <> ''
+          ${input.branchId === undefined ? Prisma.empty : Prisma.sql`and e.branch_id = ${input.branchId}`}
+        group by lower(btrim(e.chat_id))
+      )
+      select
+        case when employee_lookup.employee_count = 1 then employee_lookup.employee_id else null end as employee_id,
+        case when employee_lookup.employee_count = 1 then employee_lookup.employee_name else null end as employee_name,
+        case when employee_lookup.employee_count = 1 then employee_lookup.employee_chat_id else null end as employee_chat_id,
+        session_ranking.assigned_user_name,
+        session_ranking.assigned_user_email,
+        session_ranking.sessions_count
+      from session_ranking
+      left join employee_lookup
+        on session_ranking.assigned_user_email is not null
+       and employee_lookup.employee_chat_key = lower(session_ranking.assigned_user_email)
+      ${input.branchId === undefined ? Prisma.empty : Prisma.sql`where employee_lookup.employee_count = 1`}
+      order by
+        session_ranking.sessions_count desc,
+        coalesce(
+          case when employee_lookup.employee_count = 1 then employee_lookup.employee_name end,
+          session_ranking.assigned_user_email,
+          'Nao atribuido'
+        ) asc
+    `)
+
+    return rows.map((row) => ({
+      employeeId: row.employee_id,
+      employeeName: row.employee_name,
+      employeeChatId: row.employee_chat_id,
+      assignedUserName: row.assigned_user_name,
+      assignedUserEmail: row.assigned_user_email,
+      sessionsCount: row.sessions_count,
+    }))
+  }
+
   async getSessionsHourlyRows(input: {
+    clientId: string
+    period: KpiPeriod
+    chatId?: string
+    branchId?: number
+  }): Promise<WhatsAppKpiSessionsHourlySourceRow[]> {
+    const source = getWhatsAppKpiSource()
+
+    if (source === 'canonical') {
+      return this.getSessionsHourlyRowsCanonical(input)
+    }
+
+    const legacy = await this.getSessionsHourlyRowsLegacy(input)
+
+    if (source === 'dual') {
+      const canonical = await this.getSessionsHourlyRowsCanonical(input)
+      this.logDualMismatch('getSessionsHourlyRows', legacy, canonical)
+    }
+
+    return legacy
+  }
+
+  private async getSessionsHourlyRowsLegacy(input: {
     clientId: string
     period: KpiPeriod
     chatId?: string
@@ -205,7 +381,57 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
     }))
   }
 
+  private async getSessionsHourlyRowsCanonical(input: {
+    clientId: string
+    period: KpiPeriod
+    chatId?: string
+    branchId?: number
+  }): Promise<WhatsAppKpiSessionsHourlySourceRow[]> {
+    const rows = await this.prisma.$queryRaw<SessionsHourlySqlRow[]>(Prisma.sql`
+      select
+        lpad(extract(hour from ms.started_at)::int::text, 2, '0') as hour,
+        count(*)::bigint as sessions_count
+      from core.messaging_sessions ms
+      where ms.client_id = ${input.clientId}
+        and ms.started_at >= ${input.period.from}
+        and ms.started_at < ${this.toExclusivePeriodEnd(input.period)}
+        ${input.chatId === undefined
+          ? Prisma.empty
+          : Prisma.sql`and lower(btrim(ms.assigned_agent_email)) = ${input.chatId}`}
+        ${this.buildCanonicalBranchFilter(input)}
+      group by 1
+      order by 1 asc
+    `)
+
+    return rows.map((row) => ({
+      hour: row.hour,
+      sessionsCount: row.sessions_count,
+    }))
+  }
+
   async getMessagesHourlyRows(input: {
+    clientId: string
+    period: KpiPeriod
+    chatId?: string
+    branchId?: number
+  }): Promise<WhatsAppKpiMessagesHourlySourceRow[]> {
+    const source = getWhatsAppKpiSource()
+
+    if (source === 'canonical') {
+      return this.getMessagesHourlyRowsCanonical(input)
+    }
+
+    const legacy = await this.getMessagesHourlyRowsLegacy(input)
+
+    if (source === 'dual') {
+      const canonical = await this.getMessagesHourlyRowsCanonical(input)
+      this.logDualMismatch('getMessagesHourlyRows', legacy, canonical)
+    }
+
+    return legacy
+  }
+
+  private async getMessagesHourlyRowsLegacy(input: {
     clientId: string
     period: KpiPeriod
     chatId?: string
@@ -237,7 +463,60 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
     }))
   }
 
+  private async getMessagesHourlyRowsCanonical(input: {
+    clientId: string
+    period: KpiPeriod
+    chatId?: string
+    branchId?: number
+  }): Promise<WhatsAppKpiMessagesHourlySourceRow[]> {
+    const rows = await this.prisma.$queryRaw<MessagesHourlySqlRow[]>(Prisma.sql`
+      select
+        lpad(extract(hour from mm.created_at_external)::int::text, 2, '0') as hour,
+        count(*)::bigint as received_messages_count
+      from core.messaging_messages mm
+      join core.messaging_sessions ms on ms.id = mm.session_id
+      where mm.client_id = ${input.clientId}
+        and mm.created_at_external >= ${input.period.from}
+        and mm.created_at_external < ${this.toExclusivePeriodEnd(input.period)}
+        and mm.direction = 'INBOUND'::core.messaging_direction
+        and mm.sender_type = 'HUMAN'::core.messaging_sender_type
+        ${input.chatId === undefined
+          ? Prisma.empty
+          : Prisma.sql`and lower(btrim(ms.assigned_agent_email)) = ${input.chatId}`}
+        ${this.buildCanonicalBranchFilter(input)}
+      group by 1
+      order by 1 asc
+    `)
+
+    return rows.map((row) => ({
+      hour: row.hour,
+      receivedMessagesCount: row.received_messages_count,
+    }))
+  }
+
   async getSessionsDailyRows(input: {
+    clientId: string
+    period: KpiPeriod
+    chatId?: string
+    branchId?: number
+  }): Promise<WhatsAppKpiSessionsDailySourceRow[]> {
+    const source = getWhatsAppKpiSource()
+
+    if (source === 'canonical') {
+      return this.getSessionsDailyRowsCanonical(input)
+    }
+
+    const legacy = await this.getSessionsDailyRowsLegacy(input)
+
+    if (source === 'dual') {
+      const canonical = await this.getSessionsDailyRowsCanonical(input)
+      this.logDualMismatch('getSessionsDailyRows', legacy, canonical)
+    }
+
+    return legacy
+  }
+
+  private async getSessionsDailyRowsLegacy(input: {
     clientId: string
     period: KpiPeriod
     chatId?: string
@@ -269,7 +548,60 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
     }))
   }
 
+  private async getSessionsDailyRowsCanonical(input: {
+    clientId: string
+    period: KpiPeriod
+    chatId?: string
+    branchId?: number
+  }): Promise<WhatsAppKpiSessionsDailySourceRow[]> {
+    const rows = await this.prisma.$queryRaw<SessionsDailySqlRow[]>(Prisma.sql`
+      select
+        to_char(
+          (ms.started_at - make_interval(hours => ${KpiPeriod.saoPauloUtcOffsetHours}))::date,
+          'YYYY-MM-DD'
+        ) as date,
+        count(*)::bigint as sessions_count
+      from core.messaging_sessions ms
+      where ms.client_id = ${input.clientId}
+        and ms.started_at >= ${input.period.from}
+        and ms.started_at < ${this.toExclusivePeriodEnd(input.period)}
+        ${input.chatId === undefined
+          ? Prisma.empty
+          : Prisma.sql`and lower(btrim(ms.assigned_agent_email)) = ${input.chatId}`}
+        ${this.buildCanonicalBranchFilter(input)}
+      group by 1
+      order by 1 asc
+    `)
+
+    return rows.map((row) => ({
+      date: row.date,
+      sessionsCount: row.sessions_count,
+    }))
+  }
+
   async getMessagesDailyRows(input: {
+    clientId: string
+    period: KpiPeriod
+    chatId?: string
+    branchId?: number
+  }): Promise<WhatsAppKpiMessagesDailySourceRow[]> {
+    const source = getWhatsAppKpiSource()
+
+    if (source === 'canonical') {
+      return this.getMessagesDailyRowsCanonical(input)
+    }
+
+    const legacy = await this.getMessagesDailyRowsLegacy(input)
+
+    if (source === 'dual') {
+      const canonical = await this.getMessagesDailyRowsCanonical(input)
+      this.logDualMismatch('getMessagesDailyRows', legacy, canonical)
+    }
+
+    return legacy
+  }
+
+  private async getMessagesDailyRowsLegacy(input: {
     clientId: string
     period: KpiPeriod
     chatId?: string
@@ -294,6 +626,40 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
           ? Prisma.empty
           : Prisma.sql`and lower(btrim(s.assigned_user_email)) = ${input.chatId}`}
         ${this.buildBranchAssignedUserFilter(input, 's.assigned_user_email')}
+      group by 1
+      order by 1 asc
+    `)
+
+    return rows.map((row) => ({
+      date: row.date,
+      receivedMessagesCount: row.received_messages_count,
+    }))
+  }
+
+  private async getMessagesDailyRowsCanonical(input: {
+    clientId: string
+    period: KpiPeriod
+    chatId?: string
+    branchId?: number
+  }): Promise<WhatsAppKpiMessagesDailySourceRow[]> {
+    const rows = await this.prisma.$queryRaw<MessagesDailySqlRow[]>(Prisma.sql`
+      select
+        to_char(
+          (mm.created_at_external - make_interval(hours => ${KpiPeriod.saoPauloUtcOffsetHours}))::date,
+          'YYYY-MM-DD'
+        ) as date,
+        count(*)::bigint as received_messages_count
+      from core.messaging_messages mm
+      join core.messaging_sessions ms on ms.id = mm.session_id
+      where mm.client_id = ${input.clientId}
+        and mm.created_at_external >= ${input.period.from}
+        and mm.created_at_external < ${this.toExclusivePeriodEnd(input.period)}
+        and mm.direction = 'INBOUND'::core.messaging_direction
+        and mm.sender_type = 'HUMAN'::core.messaging_sender_type
+        ${input.chatId === undefined
+          ? Prisma.empty
+          : Prisma.sql`and lower(btrim(ms.assigned_agent_email)) = ${input.chatId}`}
+        ${this.buildCanonicalBranchFilter(input)}
       group by 1
       order by 1 asc
     `)
@@ -410,6 +776,22 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
       tagSessionsCount: row.tag_sessions_count,
       openBudgetsCount: row.open_budgets_count,
     }))
+  }
+
+  private buildCanonicalBranchFilter(input: { branchId?: number }): Prisma.Sql {
+    if (input.branchId === undefined) {
+      return Prisma.empty
+    }
+
+    return Prisma.sql`and ms.branch_id = ${input.branchId}`
+  }
+
+  private logDualMismatch(label: string, legacy: unknown, canonical: unknown): void {
+    if (JSON.stringify(legacy) === JSON.stringify(canonical)) {
+      return
+    }
+
+    console.warn(`[whatsapp-kpi-dual] ${label} mismatch`, { legacy, canonical })
   }
 
   private toExclusivePeriodEnd(period: KpiPeriod): Date {

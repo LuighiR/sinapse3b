@@ -1757,6 +1757,132 @@ Status HTTP:
 - `401` para `X-Job-Key` ausente ou invalido
 - `404` para `jobId` inexistente
 
+## Internal Messaging (FLW + DKW)
+
+Endpoints internos para importacao e validacao do modelo canônico de mensageria (`core.messaging_sessions`, `core.messaging_messages`).
+
+Headers em todas as rotas:
+
+- `X-Job-Key` required (mesmo valor de `INTERNAL_JOB_KEY`)
+
+### `POST /internal/messaging/sync`
+
+Sincroniza sessions/messages do FLW Chat para `raw.flw_*` e normaliza para o canônico.
+
+Query Params:
+
+- `clientId` required (slug do `sinapse_client`, ex.: `ferracosul`)
+
+Response `200`:
+
+```json
+{
+  "clientId": "ferracosul",
+  "sessionsFetched": 120,
+  "messagesFetched": 3400,
+  "sessionsWritten": 120,
+  "messagesWritten": 3400
+}
+```
+
+### `POST /internal/messaging/migrate-dkw`
+
+Copia conversas legadas DKW (`core.sessions`, `core.messages`) para o canônico com `provider='DKW'`. **Nao altera** as tabelas legadas.
+
+A migracao roda **mes a mes** entre `from` e `to`, processando mensagens em lotes dentro de cada janela mensal.
+
+Query Params:
+
+- `clientId` required
+- `from` required (`YYYY-MM-DD`) — inicio do historico a migrar
+- `to` required (`YYYY-MM-DD`) — fim do historico a migrar
+- `batchSize` optional (default `2000`, max `10000`) — tamanho do lote de mensagens dentro de cada mes
+
+Exemplo para migrar todo o historico DKW de uma vez:
+
+```http
+POST /internal/messaging/migrate-dkw?clientId=ferracosul&from=2020-01-01&to=2026-06-15
+```
+
+O servico divide automaticamente em janelas mensais (`2020-01-01..2020-01-31`, `2020-02-01..2020-02-29`, ...) e executa **em background**. Acompanhe o progresso no terminal com prefixo `[dkw-migrate]` ou consulte o status do job.
+
+Response `202`:
+
+```json
+{
+  "status": "accepted",
+  "message": "task initiated",
+  "jobId": "f8b3c2a1-4e5d-6789-abcd-ef0123456789"
+}
+```
+
+### `GET /internal/messaging/migrate-dkw/:jobId`
+
+Consulta o status de um job aceito anteriormente.
+
+Response `200` enquanto roda:
+
+```json
+{
+  "jobId": "f8b3c2a1-4e5d-6789-abcd-ef0123456789",
+  "clientId": "ferracosul",
+  "from": "2020-01-01",
+  "to": "2026-06-15",
+  "batchSize": 2000,
+  "status": "RUNNING",
+  "requestedAt": "2026-06-15T12:00:00.000Z",
+  "startedAt": "2026-06-15T12:00:01.000Z",
+  "finishedAt": null,
+  "errorMessage": null,
+  "result": null
+}
+```
+
+Quando concluir, `status` vira `COMPLETED` e `result` traz os totais agregados:
+
+```json
+{
+  "status": "COMPLETED",
+  "result": {
+    "windowsProcessed": 78,
+    "totals": {
+      "messagesExpected": 380000,
+      "messagesWritten": 380000,
+      "messagesSkippedMissingSession": 0
+    }
+  }
+}
+```
+
+Status possiveis: `PENDING`, `RUNNING`, `COMPLETED`, `FAILED`.
+
+Somente **um job por `clientId`** pode rodar por vez. Se ja houver migracao em andamento, a API responde `409 Conflict`.
+
+### `GET /internal/messaging/parity`
+
+Compara legado vs canônico DKW em um intervalo (sessions, mensagens inbound humanas e ranking por email).
+
+Query Params:
+
+- `clientId` required
+- `from` required (`YYYY-MM-DD`)
+- `to` required (`YYYY-MM-DD`)
+- `topAgents` optional (default `5`)
+
+### `POST /webhooks/flw/:clientId`
+
+Webhook publico do FLW Chat. O evento vem no body (`eventType` + `content`). Configure `FLW_WEBHOOK_SECRET` e, para debug, `FLW_WEBHOOK_DEBUG=true`.
+
+Rollout recomendado:
+
+1. aplicar migrations do messaging canônico
+2. popular `core.branches.flw_department_id`
+3. configurar `FLW_CHAT_API_TOKEN` e webhook
+4. rodar `POST /internal/messaging/sync`
+5. rodar `POST /internal/messaging/migrate-dkw`
+6. validar `GET /internal/messaging/parity`
+7. setar `WHATSAPP_KPI_SOURCE=canonical` (ou `dual` para diagnostico)
+
 ## WhatsApp KPI
 
 ### Filters
@@ -1770,11 +1896,15 @@ WhatsApp e mensageria aceitam:
 - `tagId` required apenas nas rotas por tag
 - `sellerId` optional apenas em `GET /kpis/whatsapp/tags/hourly/comparison`
 
-As metricas sao lidas diretamente das tabelas canonicas `core.sessions`, `core.messages`, `core.tickets`, `core.contacts`, `core.tags` e `core.contact_tags`.
+As metricas sao lidas das tabelas canonicas de mensageria. Por padrao (`WHATSAPP_KPI_SOURCE=legacy`), a origem continua sendo `core.sessions`, `core.messages`, `core.tickets`, `core.contacts`, `core.tags` e `core.contact_tags`.
 
-Quando `chatId` e informado nas rotas analiticas de WhatsApp, ele representa o email do atendente e o filtro e aplicado diretamente por `core.sessions.assigned_user_email`, com comparacao case-insensitive.
+Com `WHATSAPP_KPI_SOURCE=canonical`, summary/ranking/hourly/daily passam a ler `core.messaging_sessions` e `core.messaging_messages`. O modo `dual` executa ambas as queries e registra divergencias no log do servidor, mantendo a resposta da API no formato legado.
 
-Quando `branchId` e informado nas rotas analiticas de WhatsApp, o filtro e derivado de employee: `lower(btrim(core.employees.chat_id))` precisa casar com `lower(btrim(core.sessions.assigned_user_email))` dentro da filial selecionada. Registros sem match resolvivel ou com match ambiguo nao entram no resultado filtrado.
+KPIs por tag continuam no legado ate fase futura de contatos/tags no canônico.
+
+Quando `chatId` e informado nas rotas analiticas de WhatsApp, ele representa o email do atendente. No legado filtra `core.sessions.assigned_user_email`; no canônico filtra `core.messaging_sessions.assigned_agent_email` (case-insensitive).
+
+Quando `branchId` e informado no legado, o filtro e derivado de employee: `lower(btrim(core.employees.chat_id))` precisa casar com `lower(btrim(core.sessions.assigned_user_email))`. No canônico, filtra diretamente `core.messaging_sessions.branch_id` (mapeado via `branches.flw_department_id` para FLW).
 
 Quando `sellerId` e informado em `GET /kpis/whatsapp/tags/hourly/comparison`, ele filtra somente `openBudgetsCount` pelo mesmo identificador de budgets e sales: `core.employees.erp_id` / `core.budget_facts.seller_id`.
 

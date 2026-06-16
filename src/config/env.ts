@@ -18,6 +18,11 @@ export const envSchema = z.object({
   FLW_CHAT_CORE_BASE_URL: z.string().default('https://api.wts.chat/core').transform((v) => v.trim()),
   FLW_CHAT_API_TOKEN: z.string().default('').transform((v) => v.trim()),
   FLW_WEBHOOK_SECRET: z.string().default('').transform((v) => v.trim()),
+  FLW_WEBHOOK_DEBUG: z
+    .enum(['true', 'false', '1', '0', ''])
+    .default('false')
+    .transform((value) => value === 'true' || value === '1'),
+  WHATSAPP_KPI_SOURCE: z.enum(['legacy', 'canonical', 'dual']).default('legacy'),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
 })

@@ -55,7 +55,7 @@ export interface MessagingSessionWritePayload {
   status: string | null
   startedAt: Date
   endedAt: Date | null
-  rawJson: FlwSessionDto
+  rawJson: unknown
 }
 
 export interface MessagingMessageWritePayload {
@@ -72,5 +72,38 @@ export interface MessagingMessageWritePayload {
   mediaType: string | null
   createdAtExternal: Date
   updatedAtExternal: Date
-  rawJson: FlwMessageDto
+  rawJson: unknown
+}
+
+export interface DkwLegacyTicketSnapshot {
+  id: string
+  status: string | null
+  contactExternalId: number | null
+  contactNumber: string | null
+}
+
+export interface DkwLegacySessionSnapshot {
+  id: string
+  ticketId: string
+  externalTrackingId: number | null
+  startedAt: Date
+  endedAt: Date | null
+  assignedUserName: string | null
+  assignedUserEmail: string | null
+  ticket?: DkwLegacyTicketSnapshot | null
+}
+
+export interface DkwLegacyMessageSnapshot {
+  id: string
+  ticketId: string
+  sessionId: string | null
+  externalMessageId: string
+  body: string
+  fromMe: boolean
+  mediaUrl: string | null
+  mediaType: string | null
+  createdAtExternal: Date
+  updatedAtExternal: Date
+  senderType: 'HUMAN' | 'SYSTEM' | 'AI'
+  rawJson: unknown
 }

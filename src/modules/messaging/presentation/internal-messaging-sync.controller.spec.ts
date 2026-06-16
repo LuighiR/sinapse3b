@@ -31,7 +31,18 @@ describe('InternalMessagingSyncController', () => {
         lastMessageSyncAt: '2026-06-01T10:01:00.000Z',
       }),
     }
-    const controller = new InternalMessagingSyncController(syncService as never)
+    const dkwMigrationJobService = {
+      start: jest.fn(),
+      getStatus: jest.fn(),
+    }
+    const parityCheckService = {
+      checkClient: jest.fn(),
+    }
+    const controller = new InternalMessagingSyncController(
+      syncService as never,
+      dkwMigrationJobService as never,
+      parityCheckService as never,
+    )
 
     const result = await controller.sync('test-internal-job-key', { clientId: 'ferracosul' })
 
@@ -39,8 +50,65 @@ describe('InternalMessagingSyncController', () => {
     expect(syncService.syncClient).toHaveBeenCalledWith('ferracosul')
   })
 
+  it('accepts DKW migration jobs in background when job key is valid', () => {
+    const dkwMigrationJobService = {
+      start: jest.fn().mockReturnValue({
+        status: 'accepted',
+        message: 'task initiated',
+        jobId: 'job-123',
+      }),
+      getStatus: jest.fn(),
+    }
+    const controller = new InternalMessagingSyncController(
+      { syncClient: jest.fn() } as never,
+      dkwMigrationJobService as never,
+      { checkClient: jest.fn() } as never,
+    )
+
+    const result = controller.migrateDkw('test-internal-job-key', {
+      clientId: 'ferracosul',
+      from: '2024-01-01',
+      to: '2026-01-31',
+    })
+
+    expect(result).toEqual({
+      status: 'accepted',
+      message: 'task initiated',
+      jobId: 'job-123',
+    })
+    expect(dkwMigrationJobService.start).toHaveBeenCalledWith({
+      clientId: 'ferracosul',
+      period: expect.anything(),
+      batchSize: 2000,
+    })
+  })
+
+  it('returns migration job status when job key is valid', () => {
+    const dkwMigrationJobService = {
+      start: jest.fn(),
+      getStatus: jest.fn().mockReturnValue({
+        jobId: 'job-123',
+        status: 'RUNNING',
+      }),
+    }
+    const controller = new InternalMessagingSyncController(
+      { syncClient: jest.fn() } as never,
+      dkwMigrationJobService as never,
+      { checkClient: jest.fn() } as never,
+    )
+
+    const result = controller.getMigrateDkwStatus('test-internal-job-key', 'job-123')
+
+    expect(result.status).toBe('RUNNING')
+    expect(dkwMigrationJobService.getStatus).toHaveBeenCalledWith('job-123')
+  })
+
   it('rejects missing job key', async () => {
-    const controller = new InternalMessagingSyncController({ syncClient: jest.fn() } as never)
+    const controller = new InternalMessagingSyncController(
+      { syncClient: jest.fn() } as never,
+      { start: jest.fn(), getStatus: jest.fn() } as never,
+      { checkClient: jest.fn() } as never,
+    )
 
     await expect(controller.sync(undefined, { clientId: 'ferracosul' })).rejects.toBeInstanceOf(
       UnauthorizedException,

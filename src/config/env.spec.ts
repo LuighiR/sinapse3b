@@ -30,6 +30,8 @@ describe('loadEnv', () => {
       FLW_CHAT_CORE_BASE_URL: 'https://api.wts.chat/core',
       FLW_CHAT_API_TOKEN: '',
       FLW_WEBHOOK_SECRET: '',
+      FLW_WEBHOOK_DEBUG: false,
+      WHATSAPP_KPI_SOURCE: 'legacy',
       NODE_ENV: 'development',
       PORT: 3000,
     })
@@ -85,6 +87,9 @@ describe('loadEnv', () => {
       delete process.env.PORT
       delete process.env.FLW_CHAT_API_TOKEN
       delete process.env.FLW_WEBHOOK_SECRET
+      delete process.env.FLW_WEBHOOK_DEBUG
+      delete process.env.FLW_CHAT_API_BASE_URL
+      delete process.env.FLW_CHAT_CORE_BASE_URL
       jest.resetModules()
       const { loadEnv: reloadedLoadEnv } = await import('./env')
 
@@ -103,6 +108,8 @@ describe('loadEnv', () => {
         FLW_CHAT_CORE_BASE_URL: 'https://api.wts.chat/core',
         FLW_CHAT_API_TOKEN: '',
         FLW_WEBHOOK_SECRET: '',
+        FLW_WEBHOOK_DEBUG: false,
+        WHATSAPP_KPI_SOURCE: 'legacy',
         NODE_ENV: 'development',
         PORT: 3000,
       })

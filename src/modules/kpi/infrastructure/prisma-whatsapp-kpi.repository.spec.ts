@@ -2,7 +2,25 @@ import { KpiPeriod } from '../domain/kpi-period'
 import { PrismaWhatsAppKpiRepository } from './prisma-whatsapp-kpi.repository'
 
 describe('PrismaWhatsAppKpiRepository', () => {
-  it('reads summary counts from canonical sessions and messages', async () => {
+  const originalEnv = process.env
+
+  beforeEach(() => {
+    process.env = {
+      ...originalEnv,
+      DATABASE_URL: 'postgresql://user:pass@localhost:5432/sinapse',
+      AUTH_JWT_SECRET: 'super-secret',
+      AUTH_JWT_ISSUER: 'sinapse3',
+      AUTH_JWT_AUDIENCE: 'sinapse3-web',
+      INTERNAL_JOB_KEY: 'test-internal-job-key',
+      WHATSAPP_KPI_SOURCE: 'legacy',
+    }
+  })
+
+  afterEach(() => {
+    process.env = originalEnv
+  })
+
+  it('reads summary counts from legacy sessions and messages by default', async () => {
     const prisma = {
       $queryRaw: jest.fn().mockResolvedValue([
         {
@@ -50,6 +68,37 @@ describe('PrismaWhatsAppKpiRepository', () => {
     expect(sqlText).toContain('assigned_user_email')
     expect(sqlText).toContain('join core.sessions s on s.id = m.session_id')
     expect(sqlText).toContain('join core.tickets t on t.id = m.ticket_id')
+  })
+
+  it('reads summary counts from canonical messaging tables when configured', async () => {
+    process.env.WHATSAPP_KPI_SOURCE = 'canonical'
+
+    const prisma = {
+      $queryRaw: jest.fn().mockResolvedValue([
+        {
+          total_conversations_count: 12n,
+          received_messages_count: 34n,
+        },
+      ]),
+    }
+
+    const repository = new PrismaWhatsAppKpiRepository(prisma as any)
+
+    await repository.getSummaryCounts({
+      clientId: 'client-1',
+      period: KpiPeriod.between({ from: '2026-03-01', to: '2026-03-31' }),
+      branchId: 5,
+      chatId: 'maria@empresa.com',
+    } as any)
+
+    const sql = prisma.$queryRaw.mock.calls[0]?.[0]
+    const sqlText = sql?.strings?.join(' ')
+
+    expect(sqlText).toContain('core.messaging_sessions ms')
+    expect(sqlText).toContain('core.messaging_messages mm')
+    expect(sqlText).toContain('assigned_agent_email')
+    expect(sqlText).toContain('ms.branch_id =')
+    expect(sqlText).not.toContain('core.sessions s')
   })
 
   it('adds the branch employee lookup to summary queries when branchId is provided', async () => {

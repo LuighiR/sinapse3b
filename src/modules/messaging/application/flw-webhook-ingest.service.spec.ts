@@ -1,7 +1,7 @@
 import { FlwWebhookIngestService } from './flw-webhook-ingest.service'
 
 describe('FlwWebhookIngestService', () => {
-  it('stores webhook session/message payloads and normalizes them', async () => {
+  it('stores FLW webhook envelope payloads and normalizes them', async () => {
     const rawRepository = {
       upsertSession: jest.fn().mockResolvedValue(undefined),
       upsertMessage: jest.fn().mockResolvedValue(undefined),
@@ -20,9 +20,10 @@ describe('FlwWebhookIngestService', () => {
 
     const result = await service.ingest({
       clientId: 'ferracosul',
-      event: 'MESSAGE_RECEIVED',
       payload: {
-        message: {
+        eventType: 'MESSAGE_RECEIVED',
+        date: '2026-06-01T10:01:00.000Z',
+        content: {
           id: 'message-1',
           sessionId: 'session-1',
           direction: 'TO_HUB',
@@ -33,7 +34,43 @@ describe('FlwWebhookIngestService', () => {
           createdAt: '2026-06-01T10:01:00.000Z',
           updatedAt: '2026-06-01T10:01:00.000Z',
         },
-        session: {
+      },
+    })
+
+    expect(result).toEqual({
+      accepted: true,
+      event: 'MESSAGE_RECEIVED',
+      normalizedSessions: 1,
+      normalizedMessages: 1,
+    })
+    expect(rawRepository.upsertMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ source: 'webhook' }),
+    )
+  })
+
+  it('stores session events from content', async () => {
+    const rawRepository = {
+      upsertSession: jest.fn().mockResolvedValue(undefined),
+      upsertMessage: jest.fn().mockResolvedValue(undefined),
+    }
+    const normalizationService = {
+      normalizeClient: jest.fn().mockResolvedValue({
+        sessionsWritten: 1,
+        messagesWritten: 0,
+      }),
+    }
+
+    const service = new FlwWebhookIngestService(
+      rawRepository as never,
+      normalizationService as never,
+    )
+
+    const result = await service.ingest({
+      clientId: 'ferracosul',
+      payload: {
+        eventType: 'SESSION_NEW',
+        date: '2026-06-01T10:00:00.000Z',
+        content: {
           id: 'session-1',
           startAt: '2026-06-01T10:00:00.000Z',
           endAt: null,
@@ -44,18 +81,9 @@ describe('FlwWebhookIngestService', () => {
       },
     })
 
-    expect(result).toEqual({
-      accepted: true,
-      event: 'MESSAGE_RECEIVED',
-      normalizedSessions: 1,
-      normalizedMessages: 1,
-    })
-    expect(rawRepository.upsertSession).toHaveBeenCalledWith(
-      expect.objectContaining({ source: 'webhook' }),
-    )
-    expect(rawRepository.upsertMessage).toHaveBeenCalledWith(
-      expect.objectContaining({ source: 'webhook' }),
-    )
+    expect(result.accepted).toBe(true)
+    expect(rawRepository.upsertSession).toHaveBeenCalled()
+    expect(rawRepository.upsertMessage).not.toHaveBeenCalled()
   })
 
   it('ignores unsupported webhook events', async () => {
@@ -66,8 +94,10 @@ describe('FlwWebhookIngestService', () => {
 
     const result = await service.ingest({
       clientId: 'ferracosul',
-      event: 'PANEL_CARD_NEW',
-      payload: {},
+      payload: {
+        eventType: 'PANEL_CARD_NEW',
+        content: {},
+      },
     })
 
     expect(result.accepted).toBe(false)
