@@ -50,6 +50,7 @@ export interface MessagingSessionWritePayload {
   provider: MessagingProviderValue
   externalSessionId: string
   contactExternalId: string | null
+  contactId?: string | null
   assignedAgentEmail: string | null
   assignedAgentUserId: string | null
   status: string | null

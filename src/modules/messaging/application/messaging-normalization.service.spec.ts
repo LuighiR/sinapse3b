@@ -30,15 +30,18 @@ describe('MessagingNormalizationService', () => {
         },
       ]),
     }
+    const contactService = {
+      upsertSessionWithContact: jest.fn().mockResolvedValue(undefined),
+    }
     const canonicalRepository = {
       loadBranchIdByDepartmentId: jest.fn().mockResolvedValue(new Map([['dept-1', 2]])),
-      upsertSession: jest.fn().mockResolvedValue(undefined),
       upsertMessage: jest.fn().mockResolvedValue(undefined),
     }
 
     const service = new MessagingNormalizationService(
       rawRepository as never,
       canonicalRepository as never,
+      contactService as never,
     )
 
     const result = await service.normalizeClient('ferracosul')
@@ -47,7 +50,7 @@ describe('MessagingNormalizationService', () => {
       sessionsWritten: 1,
       messagesWritten: 1,
     })
-    expect(canonicalRepository.upsertSession).toHaveBeenCalledWith(
+    expect(contactService.upsertSessionWithContact).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 'ferracosul:FLW:session-1',
         branchId: 2,
@@ -81,15 +84,18 @@ describe('MessagingNormalizationService', () => {
         },
       ]),
     }
+    const contactService = {
+      upsertSessionWithContact: jest.fn(),
+    }
     const canonicalRepository = {
       loadBranchIdByDepartmentId: jest.fn().mockResolvedValue(new Map()),
-      upsertSession: jest.fn(),
       upsertMessage: jest.fn(),
     }
 
     const service = new MessagingNormalizationService(
       rawRepository as never,
       canonicalRepository as never,
+      contactService as never,
     )
 
     const result = await service.normalizeClient('ferracosul')

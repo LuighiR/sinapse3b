@@ -16,6 +16,7 @@ import {
   PrismaDkwLegacyRepository,
 } from '../infrastructure/prisma-dkw-legacy.repository'
 import { PrismaMessagingCanonicalRepository } from '../infrastructure/prisma-messaging-canonical.repository'
+import { MessagingContactService } from './messaging-contact.service'
 
 export type DkwMessagingMigrationWindowResult = {
   from: string
@@ -52,6 +53,7 @@ export class DkwMessagingMigrationService {
   constructor(
     private readonly legacyRepository: PrismaDkwLegacyRepository,
     private readonly canonicalRepository: PrismaMessagingCanonicalRepository,
+    private readonly contactService: MessagingContactService,
   ) {}
 
   async migrateClient(input: {
@@ -266,7 +268,7 @@ export class DkwMessagingMigrationService {
   ): Promise<void> {
     const payload = mapDkwSessionToCanonical({ clientId, session })
 
-    await this.canonicalRepository.upsertSession(payload)
+    await this.contactService.upsertSessionWithContact(payload)
     sessionCanonicalIdByLegacySessionId.set(session.id, payload.id)
   }
 

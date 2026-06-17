@@ -2,7 +2,9 @@ import { BadRequestException, Controller, Get, Headers, HttpCode, Param, Post, Q
 import { loadEnv } from '../../../config/env'
 import { DkwMessagingMigrationJobService } from '../application/dkw-messaging-migration-job.service'
 import { FlwMessagingSyncService } from '../application/flw-messaging-sync.service'
+import { MessagingContactsBackfillJobService } from '../application/messaging-contacts-backfill-job.service'
 import { MessagingParityCheckService } from '../application/messaging-parity-check.service'
+import { parseMessagingBackfillContactsQuery } from './query/messaging-backfill-contacts.query'
 import { parseMessagingMigrateDkwQuery } from './query/messaging-migrate-dkw.query'
 import { parseMessagingParityQuery } from './query/messaging-parity.query'
 import { parseMessagingSyncQuery } from './query/messaging-sync.query'
@@ -12,6 +14,7 @@ export class InternalMessagingSyncController {
   constructor(
     private readonly syncService: FlwMessagingSyncService,
     private readonly dkwMigrationJobService: DkwMessagingMigrationJobService,
+    private readonly contactsBackfillJobService: MessagingContactsBackfillJobService,
     private readonly parityCheckService: MessagingParityCheckService,
   ) {}
 
@@ -53,6 +56,33 @@ export class InternalMessagingSyncController {
     }
 
     return this.dkwMigrationJobService.getStatus(jobId.trim())
+  }
+
+  @Post('backfill-contacts')
+  @HttpCode(202)
+  backfillContacts(
+    @Headers('x-job-key') jobKey: string | undefined,
+    @Query() query: Record<string, unknown>,
+  ) {
+    this.assertValidJobKey(jobKey)
+
+    const parsedQuery = parseMessagingBackfillContactsQuery(query)
+
+    return this.contactsBackfillJobService.start(parsedQuery)
+  }
+
+  @Get('backfill-contacts/:jobId')
+  getBackfillContactsStatus(
+    @Headers('x-job-key') jobKey: string | undefined,
+    @Param('jobId') jobId: string,
+  ) {
+    this.assertValidJobKey(jobKey)
+
+    if (typeof jobId !== 'string' || jobId.trim() === '') {
+      throw new BadRequestException('Invalid contacts backfill job id')
+    }
+
+    return this.contactsBackfillJobService.getStatus(jobId.trim())
   }
 
   @Get('parity')

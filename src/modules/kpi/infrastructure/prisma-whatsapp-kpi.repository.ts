@@ -698,6 +698,29 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
     chatId?: string
     branchId?: number
   }): Promise<WhatsAppKpiTagHourlySourceRow[]> {
+    const source = getWhatsAppKpiSource()
+
+    if (source === 'canonical') {
+      return this.getTagHourlyRowsCanonical(input)
+    }
+
+    const legacy = await this.getTagHourlyRowsLegacy(input)
+
+    if (source === 'dual') {
+      const canonical = await this.getTagHourlyRowsCanonical(input)
+      this.logDualMismatch('getTagHourlyRows', legacy, canonical)
+    }
+
+    return legacy
+  }
+
+  private async getTagHourlyRowsLegacy(input: {
+    clientId: string
+    period: KpiPeriod
+    tagId: bigint
+    chatId?: string
+    branchId?: number
+  }): Promise<WhatsAppKpiTagHourlySourceRow[]> {
     const rows = await this.prisma.$queryRaw<TagHourlySqlRow[]>(Prisma.sql`
       select
         lpad(extract(hour from s.started_at)::int::text, 2, '0') as hour,
@@ -723,7 +746,66 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
     }))
   }
 
+  private async getTagHourlyRowsCanonical(input: {
+    clientId: string
+    period: KpiPeriod
+    tagId: bigint
+    chatId?: string
+    branchId?: number
+  }): Promise<WhatsAppKpiTagHourlySourceRow[]> {
+    const rows = await this.prisma.$queryRaw<TagHourlySqlRow[]>(Prisma.sql`
+      select
+        lpad(extract(hour from ms.started_at)::int::text, 2, '0') as hour,
+        count(*)::bigint as sessions_count
+      from core.messaging_sessions ms
+      join core.messaging_contacts mc on mc.id = ms.contact_id
+      join core.contact_tags ct
+        on ct.contact_id = mc.legacy_contact_id
+       and ct.client_id = ms.client_id
+      where ms.client_id = ${input.clientId}
+        and mc.legacy_contact_id is not null
+        and ct.tag_id = ${input.tagId}
+        and ms.started_at >= ${input.period.from}
+        and ms.started_at < ${this.toExclusivePeriodEnd(input.period)}
+        ${input.chatId === undefined
+          ? Prisma.empty
+          : Prisma.sql`and lower(btrim(ms.assigned_agent_email)) = ${input.chatId}`}
+        ${this.buildCanonicalBranchFilter(input)}
+      group by 1
+      order by 1 asc
+    `)
+
+    return rows.map((row) => ({
+      hour: row.hour,
+      sessionsCount: row.sessions_count,
+    }))
+  }
+
   async getTagHourlyComparisonRows(input: {
+    clientId: string
+    period: KpiPeriod
+    tagId: bigint
+    chatId?: string
+    branchId?: number
+    sellerId?: number
+  }): Promise<WhatsAppKpiTagComparisonSourceRow[]> {
+    const source = getWhatsAppKpiSource()
+
+    if (source === 'canonical') {
+      return this.getTagHourlyComparisonRowsCanonical(input)
+    }
+
+    const legacy = await this.getTagHourlyComparisonRowsLegacy(input)
+
+    if (source === 'dual') {
+      const canonical = await this.getTagHourlyComparisonRowsCanonical(input)
+      this.logDualMismatch('getTagHourlyComparisonRows', legacy, canonical)
+    }
+
+    return legacy
+  }
+
+  private async getTagHourlyComparisonRowsLegacy(input: {
     clientId: string
     period: KpiPeriod
     tagId: bigint
@@ -747,6 +829,64 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
             ? Prisma.empty
             : Prisma.sql`and lower(btrim(s.assigned_user_email)) = ${input.chatId}`}
           ${this.buildBranchAssignedUserFilter(input, 's.assigned_user_email')}
+        group by 1
+      ),
+      open_budgets as (
+        select
+          lpad(extract(hour from bf.budget_datetime)::int::text, 2, '0') as hour,
+          count(*)::bigint as open_budgets_count
+        from core.budget_facts bf
+        where bf.client_id = ${input.clientId}
+          and bf.status_normalized = 'OPEN'
+          and bf.budget_datetime >= ${input.period.from}
+          and bf.budget_datetime < ${this.toExclusivePeriodEnd(input.period)}
+          ${input.branchId === undefined ? Prisma.empty : Prisma.sql`and bf.branch_id = ${input.branchId}`}
+          ${input.sellerId === undefined ? Prisma.empty : Prisma.sql`and bf.seller_id = ${input.sellerId}`}
+        group by 1
+      )
+      select
+        coalesce(tag_sessions.hour, open_budgets.hour) as hour,
+        coalesce(tag_sessions.tag_sessions_count, 0)::bigint as tag_sessions_count,
+        coalesce(open_budgets.open_budgets_count, 0)::bigint as open_budgets_count
+      from tag_sessions
+      full outer join open_budgets on open_budgets.hour = tag_sessions.hour
+      order by 1 asc
+    `)
+
+    return rows.map((row) => ({
+      hour: row.hour,
+      tagSessionsCount: row.tag_sessions_count,
+      openBudgetsCount: row.open_budgets_count,
+    }))
+  }
+
+  private async getTagHourlyComparisonRowsCanonical(input: {
+    clientId: string
+    period: KpiPeriod
+    tagId: bigint
+    chatId?: string
+    branchId?: number
+    sellerId?: number
+  }): Promise<WhatsAppKpiTagComparisonSourceRow[]> {
+    const rows = await this.prisma.$queryRaw<TagComparisonSqlRow[]>(Prisma.sql`
+      with tag_sessions as (
+        select
+          lpad(extract(hour from ms.started_at)::int::text, 2, '0') as hour,
+          count(*)::bigint as tag_sessions_count
+        from core.messaging_sessions ms
+        join core.messaging_contacts mc on mc.id = ms.contact_id
+        join core.contact_tags ct
+          on ct.contact_id = mc.legacy_contact_id
+         and ct.client_id = ms.client_id
+        where ms.client_id = ${input.clientId}
+          and mc.legacy_contact_id is not null
+          and ct.tag_id = ${input.tagId}
+          and ms.started_at >= ${input.period.from}
+          and ms.started_at < ${this.toExclusivePeriodEnd(input.period)}
+          ${input.chatId === undefined
+            ? Prisma.empty
+            : Prisma.sql`and lower(btrim(ms.assigned_agent_email)) = ${input.chatId}`}
+          ${this.buildCanonicalBranchFilter(input)}
         group by 1
       ),
       open_budgets as (

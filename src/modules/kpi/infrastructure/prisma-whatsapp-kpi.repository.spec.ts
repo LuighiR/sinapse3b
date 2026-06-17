@@ -275,6 +275,40 @@ describe('PrismaWhatsAppKpiRepository', () => {
     ])
   })
 
+  it('reads canonical tag hourly rows through messaging_contacts legacy bridge', async () => {
+    process.env.WHATSAPP_KPI_SOURCE = 'canonical'
+
+    const prisma = {
+      $queryRaw: jest.fn().mockResolvedValue([
+        {
+          hour: '09',
+          sessions_count: 7n,
+        },
+      ]),
+    }
+
+    const repository = new PrismaWhatsAppKpiRepository(prisma as any)
+
+    await expect(
+      repository.getTagHourlyRows({
+        clientId: 'client-1',
+        period: KpiPeriod.between({ from: '2026-03-05', to: '2026-03-05' }),
+        tagId: 21830n,
+      }),
+    ).resolves.toEqual([
+      {
+        hour: '09',
+        sessionsCount: 7n,
+      },
+    ])
+
+    const sql = prisma.$queryRaw.mock.calls[0]?.[0]
+    const sqlText = sql?.strings?.join(' ')
+
+    expect(sqlText).toContain('messaging_contacts')
+    expect(sqlText).toContain('legacy_contact_id')
+  })
+
   it('adds chatId and sellerId filters to the tag comparison query when provided', async () => {
     const prisma = {
       $queryRaw: jest.fn().mockResolvedValue([

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common'
 import { mapFlwMessageToCanonical, mapFlwSessionToCanonical } from './flw-message-mapper'
+import { MessagingContactService } from './messaging-contact.service'
 import { PrismaFlwRawRepository } from '../infrastructure/prisma-flw-raw.repository'
 import { PrismaMessagingCanonicalRepository } from '../infrastructure/prisma-messaging-canonical.repository'
 
@@ -13,6 +14,7 @@ export class MessagingNormalizationService {
   constructor(
     private readonly rawRepository: PrismaFlwRawRepository,
     private readonly canonicalRepository: PrismaMessagingCanonicalRepository,
+    private readonly contactService: MessagingContactService,
   ) {}
 
   async normalizeClient(clientId: string): Promise<MessagingNormalizationResult> {
@@ -29,7 +31,7 @@ export class MessagingNormalizationService {
         branchIdByDepartmentId,
       })
 
-      await this.canonicalRepository.upsertSession(payload)
+      await this.contactService.upsertSessionWithContact(payload)
       sessionIdByExternalId.set(session.id, payload.id)
     }
 

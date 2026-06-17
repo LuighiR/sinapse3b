@@ -19,6 +19,20 @@ describe('InternalMessagingSyncController', () => {
     process.env = originalEnv
   })
 
+  function buildController(overrides: {
+    syncService?: Record<string, jest.Mock>
+    dkwMigrationJobService?: Record<string, jest.Mock>
+    contactsBackfillJobService?: Record<string, jest.Mock>
+    parityCheckService?: Record<string, jest.Mock>
+  } = {}) {
+    return new InternalMessagingSyncController(
+      (overrides.syncService ?? { syncClient: jest.fn() }) as never,
+      (overrides.dkwMigrationJobService ?? { start: jest.fn(), getStatus: jest.fn() }) as never,
+      (overrides.contactsBackfillJobService ?? { start: jest.fn(), getStatus: jest.fn() }) as never,
+      (overrides.parityCheckService ?? { checkClient: jest.fn() }) as never,
+    )
+  }
+
   it('runs sync when job key is valid', async () => {
     const syncService = {
       syncClient: jest.fn().mockResolvedValue({
@@ -31,18 +45,7 @@ describe('InternalMessagingSyncController', () => {
         lastMessageSyncAt: '2026-06-01T10:01:00.000Z',
       }),
     }
-    const dkwMigrationJobService = {
-      start: jest.fn(),
-      getStatus: jest.fn(),
-    }
-    const parityCheckService = {
-      checkClient: jest.fn(),
-    }
-    const controller = new InternalMessagingSyncController(
-      syncService as never,
-      dkwMigrationJobService as never,
-      parityCheckService as never,
-    )
+    const controller = buildController({ syncService })
 
     const result = await controller.sync('test-internal-job-key', { clientId: 'ferracosul' })
 
@@ -59,11 +62,7 @@ describe('InternalMessagingSyncController', () => {
       }),
       getStatus: jest.fn(),
     }
-    const controller = new InternalMessagingSyncController(
-      { syncClient: jest.fn() } as never,
-      dkwMigrationJobService as never,
-      { checkClient: jest.fn() } as never,
-    )
+    const controller = buildController({ dkwMigrationJobService })
 
     const result = controller.migrateDkw('test-internal-job-key', {
       clientId: 'ferracosul',
@@ -83,6 +82,31 @@ describe('InternalMessagingSyncController', () => {
     })
   })
 
+  it('accepts contacts backfill jobs in background when job key is valid', () => {
+    const contactsBackfillJobService = {
+      start: jest.fn().mockReturnValue({
+        status: 'accepted',
+        message: 'task initiated',
+        jobId: 'job-contacts-1',
+      }),
+      getStatus: jest.fn(),
+    }
+    const controller = buildController({ contactsBackfillJobService })
+
+    const result = controller.backfillContacts('test-internal-job-key', {
+      clientId: 'ferracosul',
+    })
+
+    expect(result).toEqual({
+      status: 'accepted',
+      message: 'task initiated',
+      jobId: 'job-contacts-1',
+    })
+    expect(contactsBackfillJobService.start).toHaveBeenCalledWith({
+      clientId: 'ferracosul',
+    })
+  })
+
   it('returns migration job status when job key is valid', () => {
     const dkwMigrationJobService = {
       start: jest.fn(),
@@ -91,11 +115,7 @@ describe('InternalMessagingSyncController', () => {
         status: 'RUNNING',
       }),
     }
-    const controller = new InternalMessagingSyncController(
-      { syncClient: jest.fn() } as never,
-      dkwMigrationJobService as never,
-      { checkClient: jest.fn() } as never,
-    )
+    const controller = buildController({ dkwMigrationJobService })
 
     const result = controller.getMigrateDkwStatus('test-internal-job-key', 'job-123')
 
@@ -104,11 +124,7 @@ describe('InternalMessagingSyncController', () => {
   })
 
   it('rejects missing job key', async () => {
-    const controller = new InternalMessagingSyncController(
-      { syncClient: jest.fn() } as never,
-      { start: jest.fn(), getStatus: jest.fn() } as never,
-      { checkClient: jest.fn() } as never,
-    )
+    const controller = buildController()
 
     await expect(controller.sync(undefined, { clientId: 'ferracosul' })).rejects.toBeInstanceOf(
       UnauthorizedException,

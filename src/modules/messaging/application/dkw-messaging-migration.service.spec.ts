@@ -61,12 +61,15 @@ describe('DkwMessagingMigrationService', () => {
         .mockResolvedValueOnce({ items: [], nextCursor: null }),
     })
 
+    const upsertSessionWithContact = jest.fn().mockResolvedValue(undefined)
     const upsertMessage = jest.fn().mockResolvedValue(undefined)
     const service = new DkwMessagingMigrationService(
       legacyRepository as never,
       {
-        upsertSession: jest.fn().mockResolvedValue(undefined),
         upsertMessage,
+      } as never,
+      {
+        upsertSessionWithContact,
       } as never,
     )
 
@@ -89,12 +92,14 @@ describe('DkwMessagingMigrationService', () => {
       listSessionsByIds: jest.fn().mockResolvedValue([legacySession]),
     })
 
-    const upsertSession = jest.fn().mockResolvedValue(undefined)
+    const upsertSessionWithContact = jest.fn().mockResolvedValue(undefined)
     const service = new DkwMessagingMigrationService(
       legacyRepository as never,
       {
-        upsertSession,
         upsertMessage: jest.fn().mockResolvedValue(undefined),
+      } as never,
+      {
+        upsertSessionWithContact,
       } as never,
     )
 
@@ -120,12 +125,15 @@ describe('DkwMessagingMigrationService', () => {
       countMessagesInPeriod: jest.fn().mockResolvedValue(2),
     })
 
+    const upsertSessionWithContact = jest.fn().mockResolvedValue(undefined)
     const upsertMessage = jest.fn().mockResolvedValue(undefined)
     const service = new DkwMessagingMigrationService(
       legacyRepository as never,
       {
-        upsertSession: jest.fn().mockResolvedValue(undefined),
         upsertMessage,
+      } as never,
+      {
+        upsertSessionWithContact,
       } as never,
     )
 
@@ -149,8 +157,10 @@ describe('DkwMessagingMigrationService', () => {
     const service = new DkwMessagingMigrationService(
       legacyRepository as never,
       {
-        upsertSession: jest.fn(),
         upsertMessage,
+      } as never,
+      {
+        upsertSessionWithContact: jest.fn(),
       } as never,
     )
 

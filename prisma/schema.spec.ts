@@ -72,6 +72,9 @@ describe('prisma schema', () => {
 
     expect(schema).toContain('model MessagingSession')
     expect(schema).toContain('model MessagingMessage')
+    expect(schema).toContain('model MessagingContact')
+    expect(schema).toContain('legacyContactId')
+    expect(schema).toContain('contactId')
     expect(schema).toContain('flwDepartmentId')
     expect(schema).toContain('enum MessagingProvider')
   })

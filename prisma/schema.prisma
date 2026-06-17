@@ -629,6 +629,25 @@ model MessagingSyncState {
   @@schema("core")
 }
 
+model MessagingContact {
+  id                 String              @id
+  clientId           String              @map("client_id")
+  provider           MessagingProvider
+  externalContactId  String              @map("external_contact_id")
+  displayName        String?             @map("display_name")
+  phoneNormalized    String?             @map("phone_normalized")
+  legacyContactId    BigInt?             @map("legacy_contact_id")
+  rawJson            Json?               @map("raw_json")
+  createdAt          DateTime            @default(now()) @map("created_at")
+  updatedAt          DateTime            @default(now()) @updatedAt @map("updated_at")
+  sessions           MessagingSession[]
+
+  @@unique([clientId, provider, externalContactId], map: "messaging_contacts_client_provider_external_key")
+  @@index([clientId, legacyContactId], map: "messaging_contacts_client_legacy_contact_id_idx")
+  @@map("messaging_contacts")
+  @@schema("core")
+}
+
 model MessagingSession {
   id                  String             @id
   clientId            String             @map("client_id")
@@ -636,6 +655,7 @@ model MessagingSession {
   provider            MessagingProvider
   externalSessionId   String             @map("external_session_id")
   contactExternalId   String?            @map("contact_external_id")
+  contactId           String?             @map("contact_id")
   assignedAgentEmail  String?            @map("assigned_agent_email")
   assignedAgentUserId String?            @map("assigned_agent_user_id")
   status              String?
@@ -645,11 +665,13 @@ model MessagingSession {
   createdAt           DateTime           @default(now()) @map("created_at")
   updatedAt           DateTime           @default(now()) @updatedAt @map("updated_at")
   branch              Branch?            @relation(fields: [branchId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  contact             MessagingContact?  @relation(fields: [contactId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   messages            MessagingMessage[]
 
   @@unique([clientId, provider, externalSessionId], map: "messaging_sessions_client_provider_external_key")
   @@index([clientId, startedAt], map: "messaging_sessions_client_started_at_idx")
   @@index([clientId, branchId, startedAt], map: "messaging_sessions_client_branch_started_at_idx")
+  @@index([contactId], map: "messaging_sessions_contact_id_idx")
   @@map("messaging_sessions")
   @@schema("core")
 }

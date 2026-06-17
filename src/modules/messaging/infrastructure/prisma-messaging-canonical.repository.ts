@@ -86,6 +86,7 @@ export class PrismaMessagingCanonicalRepository {
         provider: payload.provider,
         externalSessionId: payload.externalSessionId,
         contactExternalId: payload.contactExternalId,
+        contactId: payload.contactId ?? null,
         assignedAgentEmail: payload.assignedAgentEmail,
         assignedAgentUserId: payload.assignedAgentUserId,
         status: payload.status,
@@ -96,6 +97,7 @@ export class PrismaMessagingCanonicalRepository {
       update: {
         branchId: payload.branchId,
         contactExternalId: payload.contactExternalId,
+        contactId: payload.contactId ?? null,
         assignedAgentEmail: payload.assignedAgentEmail,
         assignedAgentUserId: payload.assignedAgentUserId,
         status: payload.status,
@@ -104,6 +106,41 @@ export class PrismaMessagingCanonicalRepository {
         rawJson: payload.rawJson as unknown as Prisma.InputJsonValue,
       },
     })
+  }
+
+  async findSampleSessionByContactKey(input: {
+    clientId: string
+    provider: MessagingSessionWritePayload['provider']
+    contactExternalId: string
+  }): Promise<MessagingSessionWritePayload | null> {
+    const row = await this.prisma.messagingSession.findFirst({
+      where: {
+        clientId: input.clientId,
+        provider: input.provider,
+        contactExternalId: input.contactExternalId,
+      },
+      orderBy: { startedAt: 'desc' },
+    })
+
+    if (row == null) {
+      return null
+    }
+
+    return {
+      id: row.id,
+      clientId: row.clientId,
+      branchId: row.branchId,
+      provider: row.provider,
+      externalSessionId: row.externalSessionId,
+      contactExternalId: row.contactExternalId,
+      contactId: row.contactId,
+      assignedAgentEmail: row.assignedAgentEmail,
+      assignedAgentUserId: row.assignedAgentUserId,
+      status: row.status,
+      startedAt: row.startedAt,
+      endedAt: row.endedAt,
+      rawJson: row.rawJson,
+    }
   }
 
   async upsertMessage(payload: MessagingMessageWritePayload): Promise<void> {
