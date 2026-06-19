@@ -59,9 +59,39 @@ export class PrismaFlwRawRepository {
     return rows.map((row) => row.payloadJson as unknown as FlwSessionDto)
   }
 
+  async listSessionsByClientIdSince(
+    clientId: string,
+    since: Date,
+  ): Promise<FlwSessionDto[]> {
+    const rows = await this.prisma.flwSessionRaw.findMany({
+      where: {
+        clientId,
+        fetchedAt: { gt: since },
+      },
+      orderBy: { fetchedAt: 'asc' },
+    })
+
+    return rows.map((row) => row.payloadJson as unknown as FlwSessionDto)
+  }
+
   async listMessagesByClientId(clientId: string): Promise<FlwMessageDto[]> {
     const rows = await this.prisma.flwMessageRaw.findMany({
       where: { clientId },
+      orderBy: { fetchedAt: 'asc' },
+    })
+
+    return rows.map((row) => row.payloadJson as unknown as FlwMessageDto)
+  }
+
+  async listMessagesByClientIdSince(
+    clientId: string,
+    since: Date,
+  ): Promise<FlwMessageDto[]> {
+    const rows = await this.prisma.flwMessageRaw.findMany({
+      where: {
+        clientId,
+        fetchedAt: { gt: since },
+      },
       orderBy: { fetchedAt: 'asc' },
     })
 

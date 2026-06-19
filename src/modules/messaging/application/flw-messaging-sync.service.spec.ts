@@ -22,7 +22,7 @@ describe('FlwMessagingSyncService', () => {
     jest.restoreAllMocks()
   })
 
-  it('syncs sessions and messages, then normalizes canonical data', async () => {
+  it('syncs sessions and messages into raw only', async () => {
     const listSessions = jest
       .fn()
       .mockResolvedValueOnce({
@@ -96,17 +96,9 @@ describe('FlwMessagingSyncService', () => {
       }),
       updateSyncState: jest.fn().mockResolvedValue(undefined),
     }
-    const normalizationService = {
-      normalizeClient: jest.fn().mockResolvedValue({
-        sessionsWritten: 1,
-        messagesWritten: 1,
-      }),
-    }
-
     const service = new FlwMessagingSyncService(
       rawRepository as never,
       canonicalRepository as never,
-      normalizationService as never,
     )
 
     const result = await service.syncClient('ferracosul')
@@ -115,14 +107,11 @@ describe('FlwMessagingSyncService', () => {
       clientId: 'ferracosul',
       sessionsFetched: 1,
       messagesFetched: 1,
-      sessionsWritten: 1,
-      messagesWritten: 1,
       lastSessionSyncAt: '2026-06-01T10:00:00.000Z',
       lastMessageSyncAt: '2026-06-01T10:01:00.000Z',
     })
     expect(rawRepository.upsertSession).toHaveBeenCalledTimes(1)
     expect(rawRepository.upsertMessage).toHaveBeenCalledTimes(1)
-    expect(normalizationService.normalizeClient).toHaveBeenCalledWith('ferracosul')
     expect(canonicalRepository.updateSyncState).toHaveBeenCalledWith(
       expect.objectContaining({
         clientId: 'ferracosul',
@@ -134,7 +123,7 @@ describe('FlwMessagingSyncService', () => {
   it('rejects sync when FLW token is missing', async () => {
     process.env.FLW_CHAT_API_TOKEN = ''
 
-    const service = new FlwMessagingSyncService({} as never, {} as never, {} as never)
+    const service = new FlwMessagingSyncService({} as never, {} as never)
 
     await expect(service.syncClient('ferracosul')).rejects.toBeInstanceOf(BadRequestException)
   })
@@ -157,7 +146,6 @@ describe('FlwMessagingSyncService', () => {
     const service = new FlwMessagingSyncService(
       { upsertSession: jest.fn(), upsertMessage: jest.fn() } as never,
       canonicalRepository as never,
-      { normalizeClient: jest.fn() } as never,
     )
 
     await expect(service.syncClient('ferracosul')).rejects.toThrow('network down')

@@ -24,8 +24,8 @@ describe('FlwWebhookController', () => {
       ingest: jest.fn().mockResolvedValue({
         accepted: true,
         event: 'MESSAGE_RECEIVED',
-        normalizedSessions: 1,
-        normalizedMessages: 1,
+        storedSession: false,
+        storedMessage: true,
       }),
     }
     const controller = new FlwWebhookController(ingestService as never)

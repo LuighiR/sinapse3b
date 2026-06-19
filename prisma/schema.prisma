@@ -617,13 +617,14 @@ model FlwMessageRaw {
 }
 
 model MessagingSyncState {
-  clientId          String    @id @map("client_id")
-  provider          String    @default("FLW")
-  lastSessionSyncAt DateTime? @map("last_session_sync_at")
-  lastMessageSyncAt DateTime? @map("last_message_sync_at")
-  lastSuccessAt     DateTime? @map("last_success_at")
-  lastError         String?   @map("last_error")
-  updatedAt         DateTime  @default(now()) @updatedAt @map("updated_at")
+  clientId           String    @id @map("client_id")
+  provider           String    @default("FLW")
+  lastSessionSyncAt  DateTime? @map("last_session_sync_at")
+  lastMessageSyncAt  DateTime? @map("last_message_sync_at")
+  lastNormalizedAt   DateTime? @map("last_normalized_at")
+  lastSuccessAt      DateTime? @map("last_success_at")
+  lastError          String?   @map("last_error")
+  updatedAt          DateTime  @default(now()) @updatedAt @map("updated_at")
 
   @@map("messaging_sync_states")
   @@schema("core")

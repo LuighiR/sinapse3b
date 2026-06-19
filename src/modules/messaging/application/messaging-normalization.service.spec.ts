@@ -1,7 +1,8 @@
 import { MessagingNormalizationService } from './messaging-normalization.service'
 
 describe('MessagingNormalizationService', () => {
-  it('normalizes raw FLW sessions and messages into canonical tables', async () => {
+  it('normalizes incremental raw FLW data using the last normalized watermark', async () => {
+    const since = new Date('2026-06-01T09:00:00.000Z')
     const rawRepository = {
       listSessionsByClientId: jest.fn().mockResolvedValue([
         {
@@ -15,7 +16,19 @@ describe('MessagingNormalizationService', () => {
           departmentId: 'dept-1',
         },
       ]),
-      listMessagesByClientId: jest.fn().mockResolvedValue([
+      listSessionsByClientIdSince: jest.fn().mockResolvedValue([
+        {
+          id: 'session-1',
+          startAt: '2026-06-01T10:00:00.000Z',
+          endAt: null,
+          contactId: 'contact-1',
+          userId: 'agent-1',
+          agentDetails: { email: 'maria@empresa.com' },
+          status: 'IN_PROGRESS',
+          departmentId: 'dept-1',
+        },
+      ]),
+      listMessagesByClientIdSince: jest.fn().mockResolvedValue([
         {
           id: 'message-1',
           sessionId: 'session-1',
@@ -34,8 +47,13 @@ describe('MessagingNormalizationService', () => {
       upsertSessionWithContact: jest.fn().mockResolvedValue(undefined),
     }
     const canonicalRepository = {
+      getOrCreateSyncState: jest.fn().mockResolvedValue({
+        clientId: 'ferracosul',
+        lastNormalizedAt: since,
+      }),
       loadBranchIdByDepartmentId: jest.fn().mockResolvedValue(new Map([['dept-1', 2]])),
       upsertMessage: jest.fn().mockResolvedValue(undefined),
+      updateSyncState: jest.fn().mockResolvedValue(undefined),
     }
 
     const service = new MessagingNormalizationService(
@@ -44,24 +62,18 @@ describe('MessagingNormalizationService', () => {
       contactService as never,
     )
 
-    const result = await service.normalizeClient('ferracosul')
+    const result = await service.normalizeClient({ clientId: 'ferracosul' })
 
-    expect(result).toEqual({
-      sessionsWritten: 1,
-      messagesWritten: 1,
-    })
-    expect(contactService.upsertSessionWithContact).toHaveBeenCalledWith(
+    expect(result.mode).toBe('incremental')
+    expect(result.since).toBe(since.toISOString())
+    expect(result.sessionsWritten).toBe(1)
+    expect(result.messagesWritten).toBe(1)
+    expect(rawRepository.listSessionsByClientIdSince).toHaveBeenCalledWith('ferracosul', since)
+    expect(rawRepository.listMessagesByClientIdSince).toHaveBeenCalledWith('ferracosul', since)
+    expect(canonicalRepository.updateSyncState).toHaveBeenCalledWith(
       expect.objectContaining({
-        id: 'ferracosul:FLW:session-1',
-        branchId: 2,
-        assignedAgentEmail: 'maria@empresa.com',
-      }),
-    )
-    expect(canonicalRepository.upsertMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: 'ferracosul:FLW:message-1',
-        sessionId: 'ferracosul:FLW:session-1',
-        direction: 'INBOUND',
+        clientId: 'ferracosul',
+        lastError: null,
       }),
     )
   })
@@ -69,6 +81,7 @@ describe('MessagingNormalizationService', () => {
   it('skips messages when the session was not normalized', async () => {
     const rawRepository = {
       listSessionsByClientId: jest.fn().mockResolvedValue([]),
+      listSessionsByClientIdSince: jest.fn().mockResolvedValue([]),
       listMessagesByClientId: jest.fn().mockResolvedValue([
         {
           id: 'message-1',
@@ -88,8 +101,13 @@ describe('MessagingNormalizationService', () => {
       upsertSessionWithContact: jest.fn(),
     }
     const canonicalRepository = {
+      getOrCreateSyncState: jest.fn().mockResolvedValue({
+        clientId: 'ferracosul',
+        lastNormalizedAt: null,
+      }),
       loadBranchIdByDepartmentId: jest.fn().mockResolvedValue(new Map()),
       upsertMessage: jest.fn(),
+      updateSyncState: jest.fn().mockResolvedValue(undefined),
     }
 
     const service = new MessagingNormalizationService(
@@ -98,12 +116,11 @@ describe('MessagingNormalizationService', () => {
       contactService as never,
     )
 
-    const result = await service.normalizeClient('ferracosul')
+    const result = await service.normalizeClient({ clientId: 'ferracosul', full: true })
 
-    expect(result).toEqual({
-      sessionsWritten: 0,
-      messagesWritten: 0,
-    })
+    expect(result.mode).toBe('full')
+    expect(result.messagesWritten).toBe(0)
+    expect(result.messagesSkippedMissingSession).toBe(1)
     expect(canonicalRepository.upsertMessage).not.toHaveBeenCalled()
   })
 })

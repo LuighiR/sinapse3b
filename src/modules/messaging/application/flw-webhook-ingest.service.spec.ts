@@ -1,22 +1,13 @@
 import { FlwWebhookIngestService } from './flw-webhook-ingest.service'
 
 describe('FlwWebhookIngestService', () => {
-  it('stores FLW webhook envelope payloads and normalizes them', async () => {
+  it('stores FLW webhook message payloads in raw only', async () => {
     const rawRepository = {
       upsertSession: jest.fn().mockResolvedValue(undefined),
       upsertMessage: jest.fn().mockResolvedValue(undefined),
     }
-    const normalizationService = {
-      normalizeClient: jest.fn().mockResolvedValue({
-        sessionsWritten: 1,
-        messagesWritten: 1,
-      }),
-    }
 
-    const service = new FlwWebhookIngestService(
-      rawRepository as never,
-      normalizationService as never,
-    )
+    const service = new FlwWebhookIngestService(rawRepository as never)
 
     const result = await service.ingest({
       clientId: 'ferracosul',
@@ -40,8 +31,8 @@ describe('FlwWebhookIngestService', () => {
     expect(result).toEqual({
       accepted: true,
       event: 'MESSAGE_RECEIVED',
-      normalizedSessions: 1,
-      normalizedMessages: 1,
+      storedSession: false,
+      storedMessage: true,
     })
     expect(rawRepository.upsertMessage).toHaveBeenCalledWith(
       expect.objectContaining({ source: 'webhook' }),
@@ -53,17 +44,8 @@ describe('FlwWebhookIngestService', () => {
       upsertSession: jest.fn().mockResolvedValue(undefined),
       upsertMessage: jest.fn().mockResolvedValue(undefined),
     }
-    const normalizationService = {
-      normalizeClient: jest.fn().mockResolvedValue({
-        sessionsWritten: 1,
-        messagesWritten: 0,
-      }),
-    }
 
-    const service = new FlwWebhookIngestService(
-      rawRepository as never,
-      normalizationService as never,
-    )
+    const service = new FlwWebhookIngestService(rawRepository as never)
 
     const result = await service.ingest({
       clientId: 'ferracosul',
@@ -82,6 +64,7 @@ describe('FlwWebhookIngestService', () => {
     })
 
     expect(result.accepted).toBe(true)
+    expect(result.storedSession).toBe(true)
     expect(rawRepository.upsertSession).toHaveBeenCalled()
     expect(rawRepository.upsertMessage).not.toHaveBeenCalled()
   })
@@ -89,7 +72,6 @@ describe('FlwWebhookIngestService', () => {
   it('ignores unsupported webhook events', async () => {
     const service = new FlwWebhookIngestService(
       { upsertSession: jest.fn(), upsertMessage: jest.fn() } as never,
-      { normalizeClient: jest.fn() } as never,
     )
 
     const result = await service.ingest({

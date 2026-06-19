@@ -4,7 +4,6 @@ import { FlwMessageDto, FlwSessionDto } from '../domain/messaging-types'
 import { FlwChatApiClient } from '../infrastructure/flw-chat-api.client'
 import { PrismaFlwRawRepository } from '../infrastructure/prisma-flw-raw.repository'
 import { PrismaMessagingCanonicalRepository } from '../infrastructure/prisma-messaging-canonical.repository'
-import { MessagingNormalizationService } from './messaging-normalization.service'
 
 const DEFAULT_PAGE_SIZE = 100
 const RAW_SOURCE = 'api_sync'
@@ -13,8 +12,6 @@ export type FlwMessagingSyncResult = {
   clientId: string
   sessionsFetched: number
   messagesFetched: number
-  sessionsWritten: number
-  messagesWritten: number
   lastSessionSyncAt: string | null
   lastMessageSyncAt: string | null
 }
@@ -24,7 +21,6 @@ export class FlwMessagingSyncService {
   constructor(
     private readonly rawRepository: PrismaFlwRawRepository,
     private readonly canonicalRepository: PrismaMessagingCanonicalRepository,
-    private readonly normalizationService: MessagingNormalizationService,
   ) {}
 
   async syncClient(clientId: string): Promise<FlwMessagingSyncResult> {
@@ -84,8 +80,6 @@ export class FlwMessagingSyncService {
         pageNumber += 1
       }
 
-      const normalized = await this.normalizationService.normalizeClient(clientId)
-
       await this.canonicalRepository.updateSyncState({
         clientId,
         lastSessionSyncAt: latestSessionAt,
@@ -98,8 +92,6 @@ export class FlwMessagingSyncService {
         clientId,
         sessionsFetched,
         messagesFetched,
-        sessionsWritten: normalized.sessionsWritten,
-        messagesWritten: normalized.messagesWritten,
         lastSessionSyncAt: latestSessionAt?.toISOString() ?? null,
         lastMessageSyncAt: latestMessageAt?.toISOString() ?? null,
       }

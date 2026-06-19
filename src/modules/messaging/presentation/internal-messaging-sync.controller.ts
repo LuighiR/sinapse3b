@@ -3,9 +3,11 @@ import { loadEnv } from '../../../config/env'
 import { DkwMessagingMigrationJobService } from '../application/dkw-messaging-migration-job.service'
 import { FlwMessagingSyncService } from '../application/flw-messaging-sync.service'
 import { MessagingContactsBackfillJobService } from '../application/messaging-contacts-backfill-job.service'
+import { MessagingNormalizationService } from '../application/messaging-normalization.service'
 import { MessagingParityCheckService } from '../application/messaging-parity-check.service'
 import { parseMessagingBackfillContactsQuery } from './query/messaging-backfill-contacts.query'
 import { parseMessagingMigrateDkwQuery } from './query/messaging-migrate-dkw.query'
+import { parseMessagingNormalizeQuery } from './query/messaging-normalize.query'
 import { parseMessagingParityQuery } from './query/messaging-parity.query'
 import { parseMessagingSyncQuery } from './query/messaging-sync.query'
 
@@ -13,6 +15,7 @@ import { parseMessagingSyncQuery } from './query/messaging-sync.query'
 export class InternalMessagingSyncController {
   constructor(
     private readonly syncService: FlwMessagingSyncService,
+    private readonly normalizationService: MessagingNormalizationService,
     private readonly dkwMigrationJobService: DkwMessagingMigrationJobService,
     private readonly contactsBackfillJobService: MessagingContactsBackfillJobService,
     private readonly parityCheckService: MessagingParityCheckService,
@@ -29,6 +32,19 @@ export class InternalMessagingSyncController {
     const parsedQuery = parseMessagingSyncQuery(query)
 
     return this.syncService.syncClient(parsedQuery.clientId)
+  }
+
+  @Post('normalize')
+  @HttpCode(200)
+  async normalize(
+    @Headers('x-job-key') jobKey: string | undefined,
+    @Query() query: Record<string, unknown>,
+  ) {
+    this.assertValidJobKey(jobKey)
+
+    const parsedQuery = parseMessagingNormalizeQuery(query)
+
+    return this.normalizationService.normalizeClient(parsedQuery)
   }
 
   @Post('migrate-dkw')

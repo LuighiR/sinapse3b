@@ -11,6 +11,7 @@ export type MessagingSyncStateRecord = {
   provider: string
   lastSessionSyncAt: Date | null
   lastMessageSyncAt: Date | null
+  lastNormalizedAt: Date | null
   lastSuccessAt: Date | null
   lastError: string | null
 }
@@ -33,6 +34,7 @@ export class PrismaMessagingCanonicalRepository {
     clientId: string
     lastSessionSyncAt?: Date | null
     lastMessageSyncAt?: Date | null
+    lastNormalizedAt?: Date | null
     lastSuccessAt?: Date | null
     lastError?: string | null
   }): Promise<void> {
@@ -41,6 +43,7 @@ export class PrismaMessagingCanonicalRepository {
       data: {
         lastSessionSyncAt: input.lastSessionSyncAt,
         lastMessageSyncAt: input.lastMessageSyncAt,
+        lastNormalizedAt: input.lastNormalizedAt,
         lastSuccessAt: input.lastSuccessAt,
         lastError: input.lastError,
       },

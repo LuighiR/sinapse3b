@@ -5,21 +5,19 @@ import { DkwMessagingMigrationJobService } from './application/dkw-messaging-mig
 import { DkwMessagingMigrationService } from './application/dkw-messaging-migration.service'
 import { FlwMessagingSyncService } from './application/flw-messaging-sync.service'
 import { MessagingContactService } from './application/messaging-contact.service'
+import { MessagingNormalizationService } from './application/messaging-normalization.service'
 import { MessagingContactsBackfillJobService } from './application/messaging-contacts-backfill-job.service'
 import { MessagingContactsBackfillService } from './application/messaging-contacts-backfill.service'
-import { MessagingNormalizationService } from './application/messaging-normalization.service'
 import { MessagingParityCheckService } from './application/messaging-parity-check.service'
-import { FlwWebhookIngestService } from './application/flw-webhook-ingest.service'
 import { PrismaDkwLegacyRepository } from './infrastructure/prisma-dkw-legacy.repository'
 import { PrismaFlwRawRepository } from './infrastructure/prisma-flw-raw.repository'
 import { PrismaMessagingContactRepository } from './infrastructure/prisma-messaging-contact.repository'
 import { PrismaMessagingCanonicalRepository } from './infrastructure/prisma-messaging-canonical.repository'
-import { FlwWebhookController } from './presentation/flw-webhook.controller'
 import { InternalMessagingSyncController } from './presentation/internal-messaging-sync.controller'
 
 @Module({
   imports: [PrismaModule],
-  controllers: [InternalMessagingSyncController, FlwWebhookController],
+  controllers: [InternalMessagingSyncController],
   providers: [
     PrismaFlwRawRepository,
     PrismaDkwLegacyRepository,
@@ -34,7 +32,6 @@ import { InternalMessagingSyncController } from './presentation/internal-messagi
     DkwMessagingMigrationService,
     DkwMessagingMigrationJobService,
     MessagingParityCheckService,
-    FlwWebhookIngestService,
   ],
   exports: [FlwMessagingSyncService, DkwMessagingMigrationService, MessagingNormalizationService],
 })

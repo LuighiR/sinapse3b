@@ -5,7 +5,6 @@ import {
   logFlwWebhookFailed,
   logFlwWebhookIgnored,
   logFlwWebhookNoExtractableContent,
-  logFlwWebhookNormalized,
   logFlwWebhookStoredMessage,
   logFlwWebhookStoredSession,
 } from './flw-webhook.logger'
@@ -15,7 +14,6 @@ import {
   isFlwSessionContent,
   resolveFlwWebhookEventType,
 } from './flw-webhook-payload'
-import { MessagingNormalizationService } from './messaging-normalization.service'
 
 const WEBHOOK_SOURCE = 'webhook'
 
@@ -31,16 +29,13 @@ const SUPPORTED_EVENTS = new Set([
 export type FlwWebhookIngestResult = {
   accepted: boolean
   event: string
-  normalizedSessions: number
-  normalizedMessages: number
+  storedSession: boolean
+  storedMessage: boolean
 }
 
 @Injectable()
 export class FlwWebhookIngestService {
-  constructor(
-    private readonly rawRepository: PrismaFlwRawRepository,
-    private readonly normalizationService: MessagingNormalizationService,
-  ) {}
+  constructor(private readonly rawRepository: PrismaFlwRawRepository) {}
 
   async ingest(input: {
     clientId: string
@@ -54,14 +49,16 @@ export class FlwWebhookIngestService {
       return {
         accepted: false,
         event,
-        normalizedSessions: 0,
-        normalizedMessages: 0,
+        storedSession: false,
+        storedMessage: false,
       }
     }
 
     try {
       const session = extractSession(input.payload, event)
       const message = extractMessage(input.payload, event)
+      let storedSession = false
+      let storedMessage = false
 
       if (session != null) {
         await this.rawRepository.upsertSession({
@@ -69,6 +66,7 @@ export class FlwWebhookIngestService {
           session,
           source: WEBHOOK_SOURCE,
         })
+        storedSession = true
         logFlwWebhookStoredSession({
           clientId: input.clientId,
           event,
@@ -82,6 +80,7 @@ export class FlwWebhookIngestService {
           message,
           source: WEBHOOK_SOURCE,
         })
+        storedMessage = true
         logFlwWebhookStoredMessage({
           clientId: input.clientId,
           event,
@@ -94,20 +93,11 @@ export class FlwWebhookIngestService {
         logFlwWebhookNoExtractableContent({ clientId: input.clientId, event })
       }
 
-      const normalized = await this.normalizationService.normalizeClient(input.clientId)
-
-      logFlwWebhookNormalized({
-        clientId: input.clientId,
-        event,
-        normalizedSessions: normalized.sessionsWritten,
-        normalizedMessages: normalized.messagesWritten,
-      })
-
       return {
         accepted: true,
         event,
-        normalizedSessions: normalized.sessionsWritten,
-        normalizedMessages: normalized.messagesWritten,
+        storedSession,
+        storedMessage,
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown FLW webhook error'

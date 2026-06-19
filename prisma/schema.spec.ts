@@ -64,6 +64,7 @@ describe('prisma schema', () => {
     expect(schema).toContain('model FlwSessionRaw')
     expect(schema).toContain('model FlwMessageRaw')
     expect(schema).toContain('model MessagingSyncState')
+    expect(schema).toContain('lastNormalizedAt')
     expect(schema).toContain('@@schema("raw")')
   })
 
