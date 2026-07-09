@@ -58,6 +58,16 @@ describe('prisma schema', () => {
     expect(schema).toContain('@@map("employees")')
   })
 
+  it('models employee ERP users and removes erpId from Employee', () => {
+    const schema = readFileSync(join(__dirname, 'schema.prisma'), 'utf-8')
+
+    expect(schema).toContain('model EmployeeErpUser')
+    expect(schema).toContain('@@unique([clientId, erpId]')
+    expect(schema).toContain('@@map("employee_erp_users")')
+    expect(schema).toMatch(/model Employee \{[^}]*branchId/s)
+    expect(schema).not.toMatch(/model Employee \{[^}]*erpId/s)
+  })
+
   it('maps raw FLW messaging tables and sync state', () => {
     const schema = readFileSync(join(__dirname, 'schema.prisma'), 'utf-8')
 

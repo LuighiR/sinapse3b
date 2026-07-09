@@ -82,6 +82,7 @@ model SinapseClient {
   kpiSnapshots KpiSnapshot[]
   refreshJobs RefreshJob[]
   tenants    Tenant[] @relation("TenantBackendClient")
+  employeeErpUsers EmployeeErpUser[]
 
   @@map("sinapse_clients")
   @@schema("core")
@@ -103,6 +104,7 @@ model Branch {
   saleFacts SaleFact[]
   employees Employee[]
   messagingSessions MessagingSession[]
+  employeeErpUsers EmployeeErpUser[]
 
   @@map("branches")
   @@schema("core")
@@ -113,15 +115,35 @@ model Employee {
   name            String
   extensionNumber String   @map("extension_number")
   extensionUuid   String   @map("extension_uuid")
-  erpId           BigInt   @map("erp_id")
   chatId          String   @map("chat_id")
   dkwWebhook      String?  @map("dkw_webhook")
   isNonCommercial Boolean  @default(false) @map("is_non_commercial")
   branchId        Int      @map("branch_id")
   branch          Branch   @relation(fields: [branchId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  erpUsers        EmployeeErpUser[]
 
   @@index([branchId], map: "employees_branch_id_idx")
   @@map("employees")
+  @@schema("core")
+}
+
+model EmployeeErpUser {
+  id         Int           @id @default(autoincrement())
+  employeeId Int           @map("employee_id")
+  clientId   String        @map("client_id")
+  erpId      BigInt        @map("erp_id")
+  branchId   Int           @map("branch_id")
+  createdAt  DateTime      @default(now()) @map("created_at")
+  updatedAt  DateTime      @updatedAt @map("updated_at")
+  employee   Employee      @relation(fields: [employeeId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  client     SinapseClient @relation(fields: [clientId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  branch     Branch        @relation(fields: [branchId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([clientId, erpId], map: "employee_erp_users_client_erp_id_key")
+  @@index([employeeId], map: "employee_erp_users_employee_id_idx")
+  @@index([branchId], map: "employee_erp_users_branch_id_idx")
+  @@index([erpId, branchId], map: "employee_erp_users_erp_id_branch_id_idx")
+  @@map("employee_erp_users")
   @@schema("core")
 }
 
