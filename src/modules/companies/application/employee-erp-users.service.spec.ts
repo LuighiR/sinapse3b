@@ -99,6 +99,20 @@ describe('EmployeeErpUsersService', () => {
     )
   })
 
+  it('throws ConflictException when create hits a unique constraint race', async () => {
+    const prisma = buildPrismaMock()
+    prisma.employee.findFirst.mockResolvedValue({ id: 20 })
+    prisma.branch.findFirst.mockResolvedValue({ id: 11, clientId: 'c1' })
+    prisma.employeeErpUser.findFirst.mockResolvedValue(null)
+    prisma.employeeErpUser.create.mockRejectedValue({ code: 'P2002' })
+
+    const service = new EmployeeErpUsersService(null, prisma as never)
+
+    await expect(service.create('c1', 20, { erpId: 500, branchId: 11 })).rejects.toBeInstanceOf(
+      ConflictException,
+    )
+  })
+
   it('removes an erp user link for an employee in the tenant', async () => {
     const prisma = buildPrismaMock()
     prisma.employee.findFirst.mockResolvedValue({ id: 20 })

@@ -191,6 +191,12 @@ export class EmployeeErpUsersService {
         branchId: input.branchId,
       },
       select: { id: true, erpId: true, branchId: true },
+    }).catch((error: unknown) => {
+      if (isUniqueConstraintError(error)) {
+        throw new ConflictException('ERP user id is already linked for this company')
+      }
+
+      throw error
     })
 
     return {
@@ -291,4 +297,13 @@ function serializeErpId(value: bigint): number {
   }
 
   return serialized
+}
+
+function isUniqueConstraintError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: unknown }).code === 'P2002'
+  )
 }

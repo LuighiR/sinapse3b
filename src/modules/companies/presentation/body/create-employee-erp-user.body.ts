@@ -2,8 +2,8 @@ import { BadRequestException } from '@nestjs/common'
 import { z } from 'zod'
 
 const createEmployeeErpUserBodySchema = z.object({
-  erpId: z.number().int().positive(),
-  branchId: z.number().int().positive(),
+  erpId: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  branchId: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
 })
 
 export type CreateEmployeeErpUserBody = z.infer<typeof createEmployeeErpUserBodySchema>
