@@ -57,10 +57,10 @@ export type TestEmployee = {
   name: string
   extensionNumber?: string
   extensionUuid?: string
-  erpId?: bigint
   chatId?: string
   isNonCommercial?: boolean
   branchId: number
+  erpUsers?: Array<{ id: number; erpId: bigint; branchId: number }>
 }
 
 export type TestFixtures = {

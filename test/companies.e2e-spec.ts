@@ -107,9 +107,9 @@ describe('companies', () => {
           branchId: 10,
           extensionNumber: '101',
           extensionUuid: 'ext-101',
-          erpId: 500n,
           chatId: 'chat-20',
           isNonCommercial: true,
+          erpUsers: [{ id: 1, erpId: 500n, branchId: 10 }],
         },
         {
           id: 21,
@@ -117,8 +117,8 @@ describe('companies', () => {
           branchId: 11,
           extensionNumber: '102',
           extensionUuid: 'ext-102',
-          erpId: 501n,
           chatId: 'chat-21',
+          erpUsers: [{ id: 2, erpId: 501n, branchId: 11 }],
         },
         {
           id: 99,
@@ -126,8 +126,8 @@ describe('companies', () => {
           branchId: 99,
           extensionNumber: '999',
           extensionUuid: 'ext-999',
-          erpId: 999n,
           chatId: 'chat-99',
+          erpUsers: [{ id: 3, erpId: 999n, branchId: 99 }],
         },
       ],
     })
@@ -142,13 +142,13 @@ describe('companies', () => {
         .expect([
           {
             id: 20,
-            erpId: 500,
             name: 'Maria Silva',
             branchId: 10,
             extensionNumber: '101',
             extensionUuid: 'ext-101',
             chatId: 'chat-20',
             isNonCommercial: true,
+            erpUsers: [{ id: 1, erpId: 500, branchId: 10 }],
           },
         ])
     } finally {
