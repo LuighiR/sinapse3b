@@ -183,4 +183,99 @@ describe('companies', () => {
       await app.close()
     }
   })
+
+  it('lists employee erp users for the current company', async () => {
+    const app = await buildTestApp({
+      users: [{ id: 'u1', email: 'ana@example.com', isActive: true }],
+      memberships: [{ userId: 'u1', tenantId: 't1', isActive: true }],
+      tenants: [{ id: 't1', backendClientId: 'c1', isActive: true }],
+      clients: [{ id: 'c1', name: 'Ferraco', isActive: true }],
+      branches: [{ id: 10, name: 'Matriz', clientId: 'c1', erpId: 100n }],
+      employees: [
+        {
+          id: 20,
+          name: 'Maria Silva',
+          branchId: 10,
+          erpUsers: [{ id: 1, erpId: 500n, branchId: 10 }],
+        },
+      ],
+    })
+
+    try {
+      await request(app.getHttpServer())
+        .get('/companies/current/employees/20/erp-users')
+        .set('Authorization', `Bearer ${await buildJwt({ sub: 'u1' })}`)
+        .set('X-Tenant-Id', 't1')
+        .expect(200)
+        .expect([{ id: 1, erpId: 500, branchId: 10 }])
+    } finally {
+      await app.close()
+    }
+  })
+
+  it('rejects creating an employee erp user when erpId is already linked', async () => {
+    const app = await buildTestApp({
+      users: [{ id: 'u1', email: 'ana@example.com', isActive: true }],
+      memberships: [{ userId: 'u1', tenantId: 't1', isActive: true }],
+      tenants: [{ id: 't1', backendClientId: 'c1', isActive: true }],
+      clients: [{ id: 'c1', name: 'Ferraco', isActive: true }],
+      branches: [
+        { id: 10, name: 'Matriz', clientId: 'c1', erpId: 100n },
+        { id: 11, name: 'Filial', clientId: 'c1', erpId: 101n },
+      ],
+      employees: [
+        {
+          id: 20,
+          name: 'Maria Silva',
+          branchId: 10,
+          erpUsers: [{ id: 1, erpId: 500n, branchId: 10 }],
+        },
+        {
+          id: 21,
+          name: 'Marina Costa',
+          branchId: 11,
+          erpUsers: [],
+        },
+      ],
+    })
+
+    try {
+      await request(app.getHttpServer())
+        .post('/companies/current/employees/21/erp-users')
+        .send({ erpId: 500, branchId: 11 })
+        .set('Authorization', `Bearer ${await buildJwt({ sub: 'u1' })}`)
+        .set('X-Tenant-Id', 't1')
+        .expect(409)
+    } finally {
+      await app.close()
+    }
+  })
+
+  it('rejects deleting an employee erp user that does not exist', async () => {
+    const app = await buildTestApp({
+      users: [{ id: 'u1', email: 'ana@example.com', isActive: true }],
+      memberships: [{ userId: 'u1', tenantId: 't1', isActive: true }],
+      tenants: [{ id: 't1', backendClientId: 'c1', isActive: true }],
+      clients: [{ id: 'c1', name: 'Ferraco', isActive: true }],
+      branches: [{ id: 10, name: 'Matriz', clientId: 'c1', erpId: 100n }],
+      employees: [
+        {
+          id: 20,
+          name: 'Maria Silva',
+          branchId: 10,
+          erpUsers: [{ id: 1, erpId: 500n, branchId: 10 }],
+        },
+      ],
+    })
+
+    try {
+      await request(app.getHttpServer())
+        .delete('/companies/current/employees/20/erp-users/99')
+        .set('Authorization', `Bearer ${await buildJwt({ sub: 'u1' })}`)
+        .set('X-Tenant-Id', 't1')
+        .expect(404)
+    } finally {
+      await app.close()
+    }
+  })
 })
