@@ -26,14 +26,13 @@ export class PrismaEmployeeBranchLookupReader implements EmployeeBranchLookupRea
   async findByClientId(clientId: string): Promise<EmployeeBranchLookup[]> {
     const rows = await this.prisma.$queryRaw<EmployeeBranchLookupSqlRow[]>`
       SELECT
-        e.erp_id AS "sellerId",
-        CASE WHEN count(*) = 1 THEN min(e.branch_id) ELSE NULL::integer END AS "branchId",
-        CASE WHEN count(*) = 1 THEN min(b.name) ELSE NULL::text END AS "branchName"
-      FROM core.employees AS e
-      JOIN core.branches AS b ON b.id = e.branch_id
-      WHERE b.client_id = ${clientId}
-      GROUP BY e.erp_id
-      ORDER BY e.erp_id ASC
+        eu.erp_id AS "sellerId",
+        eu.branch_id AS "branchId",
+        b.name AS "branchName"
+      FROM core.employee_erp_users AS eu
+      JOIN core.branches AS b ON b.id = eu.branch_id
+      WHERE eu.client_id = ${clientId}
+      ORDER BY eu.erp_id ASC
     `
 
     return rows.map((row) => ({

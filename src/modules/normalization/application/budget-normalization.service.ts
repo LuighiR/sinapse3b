@@ -145,13 +145,12 @@ export class PrismaBudgetFactUpsertRepository implements BudgetFactUpsertReposit
     await this.prisma.$executeRaw`
       WITH employee_branch_lookup AS (
         SELECT
-          e.erp_id AS seller_id,
-          CASE WHEN count(*) = 1 THEN min(e.branch_id) ELSE NULL::integer END AS branch_id,
-          CASE WHEN count(*) = 1 THEN min(b.name) ELSE NULL::text END AS branch_name
-        FROM core.employees AS e
-        JOIN core.branches AS b ON b.id = e.branch_id
-        WHERE b.client_id = ${clientId}
-        GROUP BY e.erp_id
+          eu.erp_id AS seller_id,
+          eu.branch_id AS branch_id,
+          b.name AS branch_name
+        FROM core.employee_erp_users AS eu
+        JOIN core.branches AS b ON b.id = eu.branch_id
+        WHERE eu.client_id = ${clientId}
       )
       INSERT INTO core.budget_facts (
         client_id,

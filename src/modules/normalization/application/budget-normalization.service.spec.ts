@@ -331,7 +331,8 @@ describe('PrismaBudgetFactUpsertRepository', () => {
 
     expect(clientId).toBe('ferracosul')
     expect(sql).toContain('employee_branch_lookup')
-    expect(sql).toContain('e.erp_id')
+    expect(sql).toContain('employee_erp_users')
+    expect(sql).toContain('eu.erp_id')
     expect(sql).toContain('branch_id')
     expect(sql).toContain("COALESCE(budget.branch, '')")
     expect(sql).toContain("COALESCE(budget.seller_name, '')")

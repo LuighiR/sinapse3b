@@ -36,7 +36,8 @@ describe('SaleNormalizationService', () => {
 
     expect(sqlText).toContain('WITH linked_budget AS (')
     expect(sqlText).toContain('employee_branch_lookup')
-    expect(sqlText).toContain('e.erp_id')
+    expect(sqlText).toContain('employee_erp_users')
+    expect(sqlText).toContain('eu.erp_id')
     expect(sqlText).toContain('branch_id')
     expect(sqlText).toContain('SELECT DISTINCT ON (budget.client_id, budget.sequential_linked_sale)')
     expect(sqlText).toContain('linked_budget.sequential_linked_sale = sale.sequential')
