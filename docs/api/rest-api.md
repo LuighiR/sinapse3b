@@ -522,7 +522,7 @@ X-Tenant-Id: <tenant-id>
 
 Query Params:
 
-- `branchId` optional, integer
+- `branchId` optional, integer — filtra pela filial de **residencia** do employee (`employees.branch_id`)
 - `search` optional, text
 
 Exemplo:
@@ -536,18 +536,109 @@ Response `200`:
 ```json
 [
   {
-    "id": 35747,
-    "erpId": 35747,
+    "id": 12,
     "name": "Fabiano Pereira da Silva",
     "branchId": 1,
     "extensionNumber": "101",
     "extensionUuid": "3c5f7f91-6b21-4b4d-a7a0-2d5f8e7a1234",
-    "chatId": "fabiano@empresa.com"
+    "chatId": "fabiano@empresa.com",
+    "isNonCommercial": false,
+    "erpUsers": [
+      { "id": 1, "erpId": 35747, "branchId": 1 },
+      { "id": 2, "erpId": 35748, "branchId": 3 }
+    ]
   }
 ]
 ```
 
-`erpId` e o identificador usado como `sellerId` nas rotas de `budgets` e `sales`.
+Notas:
+
+- `branchId` no employee e a filial onde a pessoa **reside**
+- `erpUsers[].branchId` e a filial que aquele usuario ERP **atende**
+- `erpUsers[].erpId` e o identificador usado como `sellerId` nas rotas de `budgets` e `sales`
+
+### `GET /companies/current/employees/:employeeId/erp-users`
+
+Descricao:
+lista os vinculos ERP do employee.
+
+Headers:
+
+```http
+Authorization: Bearer <jwt>
+X-Tenant-Id: <tenant-id>
+```
+
+Response `200`:
+
+```json
+[
+  { "id": 1, "erpId": 35747, "branchId": 1 },
+  { "id": 2, "erpId": 35748, "branchId": 3 }
+]
+```
+
+Erros:
+
+- `404` employee inexistente ou de outro tenant
+- `400` `employeeId` invalido
+
+### `POST /companies/current/employees/:employeeId/erp-users`
+
+Descricao:
+cria um vinculo ERP para o employee.
+
+Headers:
+
+```http
+Authorization: Bearer <jwt>
+X-Tenant-Id: <tenant-id>
+Content-Type: application/json
+```
+
+Body:
+
+```json
+{
+  "erpId": 35749,
+  "branchId": 3
+}
+```
+
+Response `201`:
+
+```json
+{ "id": 3, "erpId": 35749, "branchId": 3 }
+```
+
+Erros:
+
+- `404` employee inexistente ou de outro tenant
+- `400` body invalido ou branch fora do tenant
+- `409` `erpId` ja ligado a qualquer employee do mesmo cliente
+
+### `DELETE /companies/current/employees/:employeeId/erp-users/:erpUserId`
+
+Descricao:
+remove um vinculo ERP do employee.
+
+Headers:
+
+```http
+Authorization: Bearer <jwt>
+X-Tenant-Id: <tenant-id>
+```
+
+Response `200`:
+
+```json
+{ "ok": true }
+```
+
+Erros:
+
+- `404` employee ou vinculo inexistente / fora do escopo
+- `400` params invalidos
 
 ## Budgets KPI
 
@@ -561,7 +652,7 @@ Budgets aceitam:
 - `status` optional: `Cancelado`, `Baixado`, `Pendente`
 - `orderType` optional
 
-Quando `sellerId` e informado nas rotas de budgets, ele representa `core.employees.erp_id`.
+Quando `sellerId` e informado nas rotas de budgets, ele representa `core.employee_erp_users.erp_id`.
 
 `orderType` vem de `raw.ferraco_budgets.order_type`.
 
@@ -685,7 +776,7 @@ Query Params:
 - `sellerId` optional
 - `orderType` optional
 
-Quando `sellerId` e informado nas rotas de budgets, ele representa `core.employees.erp_id`.
+Quando `sellerId` e informado nas rotas de budgets, ele representa `core.employee_erp_users.erp_id`.
 
 Regra:
 
@@ -781,7 +872,7 @@ Query Params:
 - `sellerId` optional
 - `orderType` optional
 
-Quando `sellerId` e informado nas rotas de budgets, ele representa `core.employees.erp_id`.
+Quando `sellerId` e informado nas rotas de budgets, ele representa `core.employee_erp_users.erp_id`.
 
 Regra:
 
@@ -847,7 +938,7 @@ Query Params:
 - `sellerId` optional
 - `orderType` optional
 
-Quando `sellerId` e informado nas rotas de budgets, ele representa `core.employees.erp_id`.
+Quando `sellerId` e informado nas rotas de budgets, ele representa `core.employee_erp_users.erp_id`.
 
 Regra:
 
@@ -946,7 +1037,7 @@ Query Params:
 - `branchId` optional
 - `orderType` optional
 
-Quando `sellerId` e informado nas rotas de budgets, ele representa `core.employees.erp_id`.
+Quando `sellerId` e informado nas rotas de budgets, ele representa `core.employee_erp_users.erp_id`.
 
 Regra:
 
@@ -1123,7 +1214,7 @@ Query Params:
 - `branchId` optional
 - `branchName` optional
 
-Quando `sellerId` e informado nas rotas de budgets, ele representa `core.employees.erp_id`.
+Quando `sellerId` e informado nas rotas de budgets, ele representa `core.employee_erp_users.erp_id`.
 
 Exemplo:
 
@@ -1189,7 +1280,7 @@ Sales aceitam:
 - `orderType` optional
 - `hasLinkedBudget` optional: `true`, `false`
 
-Quando `sellerId` e informado nas rotas de sales, ele representa `core.employees.erp_id`.
+Quando `sellerId` e informado nas rotas de sales, ele representa `core.employee_erp_users.erp_id`.
 
 Em vendas, `orderType` vem do budget vinculado por:
 
@@ -1906,7 +1997,7 @@ Quando `chatId` e informado nas rotas analiticas de WhatsApp, ele representa o e
 
 Quando `branchId` e informado no legado, o filtro e derivado de employee: `lower(btrim(core.employees.chat_id))` precisa casar com `lower(btrim(core.sessions.assigned_user_email))`. No canônico, filtra diretamente `core.messaging_sessions.branch_id` (mapeado via `branches.flw_department_id` para FLW).
 
-Quando `sellerId` e informado em `GET /kpis/whatsapp/tags/hourly/comparison`, ele filtra somente `openBudgetsCount` pelo mesmo identificador de budgets e sales: `core.employees.erp_id` / `core.budget_facts.seller_id`.
+Quando `sellerId` e informado em `GET /kpis/whatsapp/tags/hourly/comparison`, ele filtra somente `openBudgetsCount` pelo mesmo identificador de budgets e sales: `core.employee_erp_users.erp_id` / `core.budget_facts.seller_id`.
 
 ### `GET /kpis/whatsapp/summary`
 
