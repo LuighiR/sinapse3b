@@ -52,6 +52,21 @@ describe('PrismaBudgetFollowUpDkwDispatchRepository', () => {
     ])
 
     expect(prisma.$queryRaw).toHaveBeenCalledTimes(1)
+
+    const sqlArg = prisma.$queryRaw.mock.calls[0]?.[0] as { strings?: TemplateStringsArray } | TemplateStringsArray | string
+    const sqlText =
+      typeof sqlArg === 'string'
+        ? sqlArg
+        : Array.isArray(sqlArg)
+          ? sqlArg.join('?')
+          : Array.isArray((sqlArg as { strings?: TemplateStringsArray })?.strings)
+            ? ((sqlArg as { strings: TemplateStringsArray }).strings.join('?'))
+            : String(sqlArg)
+
+    expect(sqlText).toContain('employee_erp_users')
+    expect(sqlText).toContain('eu.erp_id = fact.seller_id')
+    expect(sqlText).toContain('eu.branch_id = fact.branch_id')
+    expect(sqlText).not.toContain('employees.erp_id')
   })
 
   it('marks the raw budget as sent', async () => {

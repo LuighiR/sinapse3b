@@ -66,11 +66,13 @@ export class PrismaBudgetFollowUpDkwDispatchRepository implements BudgetFollowUp
       JOIN raw.ferraco_budgets AS raw
         ON raw.id = fact.source_record_id
       LEFT JOIN LATERAL (
-        SELECT employees.dkw_webhook
-        FROM core.employees AS employees
-        WHERE employees.erp_id = fact.seller_id
-          AND employees.branch_id = fact.branch_id
-        ORDER BY employees.id ASC
+        SELECT e.dkw_webhook
+        FROM core.employee_erp_users AS eu
+        JOIN core.employees AS e ON e.id = eu.employee_id
+        WHERE eu.erp_id = fact.seller_id
+          AND eu.branch_id = fact.branch_id
+          AND eu.client_id = fact.client_id
+        ORDER BY eu.id ASC
         LIMIT 1
       ) AS employee
         ON TRUE
