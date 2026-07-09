@@ -647,12 +647,10 @@ export class WhatsAppKpiQueryService {
     return trimmed.length === 0 ? undefined : trimmed
   }
 
-  private async resolveBranchScope(clientId: string, branchId?: number): Promise<number | undefined> {
-    if (branchId !== undefined && this.branchScopeService !== undefined) {
-      await this.branchScopeService.assertBranchScope(clientId, branchId)
-    }
-
-    return branchId
+  private async resolveBranchScope(_clientId: string, _branchId?: number): Promise<number | undefined> {
+    // WhatsApp KPIs currently ignore branchId: filter by chatId/period only.
+    // The query param remains accepted for frontend compatibility.
+    return undefined
   }
 
   private toPeriod(input: WhatsAppKpiQueryPeriodInput): KpiPeriod {

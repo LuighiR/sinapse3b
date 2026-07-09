@@ -48,7 +48,7 @@ describe('WhatsAppKpiQueryService', () => {
     })
   })
 
-  it('validates branch scope and passes branchId to summary lookups', async () => {
+  it('ignores branchId on summary lookups while still accepting the query param', async () => {
     const repository: jest.Mocked<WhatsAppKpiQueryRepository> = {
       getSummaryCounts: jest.fn().mockResolvedValue({
         totalConversationsCount: 12,
@@ -76,11 +76,11 @@ describe('WhatsAppKpiQueryService', () => {
       branchId: 5,
     } as any)
 
-    expect(branchScopeService.assertBranchScope).toHaveBeenCalledWith('client-1', 5)
+    expect(branchScopeService.assertBranchScope).not.toHaveBeenCalled()
     expect(repository.getSummaryCounts).toHaveBeenCalledWith({
       clientId: 'client-1',
       chatId: undefined,
-      branchId: 5,
+      branchId: undefined,
       period: expect.objectContaining({
         from: saoPauloPeriodDate(2026, 2, 1),
         to: saoPauloPeriodDate(2026, 2, 31),
@@ -359,7 +359,7 @@ describe('WhatsAppKpiQueryService', () => {
     expect(result.rows[14]).toEqual({ hour: '14', sessionsCount: 30 })
   })
 
-  it('passes branchId to both whatsapp and budget lookups for tag comparison', async () => {
+  it('ignores branchId on tag comparison and still passes sellerId for open budgets', async () => {
     const repository: jest.Mocked<WhatsAppKpiQueryRepository> = {
       getSummaryCounts: jest.fn(),
       getAgentRankingRows: jest.fn(),
@@ -388,11 +388,11 @@ describe('WhatsAppKpiQueryService', () => {
       sellerId: '35747',
     } as any)
 
-    expect(branchScopeService.assertBranchScope).toHaveBeenCalledWith('client-1', 5)
+    expect(branchScopeService.assertBranchScope).not.toHaveBeenCalled()
     expect(repository.getTagHourlyComparisonRows).toHaveBeenCalledWith({
       clientId: 'client-1',
       chatId: undefined,
-      branchId: 5,
+      branchId: undefined,
       sellerId: 35747,
       period: expect.objectContaining({
         from: saoPauloPeriodDate(2026, 2, 5),

@@ -2033,7 +2033,7 @@ WhatsApp e mensageria aceitam:
 - `from` required
 - `to` required
 - `chatId` optional
-- `branchId` optional
+- `branchId` optional — **aceito, mas ignorado por enquanto** (WhatsApp filtra por `chatId`/periodo; o front pode continuar enviando)
 - `tagId` required apenas nas rotas por tag
 - `sellerId` optional apenas em `GET /kpis/whatsapp/tags/hourly/comparison`
 
@@ -2045,7 +2045,7 @@ KPIs por tag continuam no legado ate fase futura de contatos/tags no canônico.
 
 Quando `chatId` e informado nas rotas analiticas de WhatsApp, ele representa o email do atendente. No legado filtra `core.sessions.assigned_user_email`; no canônico filtra `core.messaging_sessions.assigned_agent_email` (case-insensitive).
 
-Quando `branchId` e informado no legado, o filtro e derivado de employee: `lower(btrim(core.employees.chat_id))` precisa casar com `lower(btrim(core.sessions.assigned_user_email))`. No canônico, filtra diretamente `core.messaging_sessions.branch_id` (mapeado via `branches.flw_department_id` para FLW).
+Quando `branchId` e informado nas rotas de WhatsApp, o backend **ignora** o parametro por enquanto (compatibilidade com o front). O filtro efetivo de pessoa e `chatId`.
 
 Quando `sellerId` e informado em `GET /kpis/whatsapp/tags/hourly/comparison`, ele filtra somente `openBudgetsCount` pelo mesmo identificador de budgets e sales: `core.employee_erp_users.erp_id` / `core.budget_facts.seller_id`.
 
