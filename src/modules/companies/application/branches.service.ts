@@ -9,6 +9,7 @@ type BranchFixture = {
   phone?: string
   cnpj?: string
   clientId: string
+  erpId?: bigint
 }
 
 type BranchFixtures = {
@@ -17,14 +18,17 @@ type BranchFixtures = {
 
 type PrismaBranchReader = {
   branch: {
-    findMany(args: unknown): Promise<Array<{
-      id: number
-      name: string
-      address: string
-      phone: string
-      cnpj: string
-      clientId: string
-    }>>
+    findMany(args: unknown): Promise<
+      Array<{
+        id: number
+        name: string
+        address: string
+        phone: string
+        cnpj: string
+        clientId: string
+        erpId: bigint
+      }>
+    >
   }
 }
 
@@ -35,6 +39,7 @@ export type BranchSummary = {
   phone: string
   cnpj: string
   clientId: string
+  erpId: number
 }
 
 @Injectable()
@@ -66,6 +71,7 @@ export class BranchesService {
         phone: branch.phone ?? '',
         cnpj: branch.cnpj ?? '',
         clientId: branch.clientId,
+        erpId: serializeErpId(branch.erpId ?? BigInt(branch.id)),
       }))
   }
 
@@ -75,7 +81,7 @@ export class BranchesService {
     }
 
     const prisma = this.prisma as unknown as PrismaBranchReader
-    return prisma.branch.findMany({
+    const branches = await prisma.branch.findMany({
       where: { clientId },
       select: {
         id: true,
@@ -84,8 +90,29 @@ export class BranchesService {
         phone: true,
         cnpj: true,
         clientId: true,
+        erpId: true,
       },
       orderBy: { id: 'asc' },
     })
+
+    return branches.map((branch) => ({
+      id: branch.id,
+      name: branch.name,
+      address: branch.address,
+      phone: branch.phone,
+      cnpj: branch.cnpj,
+      clientId: branch.clientId,
+      erpId: serializeErpId(branch.erpId),
+    }))
   }
+}
+
+function serializeErpId(value: bigint): number {
+  const serialized = Number(value)
+
+  if (!Number.isSafeInteger(serialized)) {
+    throw new RangeError('Branch erpId exceeds JavaScript safe integer range')
+  }
+
+  return serialized
 }

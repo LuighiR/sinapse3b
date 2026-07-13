@@ -164,12 +164,11 @@ export class PrismaSaleFactUpsertRepository implements SaleFactUpsertRepository 
       ),
       employee_branch_lookup AS (
         SELECT
-          eu.erp_id AS seller_id,
-          eu.branch_id AS branch_id,
+          b.erp_id AS erp_branch_code,
+          b.id AS branch_id,
           b.name AS branch_name
-        FROM core.employee_erp_users AS eu
-        JOIN core.branches AS b ON b.id = eu.branch_id
-        WHERE eu.client_id = ${clientId}
+        FROM core.branches AS b
+        WHERE b.client_id = ${clientId}
       )
       INSERT INTO core.sale_facts (
         client_id,
@@ -199,8 +198,8 @@ export class PrismaSaleFactUpsertRepository implements SaleFactUpsertRepository 
         sale.client_id,
         'raw.ferraco_sales',
         sale.id,
-        COALESCE(employee_branch.branch_name, COALESCE(sale.branch, '')),
-        employee_branch.branch_id,
+        COALESCE(erp_branch.branch_name, COALESCE(sale.branch, '')),
+        erp_branch.branch_id,
         COALESCE(sale.seller_id, 0),
         COALESCE(sale.seller_name, ''),
         sale.date,
@@ -226,8 +225,8 @@ export class PrismaSaleFactUpsertRepository implements SaleFactUpsertRepository 
       LEFT JOIN linked_budget
         ON linked_budget.client_id = sale.client_id
        AND linked_budget.sequential_linked_sale = sale.sequential
-      LEFT JOIN employee_branch_lookup AS employee_branch
-        ON employee_branch.seller_id = sale.seller_id
+      LEFT JOIN employee_branch_lookup AS erp_branch
+        ON erp_branch.erp_branch_code = NULLIF(btrim(sale.branch), '')::bigint
       WHERE sale.client_id = ${clientId}
       ON CONFLICT (client_id, source_table, source_record_id)
       DO UPDATE SET
@@ -353,10 +352,11 @@ export class SaleNormalizationService {
   private normalizeSale(
     clientId: string,
     sale: RawFerracoSaleRecord,
-    employeeBranchLookup: Map<number, { branchId: number | null; branchName: string | null }>,
+    erpBranchLookup: Map<number, { branchId: number | null; branchName: string | null }>,
   ): SaleFactWritePayload {
     const sellerId = this.parseNumberOrDefault(sale.sellerId, 0)
-    const branchMatch = employeeBranchLookup.get(sellerId)
+    const erpBranchCode = this.parseOptionalErpBranchCode(sale.branch)
+    const branchMatch = erpBranchCode === null ? undefined : erpBranchLookup.get(erpBranchCode)
 
     return {
       clientId,
@@ -423,6 +423,20 @@ export class SaleNormalizationService {
     }
 
     return parsedValue
+  }
+
+  private parseOptionalErpBranchCode(value: string | null | undefined): number | null {
+    if (value == null) {
+      return null
+    }
+
+    const trimmed = String(value).trim()
+    if (trimmed === '' || !/^\d+$/.test(trimmed)) {
+      return null
+    }
+
+    const parsed = Number.parseInt(trimmed, 10)
+    return Number.isSafeInteger(parsed) ? parsed : null
   }
 
   private parseOptionalBigInt(value: string | number | bigint | null): bigint | null {

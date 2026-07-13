@@ -36,15 +36,15 @@ describe('SaleNormalizationService', () => {
 
     expect(sqlText).toContain('WITH linked_budget AS (')
     expect(sqlText).toContain('employee_branch_lookup')
-    expect(sqlText).toContain('employee_erp_users')
-    expect(sqlText).toContain('eu.erp_id')
+    expect(sqlText).toContain('b.erp_id')
+    expect(sqlText).toContain('sale.branch')
     expect(sqlText).toContain('branch_id')
     expect(sqlText).toContain('SELECT DISTINCT ON (budget.client_id, budget.sequential_linked_sale)')
     expect(sqlText).toContain('linked_budget.sequential_linked_sale = sale.sequential')
     expect(sqlText).not.toContain('LEFT JOIN LATERAL')
   })
 
-  it('maps branchId from the seller ERP lookup when the seller belongs to a unique branch', async () => {
+  it('maps branchId from the ERP branch code on the raw sale', async () => {
     const rawReader: RawFerracoSaleReader = {
       findByClientId: jest.fn().mockResolvedValue([
         {
@@ -78,7 +78,7 @@ describe('SaleNormalizationService', () => {
     const employeeBranchLookup = {
       findByClientId: jest.fn().mockResolvedValue([
         {
-          sellerId: 7,
+          sellerId: 5,
           branchId: 2,
           branchName: 'FerraçoSul - Pelotas',
         },

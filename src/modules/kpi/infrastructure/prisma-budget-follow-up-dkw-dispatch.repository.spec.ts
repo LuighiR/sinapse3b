@@ -63,10 +63,10 @@ describe('PrismaBudgetFollowUpDkwDispatchRepository', () => {
             ? ((sqlArg as { strings: TemplateStringsArray }).strings.join('?'))
             : String(sqlArg)
 
-    expect(sqlText).toContain('employee_erp_users')
-    expect(sqlText).toContain('eu.erp_id = fact.seller_id')
-    expect(sqlText).toContain('eu.branch_id = fact.branch_id')
-    expect(sqlText).not.toContain('employees.erp_id')
+    expect(sqlText).toContain('employees')
+    expect(sqlText).toContain('e.erp_id = fact.seller_id')
+    expect(sqlText).not.toContain('employee_erp_users')
+    expect(sqlText).not.toContain('eu.branch_id = fact.branch_id')
   })
 
   it('marks the raw budget as sent', async () => {

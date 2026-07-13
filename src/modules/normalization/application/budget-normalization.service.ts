@@ -143,14 +143,13 @@ export class PrismaBudgetFactUpsertRepository implements BudgetFactUpsertReposit
 
   async bulkUpsertClient(clientId: string): Promise<void> {
     await this.prisma.$executeRaw`
-      WITH employee_branch_lookup AS (
+      WITH erp_branch_lookup AS (
         SELECT
-          eu.erp_id AS seller_id,
-          eu.branch_id AS branch_id,
+          b.erp_id AS erp_branch_code,
+          b.id AS branch_id,
           b.name AS branch_name
-        FROM core.employee_erp_users AS eu
-        JOIN core.branches AS b ON b.id = eu.branch_id
-        WHERE eu.client_id = ${clientId}
+        FROM core.branches AS b
+        WHERE b.client_id = ${clientId}
       )
       INSERT INTO core.budget_facts (
         client_id,
@@ -180,8 +179,8 @@ export class PrismaBudgetFactUpsertRepository implements BudgetFactUpsertReposit
         budget.client_id,
         'raw.ferraco_budgets',
         budget.id,
-        COALESCE(employee_branch.branch_name, COALESCE(budget.branch, '')),
-        employee_branch.branch_id,
+        COALESCE(erp_branch.branch_name, COALESCE(budget.branch, '')),
+        erp_branch.branch_id,
         budget.seller_id,
         COALESCE(budget.seller_name, ''),
         budget.opening_date,
@@ -206,8 +205,8 @@ export class PrismaBudgetFactUpsertRepository implements BudgetFactUpsertReposit
         budget.sequential_linked_sale,
         row_to_json(budget)
       FROM raw.ferraco_budgets AS budget
-      LEFT JOIN employee_branch_lookup AS employee_branch
-        ON employee_branch.seller_id = budget.seller_id
+      LEFT JOIN erp_branch_lookup AS erp_branch
+        ON erp_branch.erp_branch_code = NULLIF(btrim(budget.branch), '')::bigint
       WHERE budget.client_id = ${clientId}
       ON CONFLICT (client_id, source_table, source_record_id)
       DO UPDATE SET
@@ -333,10 +332,11 @@ export class BudgetNormalizationService {
   private normalizeBudget(
     clientId: string,
     budget: RawFerracoBudgetRecord,
-    employeeBranchLookup: Map<number, { branchId: number | null; branchName: string | null }>,
+    erpBranchLookup: Map<number, { branchId: number | null; branchName: string | null }>,
   ): BudgetFactWritePayload {
     const sellerId = this.parseNumber(budget.sellerId, 'sellerId')
-    const branchMatch = employeeBranchLookup.get(sellerId)
+    const erpBranchCode = this.parseOptionalErpBranchCode(budget.branch)
+    const branchMatch = erpBranchCode === null ? undefined : erpBranchLookup.get(erpBranchCode)
 
     return {
       clientId,
@@ -401,6 +401,20 @@ export class BudgetNormalizationService {
     }
 
     return parsedValue
+  }
+
+  private parseOptionalErpBranchCode(value: string | null | undefined): number | null {
+    if (value == null) {
+      return null
+    }
+
+    const trimmed = String(value).trim()
+    if (trimmed === '' || !/^\d+$/.test(trimmed)) {
+      return null
+    }
+
+    const parsed = Number.parseInt(trimmed, 10)
+    return Number.isSafeInteger(parsed) ? parsed : null
   }
 
   private parseBigInt(value: string | number | bigint | null, fieldName: string): bigint {

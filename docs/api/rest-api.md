@@ -497,7 +497,11 @@ Response `200`:
   {
     "id": 1,
     "name": "Matriz",
-    "clientId": "ferracosul"
+    "address": "Rua Exemplo, 100",
+    "phone": "5333333333",
+    "cnpj": "00.000.000/0001-00",
+    "clientId": "ferracosul",
+    "erpId": 1
   }
 ]
 ```
@@ -505,6 +509,7 @@ Response `200`:
 Notas para o frontend:
 
 - usar `id` como `branchId` nas rotas de KPI
+- `erpId` e o codigo da filial no ERP (`core.branches.erp_id`), o mesmo valor que aparece em `raw.*.branch`
 - nao usar `domainUuid` do client para filtrar chamadas
 - o Domain ID da telefonia fica no backend em `core.branches.telephony_domain_uuid` e nao precisa ser enviado pelo frontend
 
@@ -537,151 +542,42 @@ Response `200`:
 [
   {
     "id": 12,
+    "erpId": 35747,
     "name": "Fabiano Pereira da Silva",
     "branchId": 1,
     "extensionNumber": "101",
     "extensionUuid": "3c5f7f91-6b21-4b4d-a7a0-2d5f8e7a1234",
     "chatId": "fabiano@empresa.com",
-    "isNonCommercial": false,
-    "erpUsers": [
-      { "id": 1, "erpId": 35747, "branchId": 1 },
-      { "id": 2, "erpId": 35748, "branchId": 3 }
-    ]
+    "isNonCommercial": false
   }
 ]
 ```
 
 Notas:
 
-- `branchId` no employee e a filial onde a pessoa **reside**
-- `erpUsers[].branchId` e a filial que aquele usuario ERP **atende**
-- `erpUsers[].erpId` e o identificador usado como `sellerId` nas rotas de `budgets` e `sales`
+- `erpId` e o identificador usado como `sellerId` nas rotas de `budgets` e `sales` (`core.employees.erp_id`)
+- `branchId` no employee e a filial onde a pessoa **reside** (ramal/chat); **nao** limita em quais lojas o `sellerId` pode filtrar
+- No ERP, o mesmo `seller_id` pode gerar orcamentos/vendas em varias filiais
 
 #### Guia frontend: filtro por pessoa nas 3+ lojas
 
-A tela de vendas/orcamentos/mensagens/ligacoes por loja **nao** filtra por `employee.id`. Filtra por `sellerId` = usuario ERP daquela loja.
+1. `GET /companies/current/employees` para montar o seletor de pessoa
+2. Liste **todas** as filiais (`GET /companies/current/branches`)
+3. Para cada coluna/loja, chame budgets/sales com o **mesmo** `sellerId = employee.erpId` + `branchId` da loja
+4. Se a resposta vier vazia / zerada para aquela loja, mostre **0**
 
-Fluxo recomendado:
+Exemplo — Shaiane (`erpId = 42754`):
 
-1. `GET /companies/current/employees` (sem `branchId`, ou com search) para montar o seletor de **pessoa** (Joaozinho, Maria, etc.)
-2. Quando o usuario escolhe uma pessoa, use o array `erpUsers` dela
-3. Para **cada loja/coluna** (`branchId`), resolva o `sellerId` assim:
-
-```ts
-const sellerIdForBranch = employee.erpUsers.find((u) => u.branchId === branchId)?.erpId
-```
-
-4. Chame o KPI daquela loja com `branchId` + `sellerId` quando existir vinculo
-5. Se **nao** houver vinculo para aquela loja (ex.: Joaozinho nao atende Rio Grande), **nao** envie `sellerId` de outra loja — mostre **0** / vazio para aquela coluna
-
-Exemplo — Joaozinho:
-
-```json
-{
-  "id": 20,
-  "name": "Joaozinho",
-  "branchId": 1,
-  "erpUsers": [
-    { "id": 1, "erpId": 111, "branchId": 1 },
-    { "id": 2, "erpId": 222, "branchId": 2 }
-  ]
-}
-```
-
-| Loja | `branchId` | `sellerId` a enviar | Resultado esperado |
-|------|------------|---------------------|--------------------|
-| Pelotas | 1 | `111` | vendas/orcamentos dele em Pelotas |
-| Santa Maria | 2 | `222` | vendas/orcamentos dele em Santa Maria |
-| Rio Grande | 3 | *(sem vinculo)* | **0** — nao usar `111` nem `222` |
+| Loja | `branchId` | Query | Resultado |
+|------|------------|-------|-----------|
+| Pelotas | 2 | `sellerId=42754&branchId=2` | numeros dela em Pelotas |
+| Santa Maria | 3 | `sellerId=42754&branchId=3` | numeros dela em Santa Maria (ou 0) |
+| Rio Grande | 4 | `sellerId=42754&branchId=4` | numeros dela em Rio Grande (ou 0) |
 
 Importante:
 
-- A API de budgets/sales aceita **um** `sellerId` por request (um usuario ERP). Para a grade multi-loja, o front faz **uma chamada por loja** (ou reusa o mesmo periodo com `branchId` + `sellerId` distintos).
-- **Nao** use `employee.branchId` (residencia) como filtro de KPI por loja.
-- Calls/WhatsApp: `sellerId` **nao** filtra ligacoes; em WhatsApp so entra em `tags/hourly/comparison` no lado de orcamentos abertos. Para ligacoes use ramal (`extensionUuid` / `extensionNumber`); para WhatsApp use `chatId` quando aplicavel.
-
-### `GET /companies/current/employees/:employeeId/erp-users`
-
-Descricao:
-lista os vinculos ERP do employee.
-
-Headers:
-
-```http
-Authorization: Bearer <jwt>
-X-Tenant-Id: <tenant-id>
-```
-
-Response `200`:
-
-```json
-[
-  { "id": 1, "erpId": 35747, "branchId": 1 },
-  { "id": 2, "erpId": 35748, "branchId": 3 }
-]
-```
-
-Erros:
-
-- `404` employee inexistente ou de outro tenant
-- `400` `employeeId` invalido
-
-### `POST /companies/current/employees/:employeeId/erp-users`
-
-Descricao:
-cria um vinculo ERP para o employee.
-
-Headers:
-
-```http
-Authorization: Bearer <jwt>
-X-Tenant-Id: <tenant-id>
-Content-Type: application/json
-```
-
-Body:
-
-```json
-{
-  "erpId": 35749,
-  "branchId": 3
-}
-```
-
-Response `201`:
-
-```json
-{ "id": 3, "erpId": 35749, "branchId": 3 }
-```
-
-Erros:
-
-- `404` employee inexistente ou de outro tenant
-- `400` body invalido ou branch fora do tenant
-- `409` `erpId` ja ligado a qualquer employee do mesmo cliente
-
-### `DELETE /companies/current/employees/:employeeId/erp-users/:erpUserId`
-
-Descricao:
-remove um vinculo ERP do employee.
-
-Headers:
-
-```http
-Authorization: Bearer <jwt>
-X-Tenant-Id: <tenant-id>
-```
-
-Response `200`:
-
-```json
-{ "ok": true }
-```
-
-Erros:
-
-- `404` employee ou vinculo inexistente / fora do escopo
-- `400` params invalidos
+- Calls: use `extensionUuid` / `extensionNumber` (nao `sellerId`)
+- WhatsApp: use `chatId` (`branchId` em WhatsApp e ignorado por enquanto)
 
 ## Budgets KPI
 
@@ -695,8 +591,8 @@ Budgets aceitam:
 - `status` optional: `Cancelado`, `Baixado`, `Pendente`
 - `orderType` optional
 
-Quando `sellerId` e informado nas rotas de budgets, ele representa `core.employee_erp_users.erp_id`.
-Para filtrar por **pessoa** em varias lojas, veja o guia em `GET /companies/current/employees` (resolver `erpUsers[].erpId` por `branchId`; loja sem vinculo = 0).
+Quando `sellerId` e informado nas rotas de budgets, ele representa `core.employees.erp_id`.
+Para filtrar por **pessoa** em varias lojas, veja o guia em `GET /companies/current/employees` (mesmo `sellerId` + `branchId` por loja; sem dados = 0).
 
 `orderType` vem de `raw.ferraco_budgets.order_type`.
 
@@ -820,8 +716,8 @@ Query Params:
 - `sellerId` optional
 - `orderType` optional
 
-Quando `sellerId` e informado nas rotas de budgets, ele representa `core.employee_erp_users.erp_id`.
-Para filtrar por **pessoa** em varias lojas, veja o guia em `GET /companies/current/employees` (resolver `erpUsers[].erpId` por `branchId`; loja sem vinculo = 0).
+Quando `sellerId` e informado nas rotas de budgets, ele representa `core.employees.erp_id`.
+Para filtrar por **pessoa** em varias lojas, veja o guia em `GET /companies/current/employees` (mesmo `sellerId` + `branchId` por loja; sem dados = 0).
 
 Regra:
 
@@ -917,8 +813,8 @@ Query Params:
 - `sellerId` optional
 - `orderType` optional
 
-Quando `sellerId` e informado nas rotas de budgets, ele representa `core.employee_erp_users.erp_id`.
-Para filtrar por **pessoa** em varias lojas, veja o guia em `GET /companies/current/employees` (resolver `erpUsers[].erpId` por `branchId`; loja sem vinculo = 0).
+Quando `sellerId` e informado nas rotas de budgets, ele representa `core.employees.erp_id`.
+Para filtrar por **pessoa** em varias lojas, veja o guia em `GET /companies/current/employees` (mesmo `sellerId` + `branchId` por loja; sem dados = 0).
 
 Regra:
 
@@ -984,8 +880,8 @@ Query Params:
 - `sellerId` optional
 - `orderType` optional
 
-Quando `sellerId` e informado nas rotas de budgets, ele representa `core.employee_erp_users.erp_id`.
-Para filtrar por **pessoa** em varias lojas, veja o guia em `GET /companies/current/employees` (resolver `erpUsers[].erpId` por `branchId`; loja sem vinculo = 0).
+Quando `sellerId` e informado nas rotas de budgets, ele representa `core.employees.erp_id`.
+Para filtrar por **pessoa** em varias lojas, veja o guia em `GET /companies/current/employees` (mesmo `sellerId` + `branchId` por loja; sem dados = 0).
 
 Regra:
 
@@ -1084,8 +980,8 @@ Query Params:
 - `branchId` optional
 - `orderType` optional
 
-Quando `sellerId` e informado nas rotas de budgets, ele representa `core.employee_erp_users.erp_id`.
-Para filtrar por **pessoa** em varias lojas, veja o guia em `GET /companies/current/employees` (resolver `erpUsers[].erpId` por `branchId`; loja sem vinculo = 0).
+Quando `sellerId` e informado nas rotas de budgets, ele representa `core.employees.erp_id`.
+Para filtrar por **pessoa** em varias lojas, veja o guia em `GET /companies/current/employees` (mesmo `sellerId` + `branchId` por loja; sem dados = 0).
 
 Regra:
 
@@ -1262,8 +1158,8 @@ Query Params:
 - `branchId` optional
 - `branchName` optional
 
-Quando `sellerId` e informado nas rotas de budgets, ele representa `core.employee_erp_users.erp_id`.
-Para filtrar por **pessoa** em varias lojas, veja o guia em `GET /companies/current/employees` (resolver `erpUsers[].erpId` por `branchId`; loja sem vinculo = 0).
+Quando `sellerId` e informado nas rotas de budgets, ele representa `core.employees.erp_id`.
+Para filtrar por **pessoa** em varias lojas, veja o guia em `GET /companies/current/employees` (mesmo `sellerId` + `branchId` por loja; sem dados = 0).
 
 Exemplo:
 
@@ -1329,8 +1225,8 @@ Sales aceitam:
 - `orderType` optional
 - `hasLinkedBudget` optional: `true`, `false`
 
-Quando `sellerId` e informado nas rotas de sales, ele representa `core.employee_erp_users.erp_id`.
-Para filtrar por **pessoa** em varias lojas, veja o guia em `GET /companies/current/employees` (resolver `erpUsers[].erpId` por `branchId`; loja sem vinculo = 0).
+Quando `sellerId` e informado nas rotas de sales, ele representa `core.employees.erp_id`.
+Para filtrar por **pessoa** em varias lojas, veja o guia em `GET /companies/current/employees` (mesmo `sellerId` + `branchId` por loja; sem dados = 0).
 
 Em vendas, `orderType` vem do budget vinculado por:
 
@@ -2047,7 +1943,7 @@ Quando `chatId` e informado nas rotas analiticas de WhatsApp, ele representa o e
 
 Quando `branchId` e informado nas rotas de WhatsApp, o backend **ignora** o parametro por enquanto (compatibilidade com o front). O filtro efetivo de pessoa e `chatId`.
 
-Quando `sellerId` e informado em `GET /kpis/whatsapp/tags/hourly/comparison`, ele filtra somente `openBudgetsCount` pelo mesmo identificador de budgets e sales: `core.employee_erp_users.erp_id` / `core.budget_facts.seller_id`.
+Quando `sellerId` e informado em `GET /kpis/whatsapp/tags/hourly/comparison`, ele filtra somente `openBudgetsCount` pelo mesmo identificador de budgets e sales: `core.employees.erp_id` / `core.budget_facts.seller_id`.
 
 ### `GET /kpis/whatsapp/summary`
 

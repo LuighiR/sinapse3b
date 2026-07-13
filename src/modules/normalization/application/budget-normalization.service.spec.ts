@@ -23,7 +23,7 @@ describe('mapBudgetStatus', () => {
 })
 
 describe('BudgetNormalizationService', () => {
-  it('maps branchId from the seller ERP lookup when the seller belongs to a unique branch', async () => {
+  it('maps branchId from the ERP branch code on the raw budget', async () => {
     const rawReader: RawFerracoBudgetReader = {
       findByClientId: jest.fn().mockResolvedValue([
         {
@@ -58,7 +58,7 @@ describe('BudgetNormalizationService', () => {
     const employeeBranchLookup = {
       findByClientId: jest.fn().mockResolvedValue([
         {
-          sellerId: 7,
+          sellerId: 3,
           branchId: 2,
           branchName: 'FerraçoSul - Pelotas',
         },
@@ -330,9 +330,9 @@ describe('PrismaBudgetFactUpsertRepository', () => {
     const sql = queryParts.join('?')
 
     expect(clientId).toBe('ferracosul')
-    expect(sql).toContain('employee_branch_lookup')
-    expect(sql).toContain('employee_erp_users')
-    expect(sql).toContain('eu.erp_id')
+    expect(sql).toContain('erp_branch_lookup')
+    expect(sql).toContain('b.erp_id')
+    expect(sql).toContain('budget.branch')
     expect(sql).toContain('branch_id')
     expect(sql).toContain("COALESCE(budget.branch, '')")
     expect(sql).toContain("COALESCE(budget.seller_name, '')")

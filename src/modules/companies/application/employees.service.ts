@@ -8,10 +8,10 @@ type EmployeeFixture = {
   name: string
   extensionNumber?: string
   extensionUuid?: string
+  erpId?: bigint
   chatId?: string
   isNonCommercial?: boolean
   branchId: number
-  erpUsers?: Array<{ id: number; erpId: bigint; branchId: number }>
 }
 
 type BranchFixture = {
@@ -32,14 +32,10 @@ type PrismaEmployeeReader = {
         name: string
         extensionNumber: string
         extensionUuid: string
+        erpId: bigint
         chatId: string
         isNonCommercial: boolean
         branchId: number
-        erpUsers: Array<{
-          id: number
-          erpId: bigint
-          branchId: number
-        }>
       }>
     >
   }
@@ -50,21 +46,15 @@ export type EmployeeFilters = {
   search?: string
 }
 
-export type EmployeeErpUserSummary = {
-  id: number
-  erpId: number
-  branchId: number
-}
-
 export type EmployeeSummary = {
   id: number
+  erpId: number
   name: string
   branchId: number
   extensionNumber: string
   extensionUuid: string
   chatId: string
   isNonCommercial: boolean
-  erpUsers: EmployeeErpUserSummary[]
 }
 
 @Injectable()
@@ -105,17 +95,13 @@ export class EmployeesService {
       .sort((left, right) => left.id - right.id)
       .map((employee) => ({
         id: employee.id,
+        erpId: serializeErpId(employee.erpId ?? BigInt(employee.id)),
         name: employee.name,
         branchId: employee.branchId,
         extensionNumber: employee.extensionNumber ?? '',
         extensionUuid: employee.extensionUuid ?? '',
         chatId: employee.chatId ?? '',
         isNonCommercial: employee.isNonCommercial ?? false,
-        erpUsers: (employee.erpUsers ?? []).map((erpUser) => ({
-          id: erpUser.id,
-          erpId: serializeErpId(erpUser.erpId),
-          branchId: erpUser.branchId,
-        })),
       }))
   }
 
@@ -136,30 +122,17 @@ export class EmployeesService {
         name: true,
         extensionNumber: true,
         extensionUuid: true,
+        erpId: true,
         chatId: true,
         isNonCommercial: true,
         branchId: true,
-        erpUsers: {
-          select: { id: true, erpId: true, branchId: true },
-          orderBy: { id: 'asc' },
-        },
       },
       orderBy: { id: 'asc' },
     })
 
     return employees.map((employee) => ({
-      id: employee.id,
-      name: employee.name,
-      branchId: employee.branchId,
-      extensionNumber: employee.extensionNumber,
-      extensionUuid: employee.extensionUuid,
-      chatId: employee.chatId,
-      isNonCommercial: employee.isNonCommercial,
-      erpUsers: employee.erpUsers.map((erpUser) => ({
-        id: erpUser.id,
-        erpId: serializeErpId(erpUser.erpId),
-        branchId: erpUser.branchId,
-      })),
+      ...employee,
+      erpId: serializeErpId(employee.erpId),
     }))
   }
 }
