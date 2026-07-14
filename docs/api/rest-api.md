@@ -1920,6 +1920,61 @@ Rollout recomendado:
 6. validar `GET /internal/messaging/parity`
 7. setar `WHATSAPP_KPI_SOURCE=canonical` (ou `dual` para diagnostico)
 
+## WhatsApp Cities (classificacao por cidade)
+
+Cadastro tenant-scoped de cidades operacionais WhatsApp e mapa fila FLW (`departmentId`) → cidade. Independente de `core.branches`. Ver tambem `docs/messaging-module-overview.md`.
+
+Headers em todas as rotas:
+
+```http
+Authorization: Bearer <jwt>
+X-Tenant-Id: <tenant-id>
+```
+
+### `GET /whatsapp-cities`
+
+Lista cidades do tenant.
+
+Query Params:
+
+- `activeOnly` optional (`true` → so `isActive=true`)
+
+### `POST /whatsapp-cities`
+
+Body: `{ "name": "Pelotas" }`
+
+### `PATCH /whatsapp-cities/:id`
+
+Body: `{ "name"?: string, "isActive"?: boolean }`
+
+Sem delete duro na v1 — desativar com `isActive=false`.
+
+### `GET /whatsapp-department-mappings`
+
+Lista mapeamentos fila → cidade.
+
+Query Params:
+
+- `status` optional — `PENDING` | `MAPPED`
+
+### `POST /whatsapp-department-mappings`
+
+Body: `{ "departmentId": "<uuid>", "departmentLabel"?: string | null, "cityId"?: string | null }`
+
+- Com `cityId` → `MAPPED`; sem → `PENDING`
+- Upsert por `(clientId, departmentId)`
+- Se cidade/status mudou, atualiza `messaging_sessions.whatsapp_city_id` so daquela fila (`external_department_id`)
+
+### `PATCH /whatsapp-department-mappings/:id`
+
+Body parcial: `{ "departmentLabel"?: string | null, "cityId"?: string | null, "status"?: "PENDING" | "MAPPED" }`
+
+- Campo omitido preserva; `cityId: null` ou `status: PENDING` limpa cidade
+- Sync seletivo nas sessoes da fila, igual ao POST
+
+**Seed:** `npm run seed:whatsapp-cities` (Ferracosul + backfill historico)  
+**Migration:** `prisma/migrations/20260714_add_whatsapp_city_classification.sql`
+
 ## WhatsApp KPI
 
 ### Filters
@@ -1930,6 +1985,7 @@ WhatsApp e mensageria aceitam:
 - `to` required
 - `chatId` optional
 - `branchId` optional — **aceito, mas ignorado por enquanto** (WhatsApp filtra por `chatId`/periodo; o front pode continuar enviando)
+- `whatsappCityId` optional (uuid) — filtra `messaging_sessions.whatsapp_city_id`; **efeito so no path canônico** (`WHATSAPP_KPI_SOURCE=canonical`); em `legacy` a coluna nao existe
 - `tagId` required apenas nas rotas por tag
 - `sellerId` optional apenas em `GET /kpis/whatsapp/tags/hourly/comparison`
 
@@ -1942,6 +1998,8 @@ KPIs por tag continuam no legado ate fase futura de contatos/tags no canônico.
 Quando `chatId` e informado nas rotas analiticas de WhatsApp, ele representa o email do atendente. No legado filtra `core.sessions.assigned_user_email`; no canônico filtra `core.messaging_sessions.assigned_agent_email` (case-insensitive).
 
 Quando `branchId` e informado nas rotas de WhatsApp, o backend **ignora** o parametro por enquanto (compatibilidade com o front). O filtro efetivo de pessoa e `chatId`.
+
+Quando `whatsappCityId` e informado, o filtro aplica-se apenas nas queries canônicas sobre `messaging_sessions`.
 
 Quando `sellerId` e informado em `GET /kpis/whatsapp/tags/hourly/comparison`, ele filtra somente `openBudgetsCount` pelo mesmo identificador de budgets e sales: `core.employees.erp_id` / `core.budget_facts.seller_id`.
 
@@ -1956,6 +2014,7 @@ Query Params:
 - `to`
 - `chatId` optional
 - `branchId` optional
+- `whatsappCityId` optional (uuid; so canônico)
 
 Response `200`:
 
@@ -1986,6 +2045,7 @@ Query Params:
 - `to`
 - `chatId` optional
 - `branchId` optional
+- `whatsappCityId` optional (uuid; so canônico)
 
 Response `200`:
 
@@ -2032,6 +2092,7 @@ Query Params:
 - `to`
 - `chatId` optional
 - `branchId` optional
+- `whatsappCityId` optional (uuid; so canônico)
 
 Response `200`:
 
@@ -2062,6 +2123,7 @@ Query Params:
 - `to`
 - `chatId` optional
 - `branchId` optional
+- `whatsappCityId` optional (uuid; so canônico)
 
 Response `200`:
 
@@ -2100,6 +2162,7 @@ Query Params:
 - `to`
 - `chatId` optional
 - `branchId` optional
+- `whatsappCityId` optional (uuid; so canônico)
 
 Response `200`:
 
@@ -2129,6 +2192,7 @@ Query Params:
 - `from`
 - `to`
 - `chatId` optional
+- `whatsappCityId` optional (uuid; so canônico)
 
 Response `200`:
 

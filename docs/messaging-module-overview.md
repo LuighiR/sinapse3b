@@ -56,6 +56,7 @@ O legado DKW **não é alterado** — só lido para migração e enriquecimento 
 | `20260615_add_messaging_sync_state.sql` | `core.messaging_sync_states` |
 | `20260615_add_branch_flw_department_id.sql` | `core.branches.flw_department_id` → branch canônica FLW |
 | `20260617_add_messaging_contacts.sql` | `core.messaging_contacts`, `messaging_sessions.contact_id` |
+| `20260714_add_whatsapp_city_classification.sql` | `whatsapp_cities`, `whatsapp_department_mappings`, `messaging_sessions.whatsapp_city_id` / `external_department_id` |
 
 ### `core.messaging_sessions`
 
@@ -63,6 +64,8 @@ O legado DKW **não é alterado** — só lido para migração e enriquecimento 
 - `contact_external_id` — id do provedor (uuid FLW ou id/telefone DKW)
 - `contact_id` — FK para `messaging_contacts.id`
 - `branch_id` — mapeado de `departmentId` FLW via `branches.flw_department_id`
+- `external_department_id` — `departmentId` FLW (fila); base do mapa cidade e do update seletivo
+- `whatsapp_city_id` — FK para `whatsapp_cities` (classificação operacional por cidade)
 - `assigned_agent_email` — KPIs filtram por `chatId` (= email)
 
 ### `core.messaging_messages`
@@ -82,6 +85,21 @@ O legado DKW **não é alterado** — só lido para migração e enriquecimento 
 
 - Guarda `payload_json` completo + `source` (`api_sync` | `webhook`)
 - Normalização relê **todo** o raw do client e re-upserta canônico (idempotente)
+
+### `core.whatsapp_cities`
+
+- Cadastro editável de cidades operacionais WhatsApp (independente de `branches`)
+- Unique `(client_id, name)`; soft-disable via `is_active`
+
+### `core.whatsapp_department_mappings`
+
+- Mapa `department_id` (fila FLW) → `city_id`
+- `status`: `PENDING` (sem cidade) | `MAPPED` (exige `city_id`)
+- Unique `(client_id, department_id)`
+- Na normalização FLW: fila desconhecida → auto-cria `PENDING`; `MAPPED` grava `whatsapp_city_id` na sessão
+- POST/PATCH do mapa atualiza só sessões com aquele `external_department_id` (sem re-normalize full)
+
+**Seed:** `npm run seed:whatsapp-cities` — cidades + mapeamentos Ferracosul + backfill de sessões históricas
 
 ---
 
@@ -207,6 +225,8 @@ DISTINCT (provider, contact_external_id) de messaging_sessions
 | `POST` | `/internal/messaging/backfill-contacts` | `X-Job-Key` | Job backfill contatos |
 | `GET` | `/internal/messaging/backfill-contacts/:jobId` | `X-Job-Key` | Status backfill |
 | `GET` | `/internal/messaging/parity` | `X-Job-Key` | Checagem paridade |
+| `GET`/`POST`/`PATCH` | `/whatsapp-cities` | JWT + tenant | CRUD cidades WhatsApp |
+| `GET`/`POST`/`PATCH` | `/whatsapp-department-mappings` | JWT + tenant | CRUD mapa fila → cidade |
 
 ---
 
@@ -273,7 +293,8 @@ DISTINCT (provider, contact_external_id) de messaging_sessions
 | --- | --- | --- |
 | Conversas / mensagens | `core.sessions` + `core.messages` | `messaging_sessions` + `messaging_messages` |
 | Agente (`chatId`) | `assigned_user_email` | `assigned_agent_email` |
-| Filial (`branchId`) | join employee por email | `messaging_sessions.branch_id` |
+| Filial (`branchId`) | join employee por email | `messaging_sessions.branch_id` (hoje ignorado no query service) |
+| Cidade (`whatsappCityId`) | n/a (coluna inexistente) | `messaging_sessions.whatsapp_city_id` (**só canônico**) |
 | **Tag hourly / comparação** | `sessions → tickets → contact_tags` | `messaging_sessions → messaging_contacts.legacy_contact_id → contact_tags` |
 
 Arquivo: `prisma-whatsapp-kpi.repository.ts` + `whatsapp-kpi-source.ts`
@@ -295,14 +316,15 @@ Arquivo: `prisma-whatsapp-kpi.repository.ts` + `whatsapp-kpi-source.ts`
 
 ## Rollout operacional (ordem)
 
-1. Aplicar migrations SQL (`prisma db execute --file ...`)
+1. Aplicar migrations SQL (`prisma db execute --file ...`), incl. `20260714_add_whatsapp_city_classification.sql`
 2. `npm run prisma:generate` + deploy
 3. `POST /internal/messaging/migrate-dkw` — histórico DKW (janelas mensais)
 4. `POST /internal/messaging/sync` — FLW (se necessário)
 5. `POST /internal/messaging/backfill-contacts` — contatos + `contact_id` (janelas opcionais)
-6. `GET /internal/messaging/parity` — validar
-7. `WHATSAPP_KPI_SOURCE=canonical` (ou `dual` temporário)
-8. Webhook FLW apontando para `POST /webhooks/flw/:clientId`
+6. `npm run seed:whatsapp-cities` — cidades/mapa Ferracosul + backfill `whatsapp_city_id`
+7. `GET /internal/messaging/parity` — validar
+8. `WHATSAPP_KPI_SOURCE=canonical` (ou `dual` temporário)
+9. Webhook FLW apontando para `POST /webhooks/flw/:clientId`
 
 ---
 
@@ -355,7 +377,9 @@ O webhook **não** grava canônico diretamente — sempre passa pelo raw + norma
 - `docs/superpowers/plans/2026-06-15-flw-messaging-canonical-import.md`
 - `docs/superpowers/specs/2026-06-15-messaging-canonical-contacts-design.md`
 - `docs/superpowers/plans/2026-06-15-messaging-canonical-contacts.md`
-- `docs/api/rest-api.md` — seção `/internal/messaging/*`
+- `docs/superpowers/specs/2026-07-14-whatsapp-city-classification-design.md`
+- `docs/superpowers/plans/2026-07-14-whatsapp-city-classification.md`
+- `docs/api/rest-api.md` — seções `/internal/messaging/*`, `/whatsapp-cities`, `/whatsapp-department-mappings`
 
 ---
 
