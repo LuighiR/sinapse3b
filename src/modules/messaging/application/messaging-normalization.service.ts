@@ -43,6 +43,8 @@ export class MessagingNormalizationService {
     const mode: MessagingNormalizationMode = since == null ? 'full' : 'incremental'
 
     const branchIdByDepartmentId = await this.canonicalRepository.loadBranchIdByDepartmentId(clientId)
+    const cityByDepartmentId =
+      await this.canonicalRepository.loadWhatsAppCityIdByDepartmentId(clientId)
     const allSessions = await this.rawRepository.listSessionsByClientId(clientId)
     const sessionsToUpsert =
       since == null
@@ -60,10 +62,21 @@ export class MessagingNormalizationService {
     }
 
     for (const session of sessionsToUpsert) {
+      if (
+        session.departmentId != null &&
+        !cityByDepartmentId.has(session.departmentId)
+      ) {
+        await this.canonicalRepository.resolveWhatsAppCityForDepartment({
+          clientId,
+          departmentId: session.departmentId,
+        })
+      }
+
       const payload = mapFlwSessionToCanonical({
         clientId,
         session,
         branchIdByDepartmentId,
+        cityByDepartmentId,
       })
 
       await this.contactService.upsertSessionWithContact(payload)

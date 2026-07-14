@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { Injectable } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
 import { PrismaService } from '../../../infra/prisma/prisma.service'
@@ -73,6 +74,73 @@ export class PrismaMessagingCanonicalRepository {
     return map
   }
 
+  async loadWhatsAppCityIdByDepartmentId(clientId: string): Promise<Map<string, string>> {
+    const mappings = await this.prisma.whatsAppDepartmentMapping.findMany({
+      where: {
+        clientId,
+        status: 'MAPPED',
+        cityId: { not: null },
+      },
+      select: {
+        departmentId: true,
+        cityId: true,
+      },
+    })
+
+    const map = new Map<string, string>()
+
+    for (const mapping of mappings) {
+      if (mapping.cityId != null) {
+        map.set(mapping.departmentId, mapping.cityId)
+      }
+    }
+
+    return map
+  }
+
+  async resolveWhatsAppCityForDepartment(input: {
+    clientId: string
+    departmentId: string
+  }): Promise<string | null> {
+    const existing = await this.prisma.whatsAppDepartmentMapping.findUnique({
+      where: {
+        clientId_departmentId: {
+          clientId: input.clientId,
+          departmentId: input.departmentId,
+        },
+      },
+      select: {
+        status: true,
+        cityId: true,
+      },
+    })
+
+    if (existing != null) {
+      return existing.status === 'MAPPED' ? existing.cityId : null
+    }
+
+    try {
+      await this.prisma.whatsAppDepartmentMapping.create({
+        data: {
+          id: randomUUID(),
+          clientId: input.clientId,
+          departmentId: input.departmentId,
+          status: 'PENDING',
+          cityId: null,
+        },
+      })
+    } catch (error) {
+      if (
+        !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+        error.code !== 'P2002'
+      ) {
+        throw error
+      }
+    }
+
+    return null
+  }
+
   async upsertSession(payload: MessagingSessionWritePayload): Promise<void> {
     await this.prisma.messagingSession.upsert({
       where: {
@@ -95,6 +163,8 @@ export class PrismaMessagingCanonicalRepository {
         status: payload.status,
         startedAt: payload.startedAt,
         endedAt: payload.endedAt,
+        whatsappCityId: payload.whatsappCityId,
+        externalDepartmentId: payload.externalDepartmentId,
         rawJson: payload.rawJson as unknown as Prisma.InputJsonValue,
       },
       update: {
@@ -106,6 +176,8 @@ export class PrismaMessagingCanonicalRepository {
         status: payload.status,
         startedAt: payload.startedAt,
         endedAt: payload.endedAt,
+        whatsappCityId: payload.whatsappCityId,
+        externalDepartmentId: payload.externalDepartmentId,
         rawJson: payload.rawJson as unknown as Prisma.InputJsonValue,
       },
     })
