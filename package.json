@@ -6,6 +6,7 @@
   "scripts": {
     "prisma:generate": "prisma generate",
     "seed:test-admin": "ts-node scripts/seed-ferracosul-admin.ts",
+    "seed:whatsapp-cities": "ts-node scripts/seed-ferracosul-whatsapp-cities.ts",
     "predev": "npm run prisma:generate",
     "dev": "ts-node src/main.ts",
     "frontend:dev": "npm --prefix frontend run dev",
