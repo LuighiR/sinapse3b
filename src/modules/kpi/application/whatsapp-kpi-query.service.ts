@@ -8,6 +8,7 @@ export type WhatsAppKpiQueryPeriodInput = {
   to: string | Date
   chatId?: string
   branchId?: number
+  whatsappCityId?: string
 }
 
 export type WhatsAppKpiTagsInput = {
@@ -180,36 +181,42 @@ export type WhatsAppKpiQueryRepository = {
     period: KpiPeriod
     chatId?: string
     branchId?: number
+    whatsappCityId?: string
   }): Promise<WhatsAppKpiSummaryCountsRow>
   getAgentRankingRows(input: {
     clientId: string
     period: KpiPeriod
     chatId?: string
     branchId?: number
+    whatsappCityId?: string
   }): Promise<WhatsAppKpiAgentRankingSourceRow[]>
   getSessionsHourlyRows(input: {
     clientId: string
     period: KpiPeriod
     chatId?: string
     branchId?: number
+    whatsappCityId?: string
   }): Promise<WhatsAppKpiSessionsHourlySourceRow[]>
   getMessagesHourlyRows(input: {
     clientId: string
     period: KpiPeriod
     chatId?: string
     branchId?: number
+    whatsappCityId?: string
   }): Promise<WhatsAppKpiMessagesHourlySourceRow[]>
   getSessionsDailyRows(input: {
     clientId: string
     period: KpiPeriod
     chatId?: string
     branchId?: number
+    whatsappCityId?: string
   }): Promise<WhatsAppKpiSessionsDailySourceRow[]>
   getMessagesDailyRows(input: {
     clientId: string
     period: KpiPeriod
     chatId?: string
     branchId?: number
+    whatsappCityId?: string
   }): Promise<WhatsAppKpiMessagesDailySourceRow[]>
   listTags(input: WhatsAppKpiTagsInput): Promise<WhatsAppKpiTagSourceRow[]>
   getTagHourlyRows(input: {
@@ -218,6 +225,7 @@ export type WhatsAppKpiQueryRepository = {
     tagId: bigint
     chatId?: string
     branchId?: number
+    whatsappCityId?: string
   }): Promise<WhatsAppKpiTagHourlySourceRow[]>
   getTagHourlyComparisonRows(input: {
     clientId: string
@@ -225,6 +233,7 @@ export type WhatsAppKpiQueryRepository = {
     tagId: bigint
     chatId?: string
     branchId?: number
+    whatsappCityId?: string
     sellerId?: number
   }): Promise<WhatsAppKpiTagComparisonSourceRow[]>
 }
@@ -245,6 +254,7 @@ export class WhatsAppKpiQueryService {
       period,
       chatId,
       branchId,
+      whatsappCityId: input.whatsappCityId,
     })
 
     return {
@@ -263,6 +273,7 @@ export class WhatsAppKpiQueryService {
       period,
       chatId,
       branchId,
+      whatsappCityId: input.whatsappCityId,
     })
 
     return {
@@ -288,6 +299,7 @@ export class WhatsAppKpiQueryService {
       period,
       chatId,
       branchId,
+      whatsappCityId: input.whatsappCityId,
     })
 
     return {
@@ -305,6 +317,7 @@ export class WhatsAppKpiQueryService {
       period,
       chatId,
       branchId,
+      whatsappCityId: input.whatsappCityId,
     })
 
     return {
@@ -322,6 +335,7 @@ export class WhatsAppKpiQueryService {
       period,
       chatId,
       branchId,
+      whatsappCityId: input.whatsappCityId,
     })
 
     return {
@@ -339,6 +353,7 @@ export class WhatsAppKpiQueryService {
       period,
       chatId,
       branchId,
+      whatsappCityId: input.whatsappCityId,
     })
 
     return {
@@ -372,6 +387,7 @@ export class WhatsAppKpiQueryService {
       tagId,
       chatId,
       branchId,
+      whatsappCityId: input.whatsappCityId,
     })
 
     return {
@@ -395,6 +411,7 @@ export class WhatsAppKpiQueryService {
       tagId,
       chatId,
       branchId,
+      whatsappCityId: input.whatsappCityId,
       sellerId,
     })
 

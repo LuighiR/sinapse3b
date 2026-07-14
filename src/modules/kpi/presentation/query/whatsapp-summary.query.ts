@@ -8,6 +8,7 @@ export type WhatsAppSummaryQuery = {
   to: string
   chatId?: string
   branchId?: number
+  whatsappCityId?: string
 }
 
 const optionalFilterTextSchema = z
@@ -21,6 +22,7 @@ const whatsappSummaryQuerySchema = z.object({
   to: z.string().trim().min(1),
   chatId: optionalFilterTextSchema,
   branchId: numericIdSchema.optional(),
+  whatsappCityId: z.string().uuid().optional(),
 })
 
 export function parseWhatsAppSummaryQuery(query: Record<string, unknown>): WhatsAppSummaryQuery {
@@ -29,6 +31,7 @@ export function parseWhatsAppSummaryQuery(query: Record<string, unknown>): Whats
     to: query.to,
     chatId: query.chatId,
     branchId: query.branchId,
+    whatsappCityId: query.whatsappCityId,
   })
 
   if (!parsed.success || !isValidPeriod(parsed.data)) {

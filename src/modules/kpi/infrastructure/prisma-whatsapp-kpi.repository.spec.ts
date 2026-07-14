@@ -101,6 +101,34 @@ describe('PrismaWhatsAppKpiRepository', () => {
     expect(sqlText).not.toContain('core.sessions s')
   })
 
+  it('adds whatsappCityId filter only on canonical summary queries', async () => {
+    process.env.WHATSAPP_KPI_SOURCE = 'canonical'
+
+    const prisma = {
+      $queryRaw: jest.fn().mockResolvedValue([
+        {
+          total_conversations_count: 12n,
+          received_messages_count: 34n,
+        },
+      ]),
+    }
+
+    const repository = new PrismaWhatsAppKpiRepository(prisma as any)
+    const whatsappCityId = 'ace13d85-5f0d-4bf6-b7fb-dad921af0c91'
+
+    await repository.getSummaryCounts({
+      clientId: 'client-1',
+      period: KpiPeriod.between({ from: '2026-03-01', to: '2026-03-31' }),
+      whatsappCityId,
+    })
+
+    const sql = prisma.$queryRaw.mock.calls[0]?.[0]
+    const sqlText = sql?.strings?.join(' ')
+
+    expect(sql.values).toContain(whatsappCityId)
+    expect(sqlText).toContain('ms.whatsapp_city_id =')
+  })
+
   it('adds the branch employee lookup to summary queries when branchId is provided', async () => {
     const prisma = {
       $queryRaw: jest.fn().mockResolvedValue([

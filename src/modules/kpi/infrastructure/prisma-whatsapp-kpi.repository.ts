@@ -70,6 +70,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
     period: KpiPeriod
     chatId?: string
     branchId?: number
+    whatsappCityId?: string
   }): Promise<WhatsAppKpiSummaryCountsRow> {
     const source = getWhatsAppKpiSource()
 
@@ -87,11 +88,13 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
     return legacy
   }
 
+  // city filter only on canonical
   private async getSummaryCountsLegacy(input: {
     clientId: string
     period: KpiPeriod
     chatId?: string
     branchId?: number
+    whatsappCityId?: string
   }): Promise<WhatsAppKpiSummaryCountsRow> {
     const [row] = await this.prisma.$queryRaw<SummarySqlRow[]>(Prisma.sql`
       select
@@ -135,6 +138,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
     period: KpiPeriod
     chatId?: string
     branchId?: number
+    whatsappCityId?: string
   }): Promise<WhatsAppKpiSummaryCountsRow> {
     const [row] = await this.prisma.$queryRaw<SummarySqlRow[]>(Prisma.sql`
       select
@@ -148,6 +152,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
               ? Prisma.empty
               : Prisma.sql`and lower(btrim(ms.assigned_agent_email)) = ${input.chatId}`}
             ${this.buildCanonicalBranchFilter(input)}
+            ${this.buildCanonicalWhatsAppCityFilter(input)}
         ) as total_conversations_count,
         (
           select count(*)::bigint
@@ -162,6 +167,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
               ? Prisma.empty
               : Prisma.sql`and lower(btrim(ms.assigned_agent_email)) = ${input.chatId}`}
             ${this.buildCanonicalBranchFilter(input)}
+            ${this.buildCanonicalWhatsAppCityFilter(input)}
         ) as received_messages_count
     `)
 
@@ -176,6 +182,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
     period: KpiPeriod
     chatId?: string
     branchId?: number
+    whatsappCityId?: string
   }): Promise<WhatsAppKpiAgentRankingSourceRow[]> {
     const source = getWhatsAppKpiSource()
 
@@ -193,11 +200,13 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
     return legacy
   }
 
+  // city filter only on canonical
   private async getAgentRankingRowsLegacy(input: {
     clientId: string
     period: KpiPeriod
     chatId?: string
     branchId?: number
+    whatsappCityId?: string
   }): Promise<WhatsAppKpiAgentRankingSourceRow[]> {
     const rows = await this.prisma.$queryRaw<RankingSqlRow[]>(Prisma.sql`
       with session_ranking as (
@@ -267,6 +276,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
     period: KpiPeriod
     chatId?: string
     branchId?: number
+    whatsappCityId?: string
   }): Promise<WhatsAppKpiAgentRankingSourceRow[]> {
     const rows = await this.prisma.$queryRaw<RankingSqlRow[]>(Prisma.sql`
       with session_ranking as (
@@ -282,6 +292,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
             ? Prisma.empty
             : Prisma.sql`and lower(btrim(ms.assigned_agent_email)) = ${input.chatId}`}
           ${this.buildCanonicalBranchFilter(input)}
+          ${this.buildCanonicalWhatsAppCityFilter(input)}
         group by 1, 2
       ),
       employee_lookup as (
@@ -335,6 +346,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
     period: KpiPeriod
     chatId?: string
     branchId?: number
+    whatsappCityId?: string
   }): Promise<WhatsAppKpiSessionsHourlySourceRow[]> {
     const source = getWhatsAppKpiSource()
 
@@ -352,11 +364,13 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
     return legacy
   }
 
+  // city filter only on canonical
   private async getSessionsHourlyRowsLegacy(input: {
     clientId: string
     period: KpiPeriod
     chatId?: string
     branchId?: number
+    whatsappCityId?: string
   }): Promise<WhatsAppKpiSessionsHourlySourceRow[]> {
     const rows = await this.prisma.$queryRaw<SessionsHourlySqlRow[]>(Prisma.sql`
       select
@@ -386,6 +400,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
     period: KpiPeriod
     chatId?: string
     branchId?: number
+    whatsappCityId?: string
   }): Promise<WhatsAppKpiSessionsHourlySourceRow[]> {
     const rows = await this.prisma.$queryRaw<SessionsHourlySqlRow[]>(Prisma.sql`
       select
@@ -399,6 +414,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
           ? Prisma.empty
           : Prisma.sql`and lower(btrim(ms.assigned_agent_email)) = ${input.chatId}`}
         ${this.buildCanonicalBranchFilter(input)}
+        ${this.buildCanonicalWhatsAppCityFilter(input)}
       group by 1
       order by 1 asc
     `)
@@ -414,6 +430,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
     period: KpiPeriod
     chatId?: string
     branchId?: number
+    whatsappCityId?: string
   }): Promise<WhatsAppKpiMessagesHourlySourceRow[]> {
     const source = getWhatsAppKpiSource()
 
@@ -431,11 +448,13 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
     return legacy
   }
 
+  // city filter only on canonical
   private async getMessagesHourlyRowsLegacy(input: {
     clientId: string
     period: KpiPeriod
     chatId?: string
     branchId?: number
+    whatsappCityId?: string
   }): Promise<WhatsAppKpiMessagesHourlySourceRow[]> {
     const rows = await this.prisma.$queryRaw<MessagesHourlySqlRow[]>(Prisma.sql`
       select
@@ -468,6 +487,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
     period: KpiPeriod
     chatId?: string
     branchId?: number
+    whatsappCityId?: string
   }): Promise<WhatsAppKpiMessagesHourlySourceRow[]> {
     const rows = await this.prisma.$queryRaw<MessagesHourlySqlRow[]>(Prisma.sql`
       select
@@ -484,6 +504,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
           ? Prisma.empty
           : Prisma.sql`and lower(btrim(ms.assigned_agent_email)) = ${input.chatId}`}
         ${this.buildCanonicalBranchFilter(input)}
+        ${this.buildCanonicalWhatsAppCityFilter(input)}
       group by 1
       order by 1 asc
     `)
@@ -499,6 +520,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
     period: KpiPeriod
     chatId?: string
     branchId?: number
+    whatsappCityId?: string
   }): Promise<WhatsAppKpiSessionsDailySourceRow[]> {
     const source = getWhatsAppKpiSource()
 
@@ -516,11 +538,13 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
     return legacy
   }
 
+  // city filter only on canonical
   private async getSessionsDailyRowsLegacy(input: {
     clientId: string
     period: KpiPeriod
     chatId?: string
     branchId?: number
+    whatsappCityId?: string
   }): Promise<WhatsAppKpiSessionsDailySourceRow[]> {
     const rows = await this.prisma.$queryRaw<SessionsDailySqlRow[]>(Prisma.sql`
       select
@@ -553,6 +577,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
     period: KpiPeriod
     chatId?: string
     branchId?: number
+    whatsappCityId?: string
   }): Promise<WhatsAppKpiSessionsDailySourceRow[]> {
     const rows = await this.prisma.$queryRaw<SessionsDailySqlRow[]>(Prisma.sql`
       select
@@ -569,6 +594,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
           ? Prisma.empty
           : Prisma.sql`and lower(btrim(ms.assigned_agent_email)) = ${input.chatId}`}
         ${this.buildCanonicalBranchFilter(input)}
+        ${this.buildCanonicalWhatsAppCityFilter(input)}
       group by 1
       order by 1 asc
     `)
@@ -584,6 +610,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
     period: KpiPeriod
     chatId?: string
     branchId?: number
+    whatsappCityId?: string
   }): Promise<WhatsAppKpiMessagesDailySourceRow[]> {
     const source = getWhatsAppKpiSource()
 
@@ -601,11 +628,13 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
     return legacy
   }
 
+  // city filter only on canonical
   private async getMessagesDailyRowsLegacy(input: {
     clientId: string
     period: KpiPeriod
     chatId?: string
     branchId?: number
+    whatsappCityId?: string
   }): Promise<WhatsAppKpiMessagesDailySourceRow[]> {
     const rows = await this.prisma.$queryRaw<MessagesDailySqlRow[]>(Prisma.sql`
       select
@@ -641,6 +670,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
     period: KpiPeriod
     chatId?: string
     branchId?: number
+    whatsappCityId?: string
   }): Promise<WhatsAppKpiMessagesDailySourceRow[]> {
     const rows = await this.prisma.$queryRaw<MessagesDailySqlRow[]>(Prisma.sql`
       select
@@ -660,6 +690,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
           ? Prisma.empty
           : Prisma.sql`and lower(btrim(ms.assigned_agent_email)) = ${input.chatId}`}
         ${this.buildCanonicalBranchFilter(input)}
+        ${this.buildCanonicalWhatsAppCityFilter(input)}
       group by 1
       order by 1 asc
     `)
@@ -697,6 +728,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
     tagId: bigint
     chatId?: string
     branchId?: number
+    whatsappCityId?: string
   }): Promise<WhatsAppKpiTagHourlySourceRow[]> {
     const source = getWhatsAppKpiSource()
 
@@ -714,12 +746,14 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
     return legacy
   }
 
+  // city filter only on canonical
   private async getTagHourlyRowsLegacy(input: {
     clientId: string
     period: KpiPeriod
     tagId: bigint
     chatId?: string
     branchId?: number
+    whatsappCityId?: string
   }): Promise<WhatsAppKpiTagHourlySourceRow[]> {
     const rows = await this.prisma.$queryRaw<TagHourlySqlRow[]>(Prisma.sql`
       select
@@ -752,6 +786,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
     tagId: bigint
     chatId?: string
     branchId?: number
+    whatsappCityId?: string
   }): Promise<WhatsAppKpiTagHourlySourceRow[]> {
     const rows = await this.prisma.$queryRaw<TagHourlySqlRow[]>(Prisma.sql`
       select
@@ -771,6 +806,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
           ? Prisma.empty
           : Prisma.sql`and lower(btrim(ms.assigned_agent_email)) = ${input.chatId}`}
         ${this.buildCanonicalBranchFilter(input)}
+        ${this.buildCanonicalWhatsAppCityFilter(input)}
       group by 1
       order by 1 asc
     `)
@@ -787,6 +823,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
     tagId: bigint
     chatId?: string
     branchId?: number
+    whatsappCityId?: string
     sellerId?: number
   }): Promise<WhatsAppKpiTagComparisonSourceRow[]> {
     const source = getWhatsAppKpiSource()
@@ -805,12 +842,14 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
     return legacy
   }
 
+  // city filter only on canonical
   private async getTagHourlyComparisonRowsLegacy(input: {
     clientId: string
     period: KpiPeriod
     tagId: bigint
     chatId?: string
     branchId?: number
+    whatsappCityId?: string
     sellerId?: number
   }): Promise<WhatsAppKpiTagComparisonSourceRow[]> {
     const rows = await this.prisma.$queryRaw<TagComparisonSqlRow[]>(Prisma.sql`
@@ -866,6 +905,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
     tagId: bigint
     chatId?: string
     branchId?: number
+    whatsappCityId?: string
     sellerId?: number
   }): Promise<WhatsAppKpiTagComparisonSourceRow[]> {
     const rows = await this.prisma.$queryRaw<TagComparisonSqlRow[]>(Prisma.sql`
@@ -887,6 +927,7 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
             ? Prisma.empty
             : Prisma.sql`and lower(btrim(ms.assigned_agent_email)) = ${input.chatId}`}
           ${this.buildCanonicalBranchFilter(input)}
+          ${this.buildCanonicalWhatsAppCityFilter(input)}
         group by 1
       ),
       open_budgets as (
@@ -916,6 +957,14 @@ export class PrismaWhatsAppKpiRepository implements WhatsAppKpiQueryRepository {
       tagSessionsCount: row.tag_sessions_count,
       openBudgetsCount: row.open_budgets_count,
     }))
+  }
+
+  private buildCanonicalWhatsAppCityFilter(input: { whatsappCityId?: string }): Prisma.Sql {
+    if (input.whatsappCityId === undefined) {
+      return Prisma.empty
+    }
+
+    return Prisma.sql`and ms.whatsapp_city_id = ${input.whatsappCityId}::uuid`
   }
 
   private buildCanonicalBranchFilter(input: { branchId?: number }): Prisma.Sql {

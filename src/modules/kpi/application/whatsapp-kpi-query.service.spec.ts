@@ -48,6 +48,38 @@ describe('WhatsAppKpiQueryService', () => {
     })
   })
 
+  it('propagates whatsappCityId to summary repository lookups', async () => {
+    const repository: jest.Mocked<WhatsAppKpiQueryRepository> = {
+      getSummaryCounts: jest.fn().mockResolvedValue({
+        totalConversationsCount: 12,
+        receivedMessagesCount: 34,
+      }),
+      getAgentRankingRows: jest.fn(),
+      getSessionsHourlyRows: jest.fn(),
+      getMessagesHourlyRows: jest.fn(),
+      getSessionsDailyRows: jest.fn(),
+      getMessagesDailyRows: jest.fn(),
+      listTags: jest.fn(),
+      getTagHourlyRows: jest.fn(),
+      getTagHourlyComparisonRows: jest.fn(),
+    }
+
+    const service = new WhatsAppKpiQueryService(repository)
+
+    await service.getSummary({
+      clientId: 'client-1',
+      from: '2026-03-01',
+      to: '2026-03-31',
+      whatsappCityId: 'ace13d85-5f0d-4bf6-b7fb-dad921af0c91',
+    })
+
+    expect(repository.getSummaryCounts).toHaveBeenCalledWith(
+      expect.objectContaining({
+        whatsappCityId: 'ace13d85-5f0d-4bf6-b7fb-dad921af0c91',
+      }),
+    )
+  })
+
   it('ignores branchId on summary lookups while still accepting the query param', async () => {
     const repository: jest.Mocked<WhatsAppKpiQueryRepository> = {
       getSummaryCounts: jest.fn().mockResolvedValue({
