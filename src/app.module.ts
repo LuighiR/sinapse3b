@@ -6,8 +6,18 @@ import { MeModule } from './modules/me/me.module'
 import { KpiModule } from './modules/kpi/kpi.module'
 import { MessagingModule } from './modules/messaging/messaging.module'
 import { TenantUsersModule } from './modules/tenant-users/tenant-users.module'
+import { WhatsAppCitiesModule } from './modules/whatsapp-cities/whatsapp-cities.module'
 
 @Module({
-  imports: [HealthModule, AuthModule, MeModule, CompaniesModule, KpiModule, MessagingModule, TenantUsersModule],
+  imports: [
+    HealthModule,
+    AuthModule,
+    MeModule,
+    CompaniesModule,
+    KpiModule,
+    MessagingModule,
+    TenantUsersModule,
+    WhatsAppCitiesModule,
+  ],
 })
 export class AppModule {}
