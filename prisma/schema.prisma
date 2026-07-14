@@ -82,6 +82,8 @@ model SinapseClient {
   kpiSnapshots KpiSnapshot[]
   refreshJobs RefreshJob[]
   tenants    Tenant[] @relation("TenantBackendClient")
+  whatsappCities WhatsAppCity[]
+  whatsappDepartmentMappings WhatsAppDepartmentMapping[]
 
   @@map("sinapse_clients")
   @@schema("core")
@@ -591,6 +593,14 @@ enum MessagingSenderType {
   @@schema("core")
 }
 
+enum WhatsAppDepartmentMappingStatus {
+  PENDING
+  MAPPED
+
+  @@map("whatsapp_department_mapping_status")
+  @@schema("core")
+}
+
 model FlwSessionRaw {
   id          String   @id @db.Uuid
   clientId    String   @map("client_id")
@@ -657,6 +667,8 @@ model MessagingSession {
   externalSessionId   String             @map("external_session_id")
   contactExternalId   String?            @map("contact_external_id")
   contactId           String?             @map("contact_id")
+  whatsappCityId        String?       @map("whatsapp_city_id") @db.Uuid
+  externalDepartmentId  String?       @map("external_department_id") @db.Uuid
   assignedAgentEmail  String?            @map("assigned_agent_email")
   assignedAgentUserId String?            @map("assigned_agent_user_id")
   status              String?
@@ -667,12 +679,15 @@ model MessagingSession {
   updatedAt           DateTime           @default(now()) @updatedAt @map("updated_at")
   branch              Branch?            @relation(fields: [branchId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   contact             MessagingContact?  @relation(fields: [contactId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  whatsappCity          WhatsAppCity? @relation(fields: [whatsappCityId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   messages            MessagingMessage[]
 
   @@unique([clientId, provider, externalSessionId], map: "messaging_sessions_client_provider_external_key")
   @@index([clientId, startedAt], map: "messaging_sessions_client_started_at_idx")
   @@index([clientId, branchId, startedAt], map: "messaging_sessions_client_branch_started_at_idx")
   @@index([contactId], map: "messaging_sessions_contact_id_idx")
+  @@index([clientId, whatsappCityId, startedAt], map: "messaging_sessions_client_whatsapp_city_started_at_idx")
+  @@index([clientId, externalDepartmentId], map: "messaging_sessions_client_external_department_idx")
   @@map("messaging_sessions")
   @@schema("core")
 }
@@ -700,5 +715,39 @@ model MessagingMessage {
   @@index([sessionId, createdAtExternal], map: "messaging_messages_session_created_at_external_idx")
   @@index([clientId, createdAtExternal], map: "messaging_messages_client_created_at_external_idx")
   @@map("messaging_messages")
+  @@schema("core")
+}
+
+model WhatsAppCity {
+  id        String   @id @db.Uuid
+  clientId  String   @map("client_id")
+  name      String
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  client    SinapseClient @relation(fields: [clientId], references: [id])
+  mappings  WhatsAppDepartmentMapping[]
+  sessions  MessagingSession[]
+
+  @@unique([clientId, name], map: "whatsapp_cities_client_name_key")
+  @@map("whatsapp_cities")
+  @@schema("core")
+}
+
+model WhatsAppDepartmentMapping {
+  id               String                           @id @db.Uuid
+  clientId         String                           @map("client_id")
+  departmentId     String                           @map("department_id") @db.Uuid
+  departmentLabel  String?                          @map("department_label")
+  cityId           String?                          @map("city_id") @db.Uuid
+  status           WhatsAppDepartmentMappingStatus
+  createdAt        DateTime                         @default(now()) @map("created_at")
+  updatedAt        DateTime                         @default(now()) @updatedAt @map("updated_at")
+  client           SinapseClient                    @relation(fields: [clientId], references: [id])
+  city             WhatsAppCity?                    @relation(fields: [cityId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([clientId, departmentId], map: "whatsapp_department_mappings_client_department_key")
+  @@index([clientId, status], map: "whatsapp_department_mappings_client_status_idx")
+  @@map("whatsapp_department_mappings")
   @@schema("core")
 }

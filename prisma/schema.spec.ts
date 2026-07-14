@@ -87,4 +87,14 @@ describe('prisma schema', () => {
     expect(schema).toContain('flwDepartmentId')
     expect(schema).toContain('enum MessagingProvider')
   })
+
+  it('maps whatsapp city classification tables and session fields', () => {
+    const schema = readFileSync(join(__dirname, 'schema.prisma'), 'utf-8')
+
+    expect(schema).toContain('enum WhatsAppDepartmentMappingStatus')
+    expect(schema).toContain('model WhatsAppCity')
+    expect(schema).toContain('model WhatsAppDepartmentMapping')
+    expect(schema).toContain('whatsappCityId')
+    expect(schema).toContain('externalDepartmentId')
+  })
 })
