@@ -100,6 +100,8 @@ describe('mapDkwSessionToCanonical', () => {
     expect(result.startedAt).toEqual(session.startedAt)
     expect(result.endedAt).toEqual(session.endedAt)
     expect(result.rawJson).toBe(session)
+    expect(result.externalDepartmentId).toBeNull()
+    expect(result.whatsappCityId).toBeNull()
   })
 })
 

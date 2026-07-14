@@ -46,11 +46,18 @@ export function mapFlwSessionToCanonical(input: {
   clientId: string
   session: FlwSessionDto
   branchIdByDepartmentId?: Map<string, number>
+  cityByDepartmentId?: Map<string, string>
 }): MessagingSessionWritePayload {
-  const { clientId, session, branchIdByDepartmentId } = input
+  const { clientId, session, branchIdByDepartmentId, cityByDepartmentId } = input
   const branchId =
     session.departmentId != null && branchIdByDepartmentId != null
       ? branchIdByDepartmentId.get(session.departmentId) ?? null
+      : null
+  const externalDepartmentId =
+    typeof session.departmentId === 'string' ? session.departmentId : null
+  const whatsappCityId =
+    externalDepartmentId != null && cityByDepartmentId != null
+      ? cityByDepartmentId.get(externalDepartmentId) ?? null
       : null
 
   return {
@@ -65,6 +72,8 @@ export function mapFlwSessionToCanonical(input: {
     status: session.status ?? null,
     startedAt: new Date(session.startAt),
     endedAt: session.endAt != null ? new Date(session.endAt) : null,
+    whatsappCityId,
+    externalDepartmentId,
     rawJson: session,
   }
 }

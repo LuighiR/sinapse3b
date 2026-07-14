@@ -15,6 +15,8 @@ describe('mapSessionToMessagingContact', () => {
       status: 'IN_PROGRESS',
       startedAt: new Date('2026-06-01T10:00:00.000Z'),
       endedAt: null,
+      whatsappCityId: null,
+      externalDepartmentId: null,
       rawJson: { contactId: 'contact-uuid' },
     }
 
@@ -43,6 +45,8 @@ describe('mapSessionToMessagingContact', () => {
       status: 'OPEN',
       startedAt: new Date('2026-01-10T08:00:00.000Z'),
       endedAt: null,
+      whatsappCityId: null,
+      externalDepartmentId: null,
       rawJson: {
         ticket: {
           contactExternalId: 999,
@@ -74,6 +78,8 @@ describe('mapSessionToMessagingContact', () => {
       status: null,
       startedAt: new Date('2026-06-01T10:00:00.000Z'),
       endedAt: null,
+      whatsappCityId: null,
+      externalDepartmentId: null,
       rawJson: {},
     }
 

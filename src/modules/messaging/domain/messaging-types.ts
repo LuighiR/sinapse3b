@@ -56,6 +56,8 @@ export interface MessagingSessionWritePayload {
   status: string | null
   startedAt: Date
   endedAt: Date | null
+  whatsappCityId: string | null
+  externalDepartmentId: string | null
   rawJson: unknown
 }
 

@@ -82,6 +82,8 @@ export function mapDkwSessionToCanonical(input: {
     status: session.ticket?.status ?? null,
     startedAt: session.startedAt,
     endedAt: session.endedAt,
+    whatsappCityId: null,
+    externalDepartmentId: null,
     rawJson: session,
   }
 }

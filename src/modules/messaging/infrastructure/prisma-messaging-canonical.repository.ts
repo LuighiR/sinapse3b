@@ -142,6 +142,8 @@ export class PrismaMessagingCanonicalRepository {
       status: row.status,
       startedAt: row.startedAt,
       endedAt: row.endedAt,
+      whatsappCityId: row.whatsappCityId,
+      externalDepartmentId: row.externalDepartmentId,
       rawJson: row.rawJson,
     }
   }

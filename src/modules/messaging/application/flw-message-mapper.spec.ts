@@ -133,6 +133,42 @@ describe('mapFlwSessionToCanonical', () => {
 
     expect(result.branchId).toBeNull()
   })
+
+  it('sets externalDepartmentId and whatsappCityId from department map', () => {
+    const cityByDepartmentId = new Map([['dept-1', 'city-uuid']])
+    const payload = mapFlwSessionToCanonical({
+      clientId,
+      session: baseSession({ departmentId: 'dept-1' }),
+      cityByDepartmentId,
+    })
+
+    expect(payload.externalDepartmentId).toBe('dept-1')
+    expect(payload.whatsappCityId).toBe('city-uuid')
+  })
+
+  it('leaves whatsappCityId null when department unmapped', () => {
+    const cityByDepartmentId = new Map([['other-dept', 'other-city']])
+    const payload = mapFlwSessionToCanonical({
+      clientId,
+      session: baseSession({ departmentId: 'dept-1' }),
+      cityByDepartmentId,
+    })
+
+    expect(payload.externalDepartmentId).toBe('dept-1')
+    expect(payload.whatsappCityId).toBeNull()
+  })
+
+  it('leaves both null when departmentId absent', () => {
+    const cityByDepartmentId = new Map([['dept-1', 'city-uuid']])
+    const payload = mapFlwSessionToCanonical({
+      clientId,
+      session: baseSession({ departmentId: undefined }),
+      cityByDepartmentId,
+    })
+
+    expect(payload.externalDepartmentId).toBeNull()
+    expect(payload.whatsappCityId).toBeNull()
+  })
 })
 
 describe('mapFlwMessageToCanonical', () => {
