@@ -299,6 +299,7 @@ describe('CallNormalizationService', () => {
 
   it.each([
     ['missed', 'NO_ANSWER'],
+    ['no_answer', 'NO_ANSWER'],
     ['no_answered', 'NORMAL_CLEARING'],
   ])(
     'marks %s inbound calls as lost when extension_uuid exists',
@@ -633,9 +634,10 @@ describe('PrismaCallFactUpsertRepository', () => {
     expect(sql).toContain('INSERT INTO core.call_facts ( client_id, branch_id, source_table')
     expect(sql).toContain("SELECT client.id, branch.id, 'raw.ferraco_calls', call.id, call.domain_uuid")
     expect(sql).toContain('NULLIF(call.status, \'\')')
-    expect(sql).toContain("call.status = 'answered'")
-    expect(sql).toContain("call.status IN ('missed', 'no_answered')")
+    expect(sql).toContain("COALESCE(call.status, '') = 'answered'")
+    expect(sql).toContain("COALESCE(call.status, '') IN ('missed', 'no_answer', 'no_answered')")
     expect(sql).toContain('status = EXCLUDED.status')
+    expect(sql).toContain('COALESCE( ( call.direction = \'inbound\'')
     expect(sql).toContain(
       'FROM raw.ferraco_calls AS call INNER JOIN core.branches AS branch ON branch.telephony_domain_uuid = call.domain_uuid INNER JOIN core.sinapse_clients AS client ON client.id = branch.client_id WHERE client.id = $1',
     )

@@ -195,22 +195,31 @@ export class PrismaCallFactUpsertRepository implements CallFactUpsertRepository 
         call.hangup_cause,
         call.sip_hangup_disposition,
         NULLIF(call.status, ''),
-        (
-          call.direction = 'inbound'
-          AND COALESCE(call.destination_number, '') ~ '^\\d{2,5}$'
-          AND COALESCE(call.caller_id_number, '') !~ '^\\d{2,5}$'
+        COALESCE(
+          (
+            call.direction = 'inbound'
+            AND COALESCE(call.destination_number, '') ~ '^\\d{2,5}$'
+            AND COALESCE(call.caller_id_number, '') !~ '^\\d{2,5}$'
+          ),
+          false
         ),
-        (
-          call.direction = 'inbound'
-          AND COALESCE(call.destination_number, '') ~ '^\\d{2,5}$'
-          AND COALESCE(call.caller_id_number, '') !~ '^\\d{2,5}$'
-          AND call.status = 'answered'
+        COALESCE(
+          (
+            call.direction = 'inbound'
+            AND COALESCE(call.destination_number, '') ~ '^\\d{2,5}$'
+            AND COALESCE(call.caller_id_number, '') !~ '^\\d{2,5}$'
+            AND COALESCE(call.status, '') = 'answered'
+          ),
+          false
         ),
-        (
-          call.direction = 'inbound'
-          AND COALESCE(call.destination_number, '') ~ '^\\d{2,5}$'
-          AND COALESCE(call.caller_id_number, '') !~ '^\\d{2,5}$'
-          AND call.status IN ('missed', 'no_answered')
+        COALESCE(
+          (
+            call.direction = 'inbound'
+            AND COALESCE(call.destination_number, '') ~ '^\\d{2,5}$'
+            AND COALESCE(call.caller_id_number, '') !~ '^\\d{2,5}$'
+            AND COALESCE(call.status, '') IN ('missed', 'no_answer', 'no_answered')
+          ),
+          false
         ),
         CASE
           WHEN NULLIF(call.extension_uuid, '') IS NOT NULL THEN 'EXTENSION_UUID'
@@ -218,7 +227,7 @@ export class PrismaCallFactUpsertRepository implements CallFactUpsertRepository 
             call.direction = 'inbound'
             AND COALESCE(call.destination_number, '') ~ '^\\d{2,5}$'
             AND COALESCE(call.caller_id_number, '') !~ '^\\d{2,5}$'
-            AND call.status IN ('missed', 'no_answered')
+            AND COALESCE(call.status, '') IN ('missed', 'no_answer', 'no_answered')
           ) THEN 'EXTENSION_NUMBER'
           ELSE NULL
         END,
@@ -228,7 +237,7 @@ export class PrismaCallFactUpsertRepository implements CallFactUpsertRepository 
             call.direction = 'inbound'
             AND COALESCE(call.destination_number, '') ~ '^\\d{2,5}$'
             AND COALESCE(call.caller_id_number, '') !~ '^\\d{2,5}$'
-            AND call.status IN ('missed', 'no_answered')
+            AND COALESCE(call.status, '') IN ('missed', 'no_answer', 'no_answered')
           ) THEN call.destination_number
           ELSE NULL
         END,
@@ -404,7 +413,7 @@ export class CallNormalizationService {
   }
 
   private isLostStatus(value: string | null): boolean {
-    return value === 'missed' || value === 'no_answered'
+    return value === 'missed' || value === 'no_answer' || value === 'no_answered'
   }
 
   private resolveAgentResolutionType(
