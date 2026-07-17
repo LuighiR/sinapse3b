@@ -21,6 +21,7 @@ export type RawFerracoCallRecord = {
   recordName: string | null
   hangupCause: string | null
   sipHangupDisposition: string | null
+  status: string | null
   payload: Record<string, unknown> | null
 }
 
@@ -42,6 +43,7 @@ export type CallFactWritePayload = {
   recordName: string | null
   hangupCause: string | null
   sipHangupDisposition: string | null
+  status: string | null
   isInboundToCompany: boolean
   isReceived: boolean
   isLost: boolean
@@ -121,6 +123,7 @@ export class PrismaRawFerracoCallReader implements RawFerracoCallReader {
         call.record_name AS "recordName",
         call.hangup_cause AS "hangupCause",
         call.sip_hangup_disposition AS "sipHangupDisposition",
+        call.status,
         row_to_json(call) AS payload
       FROM raw.ferraco_calls AS call
       INNER JOIN core.branches AS branch
@@ -164,6 +167,7 @@ export class PrismaCallFactUpsertRepository implements CallFactUpsertRepository 
         record_name,
         hangup_cause,
         sip_hangup_disposition,
+        status,
         is_inbound_to_company,
         is_received,
         is_lost,
@@ -190,6 +194,7 @@ export class PrismaCallFactUpsertRepository implements CallFactUpsertRepository 
         call.record_name,
         call.hangup_cause,
         call.sip_hangup_disposition,
+        NULLIF(call.status, ''),
         (
           call.direction = 'inbound'
           AND COALESCE(call.destination_number, '') ~ '^\\d{2,5}$'
@@ -199,14 +204,13 @@ export class PrismaCallFactUpsertRepository implements CallFactUpsertRepository 
           call.direction = 'inbound'
           AND COALESCE(call.destination_number, '') ~ '^\\d{2,5}$'
           AND COALESCE(call.caller_id_number, '') !~ '^\\d{2,5}$'
-          AND NULLIF(call.extension_uuid, '') IS NOT NULL
-          AND COALESCE(call.sip_hangup_disposition, '') NOT IN ('recv_cancel', 'send_cancel', 'send_refuse')
+          AND call.status = 'answered'
         ),
         (
           call.direction = 'inbound'
           AND COALESCE(call.destination_number, '') ~ '^\\d{2,5}$'
           AND COALESCE(call.caller_id_number, '') !~ '^\\d{2,5}$'
-          AND COALESCE(call.sip_hangup_disposition, '') IN ('recv_cancel', 'send_cancel', 'send_refuse')
+          AND call.status IN ('missed', 'no_answered')
         ),
         CASE
           WHEN NULLIF(call.extension_uuid, '') IS NOT NULL THEN 'EXTENSION_UUID'
@@ -214,7 +218,7 @@ export class PrismaCallFactUpsertRepository implements CallFactUpsertRepository 
             call.direction = 'inbound'
             AND COALESCE(call.destination_number, '') ~ '^\\d{2,5}$'
             AND COALESCE(call.caller_id_number, '') !~ '^\\d{2,5}$'
-            AND COALESCE(call.sip_hangup_disposition, '') IN ('recv_cancel', 'send_cancel', 'send_refuse')
+            AND call.status IN ('missed', 'no_answered')
           ) THEN 'EXTENSION_NUMBER'
           ELSE NULL
         END,
@@ -224,7 +228,7 @@ export class PrismaCallFactUpsertRepository implements CallFactUpsertRepository 
             call.direction = 'inbound'
             AND COALESCE(call.destination_number, '') ~ '^\\d{2,5}$'
             AND COALESCE(call.caller_id_number, '') !~ '^\\d{2,5}$'
-            AND COALESCE(call.sip_hangup_disposition, '') IN ('recv_cancel', 'send_cancel', 'send_refuse')
+            AND call.status IN ('missed', 'no_answered')
           ) THEN call.destination_number
           ELSE NULL
         END,
@@ -259,6 +263,7 @@ export class PrismaCallFactUpsertRepository implements CallFactUpsertRepository 
         record_name = EXCLUDED.record_name,
         hangup_cause = EXCLUDED.hangup_cause,
         sip_hangup_disposition = EXCLUDED.sip_hangup_disposition,
+        status = EXCLUDED.status,
         is_inbound_to_company = EXCLUDED.is_inbound_to_company,
         is_received = EXCLUDED.is_received,
         is_lost = EXCLUDED.is_lost,
@@ -345,8 +350,9 @@ export class CallNormalizationService {
 
   private normalizeCall(clientId: string, call: RawFerracoCallRecord): CallFactWritePayload {
     const isInboundToCompany = this.isInboundToCompany(call)
-    const isLost = isInboundToCompany && this.isLostDisposition(call.sipHangupDisposition)
-    const isReceived = isInboundToCompany && this.hasText(call.extensionUuid) && !isLost
+    const status = this.normalizeOptionalText(call.status)
+    const isLost = isInboundToCompany && this.isLostStatus(status)
+    const isReceived = isInboundToCompany && status === 'answered'
 
     return {
       clientId,
@@ -366,6 +372,7 @@ export class CallNormalizationService {
       recordName: this.normalizeOptionalText(call.recordName),
       hangupCause: this.normalizeOptionalText(call.hangupCause),
       sipHangupDisposition: this.normalizeOptionalText(call.sipHangupDisposition),
+      status,
       isInboundToCompany,
       isLost,
       isReceived,
@@ -396,8 +403,8 @@ export class CallNormalizationService {
     return true
   }
 
-  private isLostDisposition(value: string | null): boolean {
-    return value === 'recv_cancel' || value === 'send_cancel' || value === 'send_refuse'
+  private isLostStatus(value: string | null): boolean {
+    return value === 'missed' || value === 'no_answered'
   }
 
   private resolveAgentResolutionType(

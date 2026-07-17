@@ -303,6 +303,7 @@ model CallFact {
   recordName         String?       @map("record_name")
   hangupCause        String?       @map("hangup_cause")
   sipHangupDisposition String?     @map("sip_hangup_disposition")
+  status             String?
   isInboundToCompany Boolean       @default(false) @map("is_inbound_to_company")
   isReceived         Boolean       @default(false) @map("is_received")
   isLost             Boolean       @default(false) @map("is_lost")

@@ -63,6 +63,7 @@ describe('CallNormalizationService', () => {
           recordName: null,
           hangupCause: 'NORMAL_CLEARING',
           sipHangupDisposition: 'send_bye',
+          status: 'answered',
           payload: { domain: 'a' },
         },
         {
@@ -82,6 +83,7 @@ describe('CallNormalizationService', () => {
           recordName: null,
           hangupCause: 'NORMAL_CLEARING',
           sipHangupDisposition: 'recv_bye',
+          status: 'answered',
           payload: { domain: 'b' },
         },
       ]),
@@ -116,7 +118,7 @@ describe('CallNormalizationService', () => {
     )
   })
 
-  it('marks inbound extension calls as received when extension_uuid exists', async () => {
+  it('marks inbound extension calls as received when status is answered', async () => {
     const rawReader: RawFerracoCallReader = {
       findByClientId: jest.fn().mockResolvedValue([
         {
@@ -136,6 +138,7 @@ describe('CallNormalizationService', () => {
           recordName: 'cdr-1.mp3',
           hangupCause: 'NORMAL_CLEARING',
           sipHangupDisposition: 'send_bye',
+          status: 'answered',
           payload: { source: 'fixture' },
         },
       ]),
@@ -180,6 +183,7 @@ describe('CallNormalizationService', () => {
         recordName: 'cdr-1.mp3',
         hangupCause: 'NORMAL_CLEARING',
         sipHangupDisposition: 'send_bye',
+        status: 'answered',
         isInboundToCompany: true,
         isLost: false,
         isReceived: true,
@@ -194,7 +198,55 @@ describe('CallNormalizationService', () => {
     expect(upsertArgs.update.durationSeconds.toString()).toBe('300')
   })
 
-  it('marks recv_cancel inbound calls as lost and falls back to destination number', async () => {
+  it('marks answered inbound calls as received even without extension_uuid', async () => {
+    const rawReader: RawFerracoCallReader = {
+      findByClientId: jest.fn().mockResolvedValue([
+        {
+          id: 11,
+          clientId: 'client-1',
+          branchId: 11,
+          domainUuid: 'domain-1',
+          xmlCdrUuid: 'cdr-11',
+          extensionUuid: null,
+          direction: 'inbound',
+          callerNumber: '5551999999999',
+          destinationNumber: '104',
+          dateStart: '2026-01-10T09:15:00.000Z',
+          dateFinal: '2026-01-10T09:20:00.000Z',
+          duration: '300',
+          recordPath: null,
+          recordName: null,
+          hangupCause: 'NORMAL_CLEARING',
+          sipHangupDisposition: 'send_bye',
+          status: 'answered',
+          payload: null,
+        },
+      ]),
+    }
+
+    const callFactRepository: CallFactUpsertRepository = {
+      upsert: jest.fn().mockResolvedValue(undefined),
+    }
+
+    const service = new CallNormalizationService(rawReader, callFactRepository)
+
+    await service.normalizeClientCalls('client-1')
+
+    const [upsertArgs] = (callFactRepository.upsert as jest.Mock).mock.calls[0]
+
+    expect(upsertArgs.create).toMatchObject({
+      status: 'answered',
+      isInboundToCompany: true,
+      isLost: false,
+      isReceived: true,
+      extensionUuid: null,
+      agentResolutionType: null,
+      agentResolutionKey: null,
+      agentExtensionNumber: '104',
+    })
+  })
+
+  it('marks missed inbound calls as lost and falls back to destination number', async () => {
     const rawReader: RawFerracoCallReader = {
       findByClientId: jest.fn().mockResolvedValue([
         {
@@ -214,6 +266,7 @@ describe('CallNormalizationService', () => {
           recordName: null,
           hangupCause: 'ORIGINATOR_CANCEL',
           sipHangupDisposition: 'recv_cancel',
+          status: 'missed',
           payload: null,
         },
       ]),
@@ -233,6 +286,7 @@ describe('CallNormalizationService', () => {
       isInboundToCompany: true,
       isLost: true,
       isReceived: false,
+      status: 'missed',
       agentResolutionType: 'EXTENSION_NUMBER',
       agentResolutionKey: '107',
       agentExtensionNumber: '107',
@@ -244,11 +298,11 @@ describe('CallNormalizationService', () => {
   })
 
   it.each([
-    ['send_cancel', 'NO_ANSWER'],
-    ['send_refuse', 'NORMAL_CLEARING'],
+    ['missed', 'NO_ANSWER'],
+    ['no_answered', 'NORMAL_CLEARING'],
   ])(
     'marks %s inbound calls as lost when extension_uuid exists',
-    async (sipHangupDisposition, hangupCause) => {
+    async (status, hangupCause) => {
       const rawReader: RawFerracoCallReader = {
         findByClientId: jest.fn().mockResolvedValue([
           {
@@ -267,7 +321,8 @@ describe('CallNormalizationService', () => {
             recordPath: null,
             recordName: null,
             hangupCause,
-            sipHangupDisposition,
+            sipHangupDisposition: 'send_cancel',
+            status,
             payload: null,
           },
         ]),
@@ -287,11 +342,11 @@ describe('CallNormalizationService', () => {
         isInboundToCompany: true,
         isLost: true,
         isReceived: false,
+        status,
         extensionUuid: 'ext-20',
         agentResolutionType: 'EXTENSION_UUID',
         agentResolutionKey: 'ext-20',
         agentExtensionNumber: '109',
-        sipHangupDisposition,
         hangupCause,
       })
     },
@@ -317,6 +372,7 @@ describe('CallNormalizationService', () => {
           recordName: null,
           hangupCause: 'NORMAL_CLEARING',
           sipHangupDisposition: 'recv_bye',
+          status: 'answered',
           payload: null,
         },
         {
@@ -336,6 +392,7 @@ describe('CallNormalizationService', () => {
           recordName: null,
           hangupCause: 'NORMAL_CLEARING',
           sipHangupDisposition: 'send_bye',
+          status: 'answered',
           payload: null,
         },
         {
@@ -355,6 +412,7 @@ describe('CallNormalizationService', () => {
           recordName: null,
           hangupCause: 'ORIGINATOR_CANCEL',
           sipHangupDisposition: 'recv_cancel',
+          status: 'missed',
           payload: null,
         },
         {
@@ -374,6 +432,7 @@ describe('CallNormalizationService', () => {
           recordName: null,
           hangupCause: 'NORMAL_CLEARING',
           sipHangupDisposition: 'send_bye',
+          status: 'answered',
           payload: null,
         },
       ]),
@@ -490,6 +549,7 @@ describe('PrismaRawFerracoCallReader', () => {
                 recordName: null,
                 hangupCause: null,
                 sipHangupDisposition: null,
+                status: null,
                 payload: {},
               })),
           )
@@ -521,6 +581,7 @@ describe('PrismaRawFerracoCallReader', () => {
                 recordName: null,
                 hangupCause: null,
                 sipHangupDisposition: null,
+                status: null,
                 payload: {},
               },
             ]
@@ -548,6 +609,7 @@ describe('PrismaRawFerracoCallReader', () => {
     const sql = taggedSql(prisma.$queryRaw as jest.Mock)
 
     expect(sql).toContain('branch.id AS "branchId"')
+    expect(sql).toContain('call.status')
     expect(sql).toContain(
       'FROM raw.ferraco_calls AS call INNER JOIN core.branches AS branch ON branch.telephony_domain_uuid = call.domain_uuid INNER JOIN core.sinapse_clients AS client ON client.id = branch.client_id WHERE client.id =',
     )
@@ -570,10 +632,16 @@ describe('PrismaCallFactUpsertRepository', () => {
     expect(executeRawUnsafe).toHaveBeenCalledWith(expect.any(String), 'client-1')
     expect(sql).toContain('INSERT INTO core.call_facts ( client_id, branch_id, source_table')
     expect(sql).toContain("SELECT client.id, branch.id, 'raw.ferraco_calls', call.id, call.domain_uuid")
+    expect(sql).toContain('NULLIF(call.status, \'\')')
+    expect(sql).toContain("call.status = 'answered'")
+    expect(sql).toContain("call.status IN ('missed', 'no_answered')")
+    expect(sql).toContain('status = EXCLUDED.status')
     expect(sql).toContain(
       'FROM raw.ferraco_calls AS call INNER JOIN core.branches AS branch ON branch.telephony_domain_uuid = call.domain_uuid INNER JOIN core.sinapse_clients AS client ON client.id = branch.client_id WHERE client.id = $1',
     )
     expect(sql).toContain('branch_id = EXCLUDED.branch_id')
     expect(sql).not.toContain('client.domain_uuid = call.domain_uuid')
+    expect(sql).not.toContain('recv_cancel')
+    expect(sql).not.toContain('send_refuse')
   })
 })
