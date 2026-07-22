@@ -195,19 +195,10 @@ export class PrismaCallFactUpsertRepository implements CallFactUpsertRepository 
         call.hangup_cause,
         call.sip_hangup_disposition,
         NULLIF(call.status, ''),
+        COALESCE(call.direction = 'inbound', false),
         COALESCE(
           (
             call.direction = 'inbound'
-            AND COALESCE(call.destination_number, '') ~ '^\\d{2,5}$'
-            AND COALESCE(call.caller_id_number, '') !~ '^\\d{2,5}$'
-          ),
-          false
-        ),
-        COALESCE(
-          (
-            call.direction = 'inbound'
-            AND COALESCE(call.destination_number, '') ~ '^\\d{2,5}$'
-            AND COALESCE(call.caller_id_number, '') !~ '^\\d{2,5}$'
             AND COALESCE(call.status, '') = 'answered'
             AND NOT (
               NULLIF(call.extension_uuid, '') IS NULL
@@ -219,8 +210,6 @@ export class PrismaCallFactUpsertRepository implements CallFactUpsertRepository 
         COALESCE(
           (
             call.direction = 'inbound'
-            AND COALESCE(call.destination_number, '') ~ '^\\d{2,5}$'
-            AND COALESCE(call.caller_id_number, '') !~ '^\\d{2,5}$'
             AND (
               COALESCE(call.status, '') IN ('missed', 'no_answer', 'no_answered')
               OR (
@@ -236,8 +225,6 @@ export class PrismaCallFactUpsertRepository implements CallFactUpsertRepository 
           WHEN NULLIF(call.extension_uuid, '') IS NOT NULL THEN 'EXTENSION_UUID'
           WHEN (
             call.direction = 'inbound'
-            AND COALESCE(call.destination_number, '') ~ '^\\d{2,5}$'
-            AND COALESCE(call.caller_id_number, '') !~ '^\\d{2,5}$'
             AND COALESCE(call.status, '') IN ('missed', 'no_answer', 'no_answered')
           ) THEN 'EXTENSION_NUMBER'
           ELSE NULL
@@ -246,18 +233,12 @@ export class PrismaCallFactUpsertRepository implements CallFactUpsertRepository 
           WHEN NULLIF(call.extension_uuid, '') IS NOT NULL THEN NULLIF(call.extension_uuid, '')
           WHEN (
             call.direction = 'inbound'
-            AND COALESCE(call.destination_number, '') ~ '^\\d{2,5}$'
-            AND COALESCE(call.caller_id_number, '') !~ '^\\d{2,5}$'
             AND COALESCE(call.status, '') IN ('missed', 'no_answer', 'no_answered')
           ) THEN call.destination_number
           ELSE NULL
         END,
         CASE
-          WHEN (
-            call.direction = 'inbound'
-            AND COALESCE(call.destination_number, '') ~ '^\\d{2,5}$'
-            AND COALESCE(call.caller_id_number, '') !~ '^\\d{2,5}$'
-          ) THEN call.destination_number
+          WHEN call.direction = 'inbound' THEN call.destination_number
           ELSE NULL
         END,
         row_to_json(call)
@@ -302,7 +283,6 @@ export class PrismaCallFactUpsertRepository implements CallFactUpsertRepository 
 export class CallNormalizationService {
   private readonly sourceTable = 'raw.ferraco_calls'
   private readonly upsertBatchSize = 250
-  private readonly shortExtensionPattern = /^\d{2,5}$/
 
   constructor(
     @Inject(RAW_FERRACO_CALL_READER)
@@ -405,23 +385,7 @@ export class CallNormalizationService {
   }
 
   private isInboundToCompany(call: RawFerracoCallRecord): boolean {
-    const direction = this.normalizeOptionalText(call.direction)
-    const destinationNumber = this.normalizeOptionalText(call.destinationNumber)
-    const callerNumber = this.normalizeOptionalText(call.callerNumber)
-
-    if (direction !== 'inbound') {
-      return false
-    }
-
-    if (!this.isShortExtension(destinationNumber)) {
-      return false
-    }
-
-    if (this.isShortExtension(callerNumber)) {
-      return false
-    }
-
-    return true
+    return this.normalizeOptionalText(call.direction) === 'inbound'
   }
 
   private isQueueOnlyAnswered(
@@ -534,14 +498,6 @@ export class CallNormalizationService {
 
   private hasText(value: string | null): boolean {
     return this.normalizeOptionalText(value) !== null
-  }
-
-  private isShortExtension(value: string | null): boolean {
-    if (!this.hasText(value)) {
-      return false
-    }
-
-    return this.shortExtensionPattern.test(String(value).trim())
   }
 
   private isQueueDestination(value: string | null): boolean {

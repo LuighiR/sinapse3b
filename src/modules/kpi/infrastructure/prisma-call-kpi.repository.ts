@@ -506,12 +506,13 @@ export class PrismaCallKpiRepository
       return { total: 0, rows: [] }
     }
 
+    const direction = this.normalizeOptionalText(input.direction)
     const where = {
       clientId: input.clientId,
       startedAt: this.toTimestampWhere(input.period.from, input.period.to),
       ...(input.branchId !== undefined ? { branchId: input.branchId } : {}),
       ...(input.status !== undefined ? { status: input.status } : {}),
-      ...(input.direction !== undefined ? { direction: input.direction } : {}),
+      ...(direction !== null ? { direction } : {}),
       ...(input.callerNumber !== undefined
         ? { callerNumber: { contains: input.callerNumber, mode: 'insensitive' } }
         : {}),

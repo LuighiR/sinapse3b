@@ -401,7 +401,7 @@ describe('CallNormalizationService', () => {
     },
   )
 
-  it('marks outbound, local, long-destination, and internal-caller rows as outside the inbound company slice', async () => {
+  it('marks only non-inbound directions as outside the inbound company slice', async () => {
     const rawReader: RawFerracoCallReader = {
       findByClientId: jest.fn().mockResolvedValue([
         {
@@ -497,13 +497,40 @@ describe('CallNormalizationService', () => {
 
     const writtenRows = (callFactRepository.upsert as jest.Mock).mock.calls.map(([args]) => args.create)
 
-    expect(writtenRows).toHaveLength(4)
-
-    for (const row of writtenRows) {
-      expect(row.isInboundToCompany).toBe(false)
-      expect(row.isLost).toBe(false)
-      expect(row.isReceived).toBe(false)
-    }
+    expect(writtenRows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourceRecordId: 3,
+          isInboundToCompany: false,
+          isLost: false,
+          isReceived: false,
+        }),
+        expect.objectContaining({
+          sourceRecordId: 4,
+          isInboundToCompany: false,
+          isLost: false,
+          isReceived: false,
+        }),
+        expect.objectContaining({
+          sourceRecordId: 5,
+          isInboundToCompany: true,
+          isLost: true,
+          isReceived: false,
+          agentExtensionNumber: '997444',
+          agentResolutionType: 'EXTENSION_NUMBER',
+          agentResolutionKey: '997444',
+        }),
+        expect.objectContaining({
+          sourceRecordId: 6,
+          isInboundToCompany: true,
+          isLost: false,
+          isReceived: true,
+          agentExtensionNumber: '107',
+          agentResolutionType: 'EXTENSION_UUID',
+          agentResolutionKey: 'ext-6',
+        }),
+      ]),
+    )
   })
 
   it('fails fast when Nest dependencies are not wired', async () => {

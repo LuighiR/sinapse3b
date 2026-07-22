@@ -442,11 +442,9 @@ Importacao e ownership:
 Regras principais de normalizacao:
 
 - so entra como chamada inbound para a empresa quando `direction = inbound`
-- o destino precisa parecer um ramal curto (`2` a `5` digitos)
-- o originador nao pode parecer um ramal curto
 - `status` bruto da central e persistido em `core.call_facts.status`
-- `is_received = true` quando inbound valida com `status = answered` e nao for fila-only
-- `is_lost = true` quando inbound valida com `status` em `missed`, `no_answer` ou `no_answered`
+- `is_received = true` quando inbound com `status = answered` e nao for fila-only
+- `is_lost = true` quando inbound com `status` em `missed`, `no_answer` ou `no_answered`
 - excecao de fila: inbound com `status = answered`, sem `extension_uuid` e destino com exatamente `3` digitos vira `is_received = false`, `is_lost = true` e sem atribuicao de atendente
 - destino com `4+` digitos sem `extension_uuid` e `status = answered` continua como recebida
 - `agent_resolution_type` e `agent_resolution_key` ajudam a resolver o agente mesmo em chamadas perdidas (exceto fila-only answered)
