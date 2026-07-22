@@ -1488,14 +1488,15 @@ Calls aceitam:
 - `extensionUuid` optional (compatibilidade)
 - `extensionNumber` optional (compatibilidade)
 
-As ligacoes sao calculadas a partir de `raw.ferraco_calls`, considerando somente chamadas `inbound` para ramais numericos curtos (`2` a `5` digitos). A importacao casa `raw.ferraco_calls.domain_uuid` com `core.branches.telephony_domain_uuid`; `core.sinapse_clients` continua sendo o cliente/tenant backend, nao a filial.
+As ligacoes sao calculadas a partir de `raw.ferraco_calls`, considerando todas as chamadas com `direction = inbound`. A importacao casa `raw.ferraco_calls.domain_uuid` com `core.branches.telephony_domain_uuid`; `core.sinapse_clients` continua sendo o cliente/tenant backend, nao a filial.
 
 Classificacao operacional:
 
 - `status` e `direction` brutos da central sao preservados em `core.call_facts`
-- `is_received = true` quando inbound valida com `status = answered` e nao for fila-only
-- `is_lost = true` quando inbound valida com `status` em `missed` / `no_answer` / `no_answered`, ou quando `status = answered` sem `extension_uuid` e destino com exatamente `3` digitos (fila/URA sem atendimento humano)
+- `is_received = true` quando inbound com `status = answered` e nao for fila-only
+- `is_lost = true` quando inbound com `status` em `missed` / `no_answer` / `no_answered`, ou quando `status = answered` sem `extension_uuid` e destino com exatamente `3` digitos (fila/URA sem atendimento humano)
 - destino com `4+` digitos sem `extension_uuid` e `status = answered` continua como recebida
+- funcionarios marcados como nao comerciais tambem entram nas contagens; o lookup de employee serve so para nome/label
 
 Quando `branchId` e informado, a API filtra diretamente por `core.call_facts.branch_id`, salvo durante a normalizacao.
 Quando `employeeId` e informado, a API resolve o funcionario do tenant e filtra pelas suas extensoes.

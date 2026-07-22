@@ -23,13 +23,11 @@ type EmployeeLookupRow = {
   name: string
   extensionUuid: string
   extensionNumber: string
-  isNonCommercial?: boolean
 }
 
 type BranchEmployeeLookupMatch = {
   employeeId: number
   employeeName: string
-  isNonCommercial: boolean
 }
 
 type CallFactEmployeeCandidate = Omit<CallFactRecord, 'employeeName'>
@@ -832,7 +830,6 @@ export class PrismaCallKpiRepository
         name: true,
         extensionUuid: true,
         extensionNumber: true,
-        isNonCommercial: true,
       },
     })) as EmployeeLookupRow[]
 
@@ -856,10 +853,6 @@ export class PrismaCallKpiRepository
           : undefined
 
       if (employeeByUuid !== undefined) {
-        if (this.isNonCommercialLookup(employeeByUuid)) {
-          return []
-        }
-
         return [
           {
             ...fact,
@@ -875,10 +868,6 @@ export class PrismaCallKpiRepository
           : fact.agentResolutionKey && byExtensionNumber.has(fact.agentResolutionKey)
             ? byExtensionNumber.get(fact.agentResolutionKey)
             : undefined
-
-      if (this.isNonCommercialLookup(employeeByExtension)) {
-        return []
-      }
 
       return [
         {
@@ -907,7 +896,6 @@ export class PrismaCallKpiRepository
         name: true,
         extensionUuid: true,
         extensionNumber: true,
-        isNonCommercial: true,
       },
     })) as EmployeeLookupRow[]
 
@@ -946,10 +934,6 @@ export class PrismaCallKpiRepository
       }
 
       if (employeeNameByUuid !== undefined) {
-        if (employeeNameByUuid.isNonCommercial) {
-          return []
-        }
-
         return [
           {
             ...fact,
@@ -975,10 +959,6 @@ export class PrismaCallKpiRepository
           return [baseFact]
         }
 
-        if (employeeNameByPrimary.isNonCommercial) {
-          return []
-        }
-
         return [
           {
             ...fact,
@@ -1001,10 +981,6 @@ export class PrismaCallKpiRepository
         }
 
         if (employeeNameBySecondary !== undefined) {
-          if (employeeNameBySecondary.isNonCommercial) {
-            return []
-          }
-
           return [
             {
               ...fact,
@@ -1083,7 +1059,6 @@ export class PrismaCallKpiRepository
       map.set(key, {
         employeeId: employee.id,
         employeeName: employee.name,
-        isNonCommercial: employee.isNonCommercial ?? false,
       })
       return
     }
@@ -1109,10 +1084,6 @@ export class PrismaCallKpiRepository
     if (current?.name !== employee.name) {
       map.set(key, null)
     }
-  }
-
-  private isNonCommercialLookup(employee: EmployeeLookupRow | null | undefined): boolean {
-    return employee?.isNonCommercial === true
   }
 
   private addDays(value: Date, days: number): Date {

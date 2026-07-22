@@ -122,7 +122,7 @@ describe('PrismaCallKpiRepository', () => {
     ])
   })
 
-  it('excludes call facts resolved to non-commercial employees from all call KPIs', async () => {
+  it('keeps call facts resolved to non-commercial employees in the KPI fact set', async () => {
     const prisma = {
       callFact: {
         findMany: jest.fn().mockResolvedValue([
@@ -153,12 +153,14 @@ describe('PrismaCallKpiRepository', () => {
       employee: {
         findMany: jest.fn().mockResolvedValue([
           {
+            id: 1,
             name: 'Maria',
             extensionUuid: 'ext-1',
             extensionNumber: '104',
             isNonCommercial: false,
           },
           {
+            id: 2,
             name: 'Backoffice',
             extensionUuid: 'ext-2',
             extensionNumber: '105',
@@ -179,7 +181,13 @@ describe('PrismaCallKpiRepository', () => {
     ).resolves.toEqual([
       expect.objectContaining({
         id: 1,
+        employeeId: 1,
         employeeName: 'Maria',
+      }),
+      expect.objectContaining({
+        id: 2,
+        employeeId: 2,
+        employeeName: 'Backoffice',
       }),
     ])
   })
@@ -342,7 +350,7 @@ describe('PrismaCallKpiRepository', () => {
     )
   })
 
-  it('excludes branch call facts resolved to non-commercial employees without using employees to scope the branch', async () => {
+  it('keeps branch call facts resolved to non-commercial employees without using employees to scope the branch', async () => {
     const prisma = {
       callFact: {
         findMany: jest.fn().mockResolvedValue([
@@ -403,6 +411,10 @@ describe('PrismaCallKpiRepository', () => {
       expect.objectContaining({
         id: 1,
         employeeName: 'Maria',
+      }),
+      expect.objectContaining({
+        id: 2,
+        employeeName: 'Backoffice',
       }),
     ])
 

@@ -566,7 +566,7 @@ Detalhe importante:
 Filtro por filial:
 
 - e fact-native: usa `core.call_facts.branch_id`
-- o lookup de `core.employees` por `extension_uuid` ou ramal fica apenas para nomes, agent labels e exclusoes de funcionarios nao comerciais
+- o lookup de `core.employees` por `extension_uuid` ou ramal fica apenas para nomes e agent labels
 
 ### Backfill e rollout de `calls`
 
