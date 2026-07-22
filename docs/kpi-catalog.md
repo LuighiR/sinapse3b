@@ -444,9 +444,12 @@ Regras principais de normalizacao:
 - so entra como chamada inbound para a empresa quando `direction = inbound`
 - o destino precisa parecer um ramal curto (`2` a `5` digitos)
 - o originador nao pode parecer um ramal curto
-- `is_received = true` quando a chamada inbound tem `extension_uuid` e nao caiu em disposicoes de perda
-- `is_lost = true` quando a chamada inbound tem `sip_hangup_disposition` em `recv_cancel`, `send_cancel` ou `send_refuse`
-- `agent_resolution_type` e `agent_resolution_key` ajudam a resolver o agente mesmo em chamadas perdidas
+- `status` bruto da central e persistido em `core.call_facts.status`
+- `is_received = true` quando inbound valida com `status = answered` e nao for fila-only
+- `is_lost = true` quando inbound valida com `status` em `missed`, `no_answer` ou `no_answered`
+- excecao de fila: inbound com `status = answered`, sem `extension_uuid` e destino com exatamente `3` digitos vira `is_received = false`, `is_lost = true` e sem atribuicao de atendente
+- destino com `4+` digitos sem `extension_uuid` e `status = answered` continua como recebida
+- `agent_resolution_type` e `agent_resolution_key` ajudam a resolver o agente mesmo em chamadas perdidas (exceto fila-only answered)
 
 Campos importantes em `core.call_facts`:
 
@@ -468,10 +471,12 @@ Campos importantes em `core.call_facts`:
 | KPI / endpoint | O que representa | Fonte principal | Salvo em `core.call_facts`? | Salvo em `kpi.*`? | Como a API responde |
 | --- | --- | --- | --- | --- | --- |
 | `POST /kpis/calls/refresh` | Reprocessa ligacoes do periodo | `raw.ferraco_calls` | Sim | Sim | Normaliza e materializa |
-| `GET /kpis/calls/summary` | Recebidas, perdidas, total inbound, budgets abertos de televendas e pico horario | `core.call_facts` + `core.budget_facts` | Sim | Sim, em `kpi.snapshots` (`calls.summary`) | Usa materializacao sem filtros; com filtros cai para `facts` |
+| `GET /kpis/calls/summary` | Recebidas, perdidas, total inbound, budgets abertos de televendas e pico horario | `core.call_facts` + `core.budget_facts` | Sim | Sim, em `kpi.snapshots` (`calls.summary`) | Usa materializacao sem filtros; com filtros cai para `facts`. Com atendente, `totalInbound`/`peakHour` ignoram o atendente e `received`/`lost` respeitam |
 | `GET /kpis/calls/hourly` | Serie horaria de recebidas, perdidas e inbound total | `core.call_facts` | Sim | Sim, em `kpi.breakdowns` (`calls.hourly`) | Usa materializacao sem filtros; com filtros cai para `facts` |
 | `GET /kpis/calls/agents/ranking` | Ranking por atendente/ramal | `core.call_facts` + `core.employees` | Sim | Sim, em `kpi.breakdowns` (`calls.agent_ranking`) | Usa materializacao sem filtros; com filtros cai para `facts` |
 | `GET /kpis/calls/hourly/comparison` | Comparativo por hora entre chamadas e budgets de televendas | `core.call_facts` + `core.budget_facts` | Sim | Sim, em `kpi.breakdowns` (`calls.hourly_comparison`) | Usa materializacao sem filtros; com filtros cai para `facts` |
+| `GET /kpis/calls/drilldown` | Relatorio completo paginado de ligacoes | `core.call_facts` | Sim | Nao | Sempre consulta `facts` com filtros e paginacao server-side |
+| `GET /kpis/calls/filter-options` | Valores distintos de `status` e `direction` | `core.call_facts` | Sim | Nao | Distinct por periodo/filial do tenant |
 
 ### Metricas materializadas de `calls`
 
@@ -544,17 +549,21 @@ Semantica:
 
 Filtros disponiveis:
 
+- `employeeId` (preferencial)
 - `extensionUuid`
 - `extensionNumber`
 - `branchId`
+- no drilldown tambem: `status`, `direction`, `callerNumber`, `destinationNumber`, `durationMin`, `durationMax`, `outcome`, `page`, `pageSize`
 
 Impacto:
 
 - qualquer filtro faz a API recalcular em cima de `core.call_facts`
+- no summary, filtro de atendente nao reduz `totalInbound` nem `peakHour`
 
 Detalhe importante:
 
 - `extensionNumber` tambem permite capturar chamadas perdidas sem `extension_uuid`, desde que o ramal resolvido bata com `agent_extension_number` ou `agent_resolution_key`
+- `outcome` no drilldown mapeia `ANSWERED`/`UNANSWERED`/`UNCLASSIFIED` a partir de `is_received`/`is_lost`
 
 Filtro por filial:
 

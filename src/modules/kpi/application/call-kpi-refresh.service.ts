@@ -12,6 +12,7 @@ export type CallFactRecord = {
   agentResolutionKey: string | null
   agentExtensionNumber: string | null
   extensionUuid: string | null
+  employeeId?: number | null
   employeeName: string | null
 }
 

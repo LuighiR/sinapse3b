@@ -209,6 +209,10 @@ export class PrismaCallFactUpsertRepository implements CallFactUpsertRepository 
             AND COALESCE(call.destination_number, '') ~ '^\\d{2,5}$'
             AND COALESCE(call.caller_id_number, '') !~ '^\\d{2,5}$'
             AND COALESCE(call.status, '') = 'answered'
+            AND NOT (
+              NULLIF(call.extension_uuid, '') IS NULL
+              AND COALESCE(call.destination_number, '') ~ '^\\d{3}$'
+            )
           ),
           false
         ),
@@ -217,7 +221,14 @@ export class PrismaCallFactUpsertRepository implements CallFactUpsertRepository 
             call.direction = 'inbound'
             AND COALESCE(call.destination_number, '') ~ '^\\d{2,5}$'
             AND COALESCE(call.caller_id_number, '') !~ '^\\d{2,5}$'
-            AND COALESCE(call.status, '') IN ('missed', 'no_answer', 'no_answered')
+            AND (
+              COALESCE(call.status, '') IN ('missed', 'no_answer', 'no_answered')
+              OR (
+                COALESCE(call.status, '') = 'answered'
+                AND NULLIF(call.extension_uuid, '') IS NULL
+                AND COALESCE(call.destination_number, '') ~ '^\\d{3}$'
+              )
+            )
           ),
           false
         ),
@@ -360,8 +371,9 @@ export class CallNormalizationService {
   private normalizeCall(clientId: string, call: RawFerracoCallRecord): CallFactWritePayload {
     const isInboundToCompany = this.isInboundToCompany(call)
     const status = this.normalizeOptionalText(call.status)
-    const isLost = isInboundToCompany && this.isLostStatus(status)
-    const isReceived = isInboundToCompany && status === 'answered'
+    const isQueueOnlyAnswered = this.isQueueOnlyAnswered(call, isInboundToCompany, status)
+    const isLost = isInboundToCompany && (this.isLostStatus(status) || isQueueOnlyAnswered)
+    const isReceived = isInboundToCompany && status === 'answered' && !isQueueOnlyAnswered
 
     return {
       clientId,
@@ -385,8 +397,8 @@ export class CallNormalizationService {
       isInboundToCompany,
       isLost,
       isReceived,
-      agentResolutionType: this.resolveAgentResolutionType(call, isInboundToCompany, isLost),
-      agentResolutionKey: this.resolveAgentResolutionKey(call, isInboundToCompany, isLost),
+      agentResolutionType: this.resolveAgentResolutionType(call, isInboundToCompany, isLost, isQueueOnlyAnswered),
+      agentResolutionKey: this.resolveAgentResolutionKey(call, isInboundToCompany, isLost, isQueueOnlyAnswered),
       agentExtensionNumber: isInboundToCompany ? this.normalizeOptionalText(call.destinationNumber) : null,
       payloadJson: call.payload ?? {},
     }
@@ -412,6 +424,19 @@ export class CallNormalizationService {
     return true
   }
 
+  private isQueueOnlyAnswered(
+    call: RawFerracoCallRecord,
+    isInboundToCompany: boolean,
+    status: string | null,
+  ): boolean {
+    return (
+      isInboundToCompany &&
+      status === 'answered' &&
+      !this.hasText(call.extensionUuid) &&
+      this.isQueueDestination(call.destinationNumber)
+    )
+  }
+
   private isLostStatus(value: string | null): boolean {
     return value === 'missed' || value === 'no_answer' || value === 'no_answered'
   }
@@ -420,9 +445,14 @@ export class CallNormalizationService {
     call: RawFerracoCallRecord,
     isInboundToCompany: boolean,
     isLost: boolean,
+    isQueueOnlyAnswered: boolean,
   ): string | null {
     if (this.hasText(call.extensionUuid)) {
       return 'EXTENSION_UUID'
+    }
+
+    if (isQueueOnlyAnswered) {
+      return null
     }
 
     if (isInboundToCompany && isLost && this.hasText(call.destinationNumber)) {
@@ -436,9 +466,14 @@ export class CallNormalizationService {
     call: RawFerracoCallRecord,
     isInboundToCompany: boolean,
     isLost: boolean,
+    isQueueOnlyAnswered: boolean,
   ): string | null {
     if (this.hasText(call.extensionUuid)) {
       return this.normalizeOptionalText(call.extensionUuid)
+    }
+
+    if (isQueueOnlyAnswered) {
+      return null
     }
 
     if (isInboundToCompany && isLost && this.hasText(call.destinationNumber)) {
@@ -507,5 +542,10 @@ export class CallNormalizationService {
     }
 
     return this.shortExtensionPattern.test(String(value).trim())
+  }
+
+  private isQueueDestination(value: string | null): boolean {
+    const normalized = this.normalizeOptionalText(value)
+    return normalized !== null && /^\d{3}$/.test(normalized)
   }
 }

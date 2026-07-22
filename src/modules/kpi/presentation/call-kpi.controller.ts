@@ -6,6 +6,8 @@ import { TenantScopeGuard } from '../../auth/presentation/guards/tenant-scope.gu
 import { CallKpiQueryService } from '../application/call-kpi-query.service'
 import { CallKpiRefreshService } from '../application/call-kpi-refresh.service'
 import { parseCallAgentRankingQuery } from './query/call-agent-ranking.query'
+import { parseCallDrilldownQuery } from './query/call-drilldown.query'
+import { parseCallFilterOptionsQuery } from './query/call-filter-options.query'
 import { parseCallHourlyComparisonQuery } from './query/call-hourly-comparison.query'
 import { parseCallHourlyQuery } from './query/call-hourly.query'
 import { parseCallRefreshQuery } from './query/call-refresh.query'
@@ -67,6 +69,26 @@ export class CallKpiController {
     return this.queryService.getHourlyComparison({
       clientId: authContext.clientId,
       ...period,
+    })
+  }
+
+  @Get('drilldown')
+  getDrilldown(@RequestContext() authContext: AuthContext, @Query() query: Record<string, unknown>) {
+    const filters = parseCallDrilldownQuery(query)
+
+    return this.queryService.getDrilldown({
+      clientId: authContext.clientId,
+      ...filters,
+    })
+  }
+
+  @Get('filter-options')
+  getFilterOptions(@RequestContext() authContext: AuthContext, @Query() query: Record<string, unknown>) {
+    const filters = parseCallFilterOptionsQuery(query)
+
+    return this.queryService.getFilterOptions({
+      clientId: authContext.clientId,
+      ...filters,
     })
   }
 }

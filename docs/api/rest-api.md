@@ -1484,21 +1484,43 @@ Calls aceitam:
 - `from` required
 - `to` required
 - `branchId` optional
-- `extensionUuid` optional
-- `extensionNumber` optional
+- `employeeId` optional (preferencial para filtrar atendente)
+- `extensionUuid` optional (compatibilidade)
+- `extensionNumber` optional (compatibilidade)
 
-As ligacoes sao calculadas a partir de `raw.ferraco_calls`, considerando somente chamadas `inbound` para ramais numericos curtos. A importacao casa `raw.ferraco_calls.domain_uuid` com `core.branches.telephony_domain_uuid`; `core.sinapse_clients` continua sendo o cliente/tenant backend, nao a filial.
+As ligacoes sao calculadas a partir de `raw.ferraco_calls`, considerando somente chamadas `inbound` para ramais numericos curtos (`2` a `5` digitos). A importacao casa `raw.ferraco_calls.domain_uuid` com `core.branches.telephony_domain_uuid`; `core.sinapse_clients` continua sendo o cliente/tenant backend, nao a filial.
+
+Classificacao operacional:
+
+- `status` e `direction` brutos da central sao preservados em `core.call_facts`
+- `is_received = true` quando inbound valida com `status = answered` e nao for fila-only
+- `is_lost = true` quando inbound valida com `status` em `missed` / `no_answer` / `no_answered`, ou quando `status = answered` sem `extension_uuid` e destino com exatamente `3` digitos (fila/URA sem atendimento humano)
+- destino com `4+` digitos sem `extension_uuid` e `status = answered` continua como recebida
+
 Quando `branchId` e informado, a API filtra diretamente por `core.call_facts.branch_id`, salvo durante a normalizacao.
+Quando `employeeId` e informado, a API resolve o funcionario do tenant e filtra pelas suas extensoes.
 Quando `extensionUuid` e informado, a API filtra diretamente por `call_facts.extension_uuid`.
 Quando `extensionNumber` e informado, a API tambem inclui chamadas perdidas sem `extension_uuid`, desde que o ramal resolvido em `agent_extension_number` / `agent_resolution_key` bata com o valor enviado.
-Lookup de employee/ramal em calls fica para nomes, agent labels e exclusoes de funcionarios nao comerciais; nao decide ownership da filial.
 
 Contrato para o frontend:
 
 - listar filiais em `GET /companies/current/branches`
+- listar atendentes em `GET /companies/current/employees`
 - enviar `branchId=<branch.id>` quando o usuario selecionar uma filial
+- preferir `employeeId=<employee.id>` para filtrar atendente
 - nao enviar `domainUuid` em filtros de calls; ele e um detalhe interno de importacao
 - sem `branchId`, as rotas de calls retornam o consolidado de todas as filiais do tenant ativo
+
+No `GET /kpis/calls/summary`, o escopo e misto:
+
+- `totalInbound` e `peakHour` usam periodo + filial (ignoram atendente)
+- `received` e `lost` usam periodo + filial + atendente, quando informado
+
+Mapeamento sugerido dos cards para o relatorio completo:
+
+- Total: `direction=inbound` + periodo/filial
+- Atendidas: `direction=inbound&outcome=ANSWERED&employeeId=...`
+- Nao atendidas: `direction=inbound&outcome=UNANSWERED&employeeId=...`
 
 ### `POST /kpis/calls/refresh`
 
@@ -1671,6 +1693,102 @@ Response `200`:
       "telemarketingBudgetCount": 3
     }
   ]
+}
+```
+
+### `GET /kpis/calls/drilldown`
+
+Descricao:
+relatorio completo e paginado de ligacoes a partir de `core.call_facts`, com filtros de negocio e resultado operacional.
+
+Query Params:
+
+- `from`, `to` required
+- `branchId`, `employeeId`, `extensionUuid`, `extensionNumber` optional
+- `status`, `direction` optional (valores brutos da central; nao sao enums rigidos)
+- `callerNumber`, `destinationNumber` optional (contains, case-insensitive)
+- `durationMin`, `durationMax` optional (segundos, nao negativos; `durationMin <= durationMax`)
+- `outcome` optional: `ANSWERED` | `UNANSWERED` | `UNCLASSIFIED`
+- `page` optional (default `1`, minimo `1`)
+- `pageSize` optional (default `50`, maximo `100`)
+
+Ordenacao fixa: `startedAt DESC, id DESC`.
+
+Response `200`:
+
+```json
+{
+  "period": {
+    "from": "2026-01-01",
+    "to": "2026-01-31",
+    "key": "2026-01-01_2026-01-31"
+  },
+  "filters": {
+    "direction": "inbound",
+    "outcome": "ANSWERED",
+    "employeeId": 7
+  },
+  "pagination": {
+    "page": 1,
+    "pageSize": 50,
+    "total": 1,
+    "totalPages": 1
+  },
+  "rows": [
+    {
+      "id": "10",
+      "startedAt": "2026-01-05T09:00:00.000Z",
+      "endedAt": "2026-01-05T09:05:00.000Z",
+      "durationSeconds": "300",
+      "direction": "inbound",
+      "status": "answered",
+      "outcome": "ANSWERED",
+      "callerNumber": "5551999999999",
+      "destinationNumber": "1041",
+      "extensionUuid": "ext-1",
+      "agentExtensionNumber": "1041",
+      "isInboundToCompany": true,
+      "isReceived": true,
+      "isLost": false,
+      "branchId": 12,
+      "branchName": "Matriz",
+      "employeeId": 7,
+      "employeeName": "Maria"
+    }
+  ]
+}
+```
+
+Notas:
+
+- `status` e o valor bruto da central
+- `outcome` e o resultado operacional derivado de `is_received` / `is_lost`
+- implantacao de indices e backfill de fila: `prisma migrate deploy`
+
+### `GET /kpis/calls/filter-options`
+
+Descricao:
+retorna valores distintos de `status` e `direction` existentes no periodo/filial do tenant, para popular filtros da UI.
+
+Query Params:
+
+- `from`, `to` required
+- `branchId` optional
+
+Response `200`:
+
+```json
+{
+  "period": {
+    "from": "2026-01-01",
+    "to": "2026-01-31",
+    "key": "2026-01-01_2026-01-31"
+  },
+  "filters": {
+    "branchId": 12
+  },
+  "statuses": ["answered", "missed", "no_answer"],
+  "directions": ["inbound", "outbound", "local"]
 }
 ```
 

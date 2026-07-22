@@ -16,7 +16,7 @@ import {
   CallKpiSnapshotRow,
   TelemarketingBudgetFactRecord,
 } from '../application/call-kpi-refresh.service'
-import { CallKpiQueryRepository } from '../application/call-kpi-query.service'
+import { CallKpiQueryRepository, type CallKpiDrilldownPage, type CallKpiDrilldownRepositoryInput, type CallKpiFilterOptionsResult, type CallOutcome } from '../application/call-kpi-query.service'
 
 type EmployeeLookupRow = {
   id: number
@@ -498,6 +498,251 @@ export class PrismaCallKpiRepository
     })
   }
 
+  async getDrilldownPage(input: CallKpiDrilldownRepositoryInput): Promise<CallKpiDrilldownPage> {
+    const prisma = this.prisma as any
+    const agentFilter = await this.buildAgentFilter(input.clientId, input)
+
+    if (agentFilter === null) {
+      return { total: 0, rows: [] }
+    }
+
+    const where = {
+      clientId: input.clientId,
+      startedAt: this.toTimestampWhere(input.period.from, input.period.to),
+      ...(input.branchId !== undefined ? { branchId: input.branchId } : {}),
+      ...(input.status !== undefined ? { status: input.status } : {}),
+      ...(input.direction !== undefined ? { direction: input.direction } : {}),
+      ...(input.callerNumber !== undefined
+        ? { callerNumber: { contains: input.callerNumber, mode: 'insensitive' } }
+        : {}),
+      ...(input.destinationNumber !== undefined
+        ? { destinationNumber: { contains: input.destinationNumber, mode: 'insensitive' } }
+        : {}),
+      ...this.buildDurationWhere(input.durationMin, input.durationMax),
+      ...this.buildOutcomeWhere(input.outcome),
+      ...agentFilter,
+    }
+
+    const [total, rows] = await Promise.all([
+      prisma.callFact.count({ where }),
+      prisma.callFact.findMany({
+        where,
+        orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+        skip: (input.page - 1) * input.pageSize,
+        take: input.pageSize,
+        select: {
+          id: true,
+          startedAt: true,
+          endedAt: true,
+          durationSeconds: true,
+          direction: true,
+          status: true,
+          callerNumber: true,
+          destinationNumber: true,
+          extensionUuid: true,
+          agentExtensionNumber: true,
+          agentResolutionKey: true,
+          isInboundToCompany: true,
+          isReceived: true,
+          isLost: true,
+          branchId: true,
+          branch: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      }),
+    ])
+
+    const enriched = await this.attachEmployeeNames(
+      input.clientId,
+      rows.map((row: any) => ({
+        id: row.id,
+        startedAt: row.startedAt,
+        isInboundToCompany: row.isInboundToCompany,
+        isReceived: row.isReceived,
+        isLost: row.isLost,
+        agentResolutionType: null,
+        agentResolutionKey: row.agentResolutionKey,
+        agentExtensionNumber: row.agentExtensionNumber,
+        extensionUuid: row.extensionUuid,
+        employeeName: null,
+      })),
+    )
+
+    const employeeByFactKey = new Map(
+      enriched.map((fact) => [
+        `${String(fact.id)}`,
+        { employeeId: fact.employeeId ?? null, employeeName: fact.employeeName },
+      ]),
+    )
+
+    return {
+      total,
+      rows: rows
+        .filter((row: any) => employeeByFactKey.has(String(row.id)))
+        .map((row: any) => {
+          const employee = employeeByFactKey.get(String(row.id))
+
+          return {
+            id: row.id,
+            startedAt: row.startedAt,
+            endedAt: row.endedAt,
+            durationSeconds: row.durationSeconds.toString(),
+            direction: row.direction,
+            status: row.status,
+            callerNumber: row.callerNumber,
+            destinationNumber: row.destinationNumber,
+            extensionUuid: row.extensionUuid,
+            agentExtensionNumber: row.agentExtensionNumber,
+            isInboundToCompany: row.isInboundToCompany,
+            isReceived: row.isReceived,
+            isLost: row.isLost,
+            branchId: row.branchId,
+            branchName: row.branch?.name ?? null,
+            employeeId: employee?.employeeId ?? null,
+            employeeName: employee?.employeeName ?? null,
+          }
+        }),
+    }
+  }
+
+  async getFilterOptions(input: {
+    clientId: string
+    period: KpiPeriod
+    branchId?: number
+  }): Promise<CallKpiFilterOptionsResult> {
+    const prisma = this.prisma as any
+    const where = {
+      clientId: input.clientId,
+      startedAt: this.toTimestampWhere(input.period.from, input.period.to),
+      ...(input.branchId !== undefined ? { branchId: input.branchId } : {}),
+    }
+
+    const [statusRows, directionRows] = await Promise.all([
+      prisma.callFact.findMany({
+        where: {
+          ...where,
+          status: { not: null },
+        },
+        distinct: ['status'],
+        select: { status: true },
+        orderBy: { status: 'asc' },
+      }),
+      prisma.callFact.findMany({
+        where: {
+          ...where,
+          direction: { not: null },
+        },
+        distinct: ['direction'],
+        select: { direction: true },
+        orderBy: { direction: 'asc' },
+      }),
+    ])
+
+    return {
+      statuses: statusRows
+        .map((row: { status: string | null }) => row.status)
+        .filter((value: string | null): value is string => value != null && value.trim() !== ''),
+      directions: directionRows
+        .map((row: { direction: string | null }) => row.direction)
+        .filter((value: string | null): value is string => value != null && value.trim() !== ''),
+    }
+  }
+
+  private async buildAgentFilter(
+    clientId: string,
+    input: Pick<CallKpiDrilldownRepositoryInput, 'employeeId' | 'extensionUuid' | 'extensionNumber'>,
+  ): Promise<Record<string, unknown> | null | Record<string, never>> {
+    if (input.employeeId !== undefined) {
+      const prisma = this.prisma as any
+      const employee = await prisma.employee.findFirst({
+        where: {
+          id: input.employeeId,
+          branch: { clientId },
+        },
+        select: {
+          extensionUuid: true,
+          extensionNumber: true,
+        },
+      })
+
+      if (employee === null) {
+        return null
+      }
+
+      const orFilters: Array<Record<string, unknown>> = []
+
+      if (this.hasText(employee.extensionUuid)) {
+        orFilters.push({ extensionUuid: employee.extensionUuid })
+      }
+
+      if (this.hasText(employee.extensionNumber)) {
+        orFilters.push({ agentExtensionNumber: employee.extensionNumber })
+        orFilters.push({ agentResolutionKey: employee.extensionNumber })
+      }
+
+      if (orFilters.length === 0) {
+        return null
+      }
+
+      return { OR: orFilters }
+    }
+
+    const extensionUuid = this.normalizeOptionalText(input.extensionUuid)
+    const extensionNumber = this.normalizeOptionalText(input.extensionNumber)
+
+    if (extensionUuid === null && extensionNumber === null) {
+      return {}
+    }
+
+    const orFilters: Array<Record<string, unknown>> = []
+
+    if (extensionUuid !== null) {
+      orFilters.push({ extensionUuid })
+    }
+
+    if (extensionNumber !== null) {
+      orFilters.push({ agentExtensionNumber: extensionNumber })
+      orFilters.push({ agentResolutionKey: extensionNumber })
+    }
+
+    return { OR: orFilters }
+  }
+
+  private buildDurationWhere(
+    durationMin?: number,
+    durationMax?: number,
+  ): Record<string, unknown> {
+    if (durationMin === undefined && durationMax === undefined) {
+      return {}
+    }
+
+    return {
+      durationSeconds: {
+        ...(durationMin !== undefined ? { gte: durationMin } : {}),
+        ...(durationMax !== undefined ? { lte: durationMax } : {}),
+      },
+    }
+  }
+
+  private buildOutcomeWhere(outcome?: CallOutcome): Record<string, unknown> {
+    if (outcome === 'ANSWERED') {
+      return { isReceived: true }
+    }
+
+    if (outcome === 'UNANSWERED') {
+      return { isLost: true }
+    }
+
+    if (outcome === 'UNCLASSIFIED') {
+      return { isReceived: false, isLost: false }
+    }
+
+    return {}
+  }
+
   private async getBreakdownRowsByDefinition(input: {
     clientId: string
     period: KpiPeriod
@@ -582,6 +827,7 @@ export class PrismaCallKpiRepository
       },
       orderBy: [{ id: 'asc' }],
       select: {
+        id: true,
         name: true,
         extensionUuid: true,
         extensionNumber: true,
@@ -616,6 +862,7 @@ export class PrismaCallKpiRepository
         return [
           {
             ...fact,
+            employeeId: employeeByUuid?.id ?? null,
             employeeName: employeeByUuid?.name ?? null,
           },
         ]
@@ -635,6 +882,7 @@ export class PrismaCallKpiRepository
       return [
         {
           ...fact,
+          employeeId: employeeByExtension?.id ?? null,
           employeeName: employeeByExtension?.name ?? null,
         },
       ]
@@ -687,6 +935,7 @@ export class PrismaCallKpiRepository
     return candidates.flatMap((fact): CallFactRecord[] => {
       const baseFact: CallFactRecord = {
         ...fact,
+        employeeId: null,
         employeeName: null,
       }
       const employeeNameByUuid = this.resolveEmployeeByExtensionUuid(uniqueLookup.byExtensionUuid, fact.extensionUuid)
@@ -703,6 +952,7 @@ export class PrismaCallKpiRepository
         return [
           {
             ...fact,
+            employeeId: employeeNameByUuid.employeeId,
             employeeName: employeeNameByUuid.employeeName,
           },
         ]
@@ -731,6 +981,7 @@ export class PrismaCallKpiRepository
         return [
           {
             ...fact,
+            employeeId: employeeNameByPrimary.employeeId,
             employeeName: employeeNameByPrimary.employeeName,
           },
         ]
@@ -756,6 +1007,7 @@ export class PrismaCallKpiRepository
           return [
             {
               ...fact,
+              employeeId: employeeNameBySecondary.employeeId,
               employeeName: employeeNameBySecondary.employeeName,
             },
           ]

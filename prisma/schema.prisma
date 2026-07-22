@@ -324,6 +324,9 @@ model CallFact {
   @@index([clientId, isReceived, startedAt], map: "call_facts_client_received_started_idx")
   @@index([clientId, isLost, startedAt], map: "call_facts_client_lost_started_idx")
   @@index([clientId, agentResolutionKey, startedAt], map: "call_facts_client_agent_started_idx")
+  @@index([clientId, status, startedAt], map: "call_facts_client_status_started_idx")
+  @@index([clientId, direction, startedAt], map: "call_facts_client_direction_started_idx")
+  @@index([clientId, startedAt, id], map: "call_facts_client_started_at_id_idx")
   @@map("call_facts")
   @@schema("core")
 }

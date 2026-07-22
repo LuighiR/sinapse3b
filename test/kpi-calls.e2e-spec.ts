@@ -3,6 +3,8 @@ import request from 'supertest'
 import {
   CallKpiQueryService,
   type CallKpiAgentRankingResponse,
+  type CallKpiDrilldownResponse,
+  type CallKpiFilterOptionsResponse,
   type CallKpiHourlyComparisonResponse,
   type CallKpiHourlyResponse,
   type CallKpiSummaryResponse,
@@ -85,6 +87,39 @@ describe('Call KPI endpoints', () => {
       period: { from: '2026-01-01', to: '2026-01-31', key: '2026-01-01_2026-01-31' },
       rows: [{ hour: '08', receivedCount: 2, lostCount: 1, telemarketingBudgetCount: 1 }],
     } satisfies CallKpiHourlyComparisonResponse)
+    jest.spyOn(queryService, 'getDrilldown').mockResolvedValue({
+      period: { from: '2026-01-01', to: '2026-01-31', key: '2026-01-01_2026-01-31' },
+      filters: { direction: 'inbound', outcome: 'ANSWERED', employeeId: 7 },
+      pagination: { page: 1, pageSize: 50, total: 1, totalPages: 1 },
+      rows: [
+        {
+          id: '10',
+          startedAt: '2026-01-05T09:00:00.000Z',
+          endedAt: '2026-01-05T09:05:00.000Z',
+          durationSeconds: '300',
+          direction: 'inbound',
+          status: 'answered',
+          outcome: 'ANSWERED',
+          callerNumber: '5551999999999',
+          destinationNumber: '1041',
+          extensionUuid: 'ext-1',
+          agentExtensionNumber: '1041',
+          isInboundToCompany: true,
+          isReceived: true,
+          isLost: false,
+          branchId: 12,
+          branchName: 'Matriz',
+          employeeId: 7,
+          employeeName: 'Maria',
+        },
+      ],
+    } satisfies CallKpiDrilldownResponse)
+    jest.spyOn(queryService, 'getFilterOptions').mockResolvedValue({
+      period: { from: '2026-01-01', to: '2026-01-31', key: '2026-01-01_2026-01-31' },
+      filters: { branchId: 12 },
+      statuses: ['answered', 'missed'],
+      directions: ['inbound', 'outbound'],
+    } satisfies CallKpiFilterOptionsResponse)
     jest.spyOn(refreshService, 'refresh').mockResolvedValue({
       clientId: 'client-1',
       from: '2026-01-01',
@@ -267,6 +302,65 @@ describe('Call KPI endpoints', () => {
       to: '2026-01-31',
       branchId: 12,
     })
+  })
+
+  it('returns the call drilldown for the active tenant client', async () => {
+    await request(app.getHttpServer())
+      .get('/kpis/calls/drilldown')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Tenant-Id', 'tenant-1')
+      .query({
+        from: '2026-01-01',
+        to: '2026-01-31',
+        direction: 'inbound',
+        outcome: 'ANSWERED',
+        employeeId: '7',
+        page: '1',
+        pageSize: '50',
+      })
+      .expect(200)
+
+    expect(queryService.getDrilldown).toHaveBeenCalledWith({
+      clientId: 'client-1',
+      from: '2026-01-01',
+      to: '2026-01-31',
+      direction: 'inbound',
+      outcome: 'ANSWERED',
+      employeeId: 7,
+      page: 1,
+      pageSize: 50,
+    })
+  })
+
+  it('returns call filter options for the active tenant client', async () => {
+    await request(app.getHttpServer())
+      .get('/kpis/calls/filter-options')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Tenant-Id', 'tenant-1')
+      .query({ from: '2026-01-01', to: '2026-01-31', branchId: '12' })
+      .expect(200)
+      .expect({
+        period: { from: '2026-01-01', to: '2026-01-31', key: '2026-01-01_2026-01-31' },
+        filters: { branchId: 12 },
+        statuses: ['answered', 'missed'],
+        directions: ['inbound', 'outbound'],
+      })
+
+    expect(queryService.getFilterOptions).toHaveBeenCalledWith({
+      clientId: 'client-1',
+      from: '2026-01-01',
+      to: '2026-01-31',
+      branchId: 12,
+    })
+  })
+
+  it('rejects oversized pageSize on the drilldown endpoint', async () => {
+    await request(app.getHttpServer())
+      .get('/kpis/calls/drilldown')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Tenant-Id', 'tenant-1')
+      .query({ from: '2026-01-01', to: '2026-01-31', pageSize: '101' })
+      .expect(400)
   })
 
   it('refreshes the call kpis for the active tenant client', async () => {

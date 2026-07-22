@@ -198,7 +198,7 @@ describe('CallNormalizationService', () => {
     expect(upsertArgs.update.durationSeconds.toString()).toBe('300')
   })
 
-  it('marks answered inbound calls as received even without extension_uuid', async () => {
+  it('marks answered inbound queue calls without extension_uuid as lost', async () => {
     const rawReader: RawFerracoCallReader = {
       findByClientId: jest.fn().mockResolvedValue([
         {
@@ -237,12 +237,60 @@ describe('CallNormalizationService', () => {
     expect(upsertArgs.create).toMatchObject({
       status: 'answered',
       isInboundToCompany: true,
+      isLost: true,
+      isReceived: false,
+      extensionUuid: null,
+      agentResolutionType: null,
+      agentResolutionKey: null,
+      agentExtensionNumber: '104',
+    })
+  })
+
+  it('marks answered inbound calls without extension_uuid as received for 4-digit destinations', async () => {
+    const rawReader: RawFerracoCallReader = {
+      findByClientId: jest.fn().mockResolvedValue([
+        {
+          id: 12,
+          clientId: 'client-1',
+          branchId: 11,
+          domainUuid: 'domain-1',
+          xmlCdrUuid: 'cdr-12',
+          extensionUuid: null,
+          direction: 'inbound',
+          callerNumber: '5551999999999',
+          destinationNumber: '1041',
+          dateStart: '2026-01-10T09:15:00.000Z',
+          dateFinal: '2026-01-10T09:20:00.000Z',
+          duration: '300',
+          recordPath: null,
+          recordName: null,
+          hangupCause: 'NORMAL_CLEARING',
+          sipHangupDisposition: 'send_bye',
+          status: 'answered',
+          payload: null,
+        },
+      ]),
+    }
+
+    const callFactRepository: CallFactUpsertRepository = {
+      upsert: jest.fn().mockResolvedValue(undefined),
+    }
+
+    const service = new CallNormalizationService(rawReader, callFactRepository)
+
+    await service.normalizeClientCalls('client-1')
+
+    const [upsertArgs] = (callFactRepository.upsert as jest.Mock).mock.calls[0]
+
+    expect(upsertArgs.create).toMatchObject({
+      status: 'answered',
+      isInboundToCompany: true,
       isLost: false,
       isReceived: true,
       extensionUuid: null,
       agentResolutionType: null,
       agentResolutionKey: null,
-      agentExtensionNumber: '104',
+      agentExtensionNumber: '1041',
     })
   })
 
@@ -636,6 +684,8 @@ describe('PrismaCallFactUpsertRepository', () => {
     expect(sql).toContain('NULLIF(call.status, \'\')')
     expect(sql).toContain("COALESCE(call.status, '') = 'answered'")
     expect(sql).toContain("COALESCE(call.status, '') IN ('missed', 'no_answer', 'no_answered')")
+    expect(sql).toContain("NULLIF(call.extension_uuid, '') IS NULL")
+    expect(sql).toContain("COALESCE(call.destination_number, '') ~ '^\\d{3}$'")
     expect(sql).toContain('status = EXCLUDED.status')
     expect(sql).toContain('COALESCE( ( call.direction = \'inbound\'')
     expect(sql).toContain(

@@ -28,6 +28,8 @@ describe('CallKpiQueryService', () => {
       getHourlyComparisonRows: jest.fn(),
       getCallFactRows: jest.fn(),
       getTelemarketingBudgetRows: jest.fn(),
+      getDrilldownPage: jest.fn(),
+      getFilterOptions: jest.fn(),
     }
 
     const service = new CallKpiQueryService(repository)
@@ -94,6 +96,8 @@ describe('CallKpiQueryService', () => {
       getTelemarketingBudgetRows: jest.fn().mockResolvedValue([
         { budgetDatetime: utcDate(2026, 0, 5, 8, 30), statusNormalized: 'OPEN' },
       ]),
+      getDrilldownPage: jest.fn(),
+      getFilterOptions: jest.fn(),
     }
 
     const service = new CallKpiQueryService(repository)
@@ -176,6 +180,8 @@ describe('CallKpiQueryService', () => {
       getHourlyComparisonRows: jest.fn(),
       getCallFactRows: jest.fn(),
       getTelemarketingBudgetRows: jest.fn(),
+      getDrilldownPage: jest.fn(),
+      getFilterOptions: jest.fn(),
     }
 
     const service = new CallKpiQueryService(repository)
@@ -250,6 +256,8 @@ describe('CallKpiQueryService', () => {
       getHourlyComparisonRows: jest.fn(),
       getCallFactRows: jest.fn(),
       getTelemarketingBudgetRows: jest.fn(),
+      getDrilldownPage: jest.fn(),
+      getFilterOptions: jest.fn(),
     }
 
     const service = new CallKpiQueryService(repository)
@@ -308,6 +316,8 @@ describe('CallKpiQueryService', () => {
         },
       ]),
       getTelemarketingBudgetRows: jest.fn(),
+      getDrilldownPage: jest.fn(),
+      getFilterOptions: jest.fn(),
     }
 
     const service = new CallKpiQueryService(repository)
@@ -370,6 +380,8 @@ describe('CallKpiQueryService', () => {
       ]),
       getCallFactRows: jest.fn(),
       getTelemarketingBudgetRows: jest.fn(),
+      getDrilldownPage: jest.fn(),
+      getFilterOptions: jest.fn(),
     }
 
     const service = new CallKpiQueryService(repository)
@@ -450,6 +462,8 @@ describe('CallKpiQueryService', () => {
       getTelemarketingBudgetRows: jest.fn().mockResolvedValue([
         { budgetDatetime: utcDate(2026, 0, 5, 8, 30), statusNormalized: 'OPEN' },
       ]),
+      getDrilldownPage: jest.fn(),
+      getFilterOptions: jest.fn(),
     }
 
     const service = new CallKpiQueryService(repository)
@@ -471,9 +485,211 @@ describe('CallKpiQueryService', () => {
       },
       received: { count: 1 },
       lost: { count: 1 },
-      totalInbound: { count: 2 },
+      totalInbound: { count: 3 },
       telemarketingOpenBudgets: { count: 1 },
       peakHour: { hour: '08', totalInboundCount: 2 },
+    })
+  })
+
+  it('keeps totalInbound general while filtering received and lost by employeeId', async () => {
+    const repository: jest.Mocked<CallKpiQueryRepository> = {
+      getSummaryRows: jest.fn(),
+      getHourlyRows: jest.fn(),
+      getAgentRankingRows: jest.fn(),
+      getHourlyComparisonRows: jest.fn(),
+      getCallFactRows: jest.fn().mockResolvedValue([
+        {
+          id: 1n,
+          startedAt: utcDate(2026, 0, 5, 8, 10),
+          isInboundToCompany: true,
+          isReceived: true,
+          isLost: false,
+          agentResolutionType: 'EXTENSION_UUID',
+          agentResolutionKey: 'ext-1',
+          agentExtensionNumber: '104',
+          extensionUuid: 'ext-1',
+          employeeId: 7,
+          employeeName: 'Maria',
+        },
+        {
+          id: 2n,
+          startedAt: utcDate(2026, 0, 5, 8, 20),
+          isInboundToCompany: true,
+          isReceived: false,
+          isLost: true,
+          agentResolutionType: 'EXTENSION_NUMBER',
+          agentResolutionKey: '104',
+          agentExtensionNumber: '104',
+          extensionUuid: null,
+          employeeId: 7,
+          employeeName: 'Maria',
+        },
+        {
+          id: 3n,
+          startedAt: utcDate(2026, 0, 5, 9, 0),
+          isInboundToCompany: true,
+          isReceived: true,
+          isLost: false,
+          agentResolutionType: 'EXTENSION_UUID',
+          agentResolutionKey: 'ext-2',
+          agentExtensionNumber: '107',
+          extensionUuid: 'ext-2',
+          employeeId: 8,
+          employeeName: 'Joao',
+        },
+      ]),
+      getTelemarketingBudgetRows: jest.fn().mockResolvedValue([]),
+      getDrilldownPage: jest.fn(),
+      getFilterOptions: jest.fn(),
+    }
+
+    const service = new CallKpiQueryService(repository)
+
+    const result = await service.getSummary({
+      clientId: 'c1',
+      from: '2026-01-05',
+      to: '2026-01-05',
+      employeeId: 7,
+    })
+
+    expect(result).toEqual({
+      period: {
+        from: '2026-01-05',
+        to: '2026-01-05',
+        key: '2026-01-05_2026-01-05',
+      },
+      received: { count: 1 },
+      lost: { count: 1 },
+      totalInbound: { count: 3 },
+      telemarketingOpenBudgets: { count: 0 },
+      peakHour: { hour: '08', totalInboundCount: 2 },
+    })
+  })
+
+  it('returns paginated drilldown rows with outcome mapping', async () => {
+    const repository: jest.Mocked<CallKpiQueryRepository> = {
+      getSummaryRows: jest.fn(),
+      getHourlyRows: jest.fn(),
+      getAgentRankingRows: jest.fn(),
+      getHourlyComparisonRows: jest.fn(),
+      getCallFactRows: jest.fn(),
+      getTelemarketingBudgetRows: jest.fn(),
+      getDrilldownPage: jest.fn().mockResolvedValue({
+        total: 2,
+        rows: [
+          {
+            id: 10n,
+            startedAt: utcDate(2026, 0, 5, 9, 0),
+            endedAt: utcDate(2026, 0, 5, 9, 5),
+            durationSeconds: '300',
+            direction: 'inbound',
+            status: 'answered',
+            callerNumber: '5551999999999',
+            destinationNumber: '1041',
+            extensionUuid: 'ext-1',
+            agentExtensionNumber: '1041',
+            isInboundToCompany: true,
+            isReceived: true,
+            isLost: false,
+            branchId: 12,
+            branchName: 'Matriz',
+            employeeId: 7,
+            employeeName: 'Maria',
+          },
+          {
+            id: 9n,
+            startedAt: utcDate(2026, 0, 5, 8, 0),
+            endedAt: null,
+            durationSeconds: '0',
+            direction: 'inbound',
+            status: 'answered',
+            callerNumber: '5551888888888',
+            destinationNumber: '104',
+            extensionUuid: null,
+            agentExtensionNumber: '104',
+            isInboundToCompany: true,
+            isReceived: false,
+            isLost: true,
+            branchId: 12,
+            branchName: 'Matriz',
+            employeeId: null,
+            employeeName: null,
+          },
+        ],
+      }),
+      getFilterOptions: jest.fn(),
+    }
+
+    const service = new CallKpiQueryService(repository)
+
+    const result = await service.getDrilldown({
+      clientId: 'c1',
+      from: '2026-01-05',
+      to: '2026-01-05',
+      direction: 'inbound',
+      page: 1,
+      pageSize: 50,
+    })
+
+    expect(repository.getDrilldownPage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        clientId: 'c1',
+        direction: 'inbound',
+        page: 1,
+        pageSize: 50,
+      }),
+    )
+    expect(result.pagination).toEqual({
+      page: 1,
+      pageSize: 50,
+      total: 2,
+      totalPages: 1,
+    })
+    expect(result.rows[0].outcome).toBe('ANSWERED')
+    expect(result.rows[1].outcome).toBe('UNANSWERED')
+  })
+
+  it('returns distinct filter options for the period', async () => {
+    const repository: jest.Mocked<CallKpiQueryRepository> = {
+      getSummaryRows: jest.fn(),
+      getHourlyRows: jest.fn(),
+      getAgentRankingRows: jest.fn(),
+      getHourlyComparisonRows: jest.fn(),
+      getCallFactRows: jest.fn(),
+      getTelemarketingBudgetRows: jest.fn(),
+      getDrilldownPage: jest.fn(),
+      getFilterOptions: jest.fn().mockResolvedValue({
+        statuses: ['answered', 'missed'],
+        directions: ['inbound', 'outbound'],
+      }),
+    }
+
+    const service = new CallKpiQueryService(repository)
+
+    const result = await service.getFilterOptions({
+      clientId: 'c1',
+      from: '2026-01-01',
+      to: '2026-01-31',
+      branchId: 12,
+    })
+
+    expect(repository.getFilterOptions).toHaveBeenCalledWith({
+      clientId: 'c1',
+      period: expect.objectContaining({
+        from: saoPauloPeriodDate(2026, 0, 1),
+        to: saoPauloPeriodDate(2026, 0, 31),
+      }),
+      branchId: 12,
+    })
+    expect(result).toEqual({
+      period: {
+        from: '2026-01-01',
+        to: '2026-01-31',
+        key: '2026-01-01_2026-01-31',
+      },
+      filters: { branchId: 12 },
+      statuses: ['answered', 'missed'],
+      directions: ['inbound', 'outbound'],
     })
   })
 
@@ -491,6 +707,8 @@ describe('CallKpiQueryService', () => {
           payloadJson: { hour: '08' },
         },
       ]),
+      getDrilldownPage: jest.fn(),
+      getFilterOptions: jest.fn(),
       getCallFactRows: jest.fn().mockResolvedValue([
         {
           id: 1n,
@@ -587,6 +805,8 @@ describe('CallKpiQueryService', () => {
       getTelemarketingBudgetRows: jest.fn().mockResolvedValue([
         { budgetDatetime: utcDate(2026, 0, 5, 8, 30), statusNormalized: 'OPEN' },
       ]),
+      getDrilldownPage: jest.fn(),
+      getFilterOptions: jest.fn(),
     }
     const branchScopeService = {
       assertBranchScope: jest.fn().mockResolvedValue(undefined),
@@ -645,6 +865,8 @@ describe('CallKpiQueryService', () => {
       getTelemarketingBudgetRows: jest.fn().mockResolvedValue([
         { budgetDatetime: utcDate(2026, 0, 5, 8, 30), statusNormalized: 'OPEN' },
       ]),
+      getDrilldownPage: jest.fn(),
+      getFilterOptions: jest.fn(),
     }
     const branchScopeService = {
       assertBranchScope: jest.fn().mockResolvedValue(undefined),

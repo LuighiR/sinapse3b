@@ -14,6 +14,7 @@ export type CallKpiQueryPeriodInput = {
   to: string | Date
   extensionUuid?: string
   extensionNumber?: string
+  employeeId?: number
   branchId?: number
   registeredEmployeesOnly?: boolean
 }
@@ -84,6 +85,137 @@ export type CallKpiQueryRepository = {
     period: KpiPeriod
     branchId?: number
   }): Promise<TelemarketingBudgetFactRecord[]>
+  getDrilldownPage(input: CallKpiDrilldownRepositoryInput): Promise<CallKpiDrilldownPage>
+  getFilterOptions(input: {
+    clientId: string
+    period: KpiPeriod
+    branchId?: number
+  }): Promise<CallKpiFilterOptionsResult>
+}
+
+export type CallOutcome = 'ANSWERED' | 'UNANSWERED' | 'UNCLASSIFIED'
+
+export type CallKpiDrilldownInput = CallKpiQueryPeriodInput & {
+  status?: string
+  direction?: string
+  callerNumber?: string
+  destinationNumber?: string
+  durationMin?: number
+  durationMax?: number
+  outcome?: CallOutcome
+  page: number
+  pageSize: number
+}
+
+export type CallKpiDrilldownFilters = {
+  branchId?: number
+  employeeId?: number
+  extensionUuid?: string
+  extensionNumber?: string
+  status?: string
+  direction?: string
+  callerNumber?: string
+  destinationNumber?: string
+  durationMin?: number
+  durationMax?: number
+  outcome?: CallOutcome
+}
+
+export type CallKpiDrilldownRow = {
+  id: string
+  startedAt: string
+  endedAt: string | null
+  durationSeconds: string
+  direction: string | null
+  status: string | null
+  outcome: CallOutcome
+  callerNumber: string | null
+  destinationNumber: string | null
+  extensionUuid: string | null
+  agentExtensionNumber: string | null
+  isInboundToCompany: boolean
+  isReceived: boolean
+  isLost: boolean
+  branchId: number | null
+  branchName: string | null
+  employeeId: number | null
+  employeeName: string | null
+}
+
+export type CallKpiDrilldownPagination = {
+  page: number
+  pageSize: number
+  total: number
+  totalPages: number
+}
+
+export type CallKpiDrilldownResponse = {
+  period: CallKpiPeriodView
+  filters: CallKpiDrilldownFilters
+  pagination: CallKpiDrilldownPagination
+  rows: CallKpiDrilldownRow[]
+}
+
+export type CallKpiFilterOptionsInput = {
+  clientId: string
+  from: string | Date
+  to: string | Date
+  branchId?: number
+}
+
+export type CallKpiFilterOptionsResponse = {
+  period: CallKpiPeriodView
+  filters: { branchId?: number }
+  statuses: string[]
+  directions: string[]
+}
+
+export type CallKpiDrilldownFactRow = {
+  id: bigint | number | string
+  startedAt: Date | string
+  endedAt: Date | string | null
+  durationSeconds: string | number
+  direction: string | null
+  status: string | null
+  callerNumber: string | null
+  destinationNumber: string | null
+  extensionUuid: string | null
+  agentExtensionNumber: string | null
+  isInboundToCompany: boolean
+  isReceived: boolean
+  isLost: boolean
+  branchId: number | null
+  branchName: string | null
+  employeeId: number | null
+  employeeName: string | null
+}
+
+export type CallKpiDrilldownRepositoryInput = {
+  clientId: string
+  period: KpiPeriod
+  branchId?: number
+  employeeId?: number
+  extensionUuid?: string
+  extensionNumber?: string
+  status?: string
+  direction?: string
+  callerNumber?: string
+  destinationNumber?: string
+  durationMin?: number
+  durationMax?: number
+  outcome?: CallOutcome
+  page: number
+  pageSize: number
+}
+
+export type CallKpiDrilldownPage = {
+  total: number
+  rows: CallKpiDrilldownFactRow[]
+}
+
+export type CallKpiFilterOptionsResult = {
+  statuses: string[]
+  directions: string[]
 }
 
 type RankingBucket = {
@@ -110,17 +242,18 @@ export class CallKpiQueryService {
 
     if (this.hasFactFilters(input)) {
       const [callFacts, telemarketingBudgetRows] = await Promise.all([
-        this.getFilteredFacts(input, period),
+        this.getPeriodFacts(input, period),
         this.repository.getTelemarketingBudgetRows({
           clientId: input.clientId,
           period,
           branchId: input.branchId,
         }),
       ])
+      const agentFacts = this.filterFactsByAgent(callFacts, input)
 
       return {
         period: this.toPeriodView(period),
-        ...this.buildSummaryFromFacts(callFacts, telemarketingBudgetRows),
+        ...this.buildSummaryFromFacts(callFacts, agentFacts, telemarketingBudgetRows),
       }
     }
 
@@ -137,7 +270,7 @@ export class CallKpiQueryService {
 
       return {
         period: this.toPeriodView(period),
-        ...this.buildSummaryFromFacts(callFacts, telemarketingBudgetRows),
+        ...this.buildSummaryFromFacts(callFacts, callFacts, telemarketingBudgetRows),
       }
     }
 
@@ -252,6 +385,142 @@ export class CallKpiQueryService {
     }
   }
 
+  async getDrilldown(input: CallKpiDrilldownInput): Promise<CallKpiDrilldownResponse> {
+    const period = this.toPeriod(input)
+    await this.assertBranchScope(input)
+
+    const page = await this.repository.getDrilldownPage({
+      clientId: input.clientId,
+      period,
+      branchId: input.branchId,
+      employeeId: input.employeeId,
+      extensionUuid: input.extensionUuid,
+      extensionNumber: input.extensionNumber,
+      status: input.status,
+      direction: input.direction,
+      callerNumber: input.callerNumber,
+      destinationNumber: input.destinationNumber,
+      durationMin: input.durationMin,
+      durationMax: input.durationMax,
+      outcome: input.outcome,
+      page: input.page,
+      pageSize: input.pageSize,
+    })
+
+    return {
+      period: this.toPeriodView(period),
+      filters: this.buildDrilldownFilters(input),
+      pagination: {
+        page: input.page,
+        pageSize: input.pageSize,
+        total: page.total,
+        totalPages: page.total === 0 ? 0 : Math.ceil(page.total / input.pageSize),
+      },
+      rows: page.rows.map((row) => this.toDrilldownRow(row)),
+    }
+  }
+
+  async getFilterOptions(input: CallKpiFilterOptionsInput): Promise<CallKpiFilterOptionsResponse> {
+    const period = this.toPeriod(input)
+    await this.assertBranchScope(input)
+
+    const options = await this.repository.getFilterOptions({
+      clientId: input.clientId,
+      period,
+      branchId: input.branchId,
+    })
+
+    return {
+      period: this.toPeriodView(period),
+      filters: input.branchId !== undefined ? { branchId: input.branchId } : {},
+      statuses: options.statuses,
+      directions: options.directions,
+    }
+  }
+
+  private buildDrilldownFilters(input: CallKpiDrilldownInput): CallKpiDrilldownFilters {
+    const filters: CallKpiDrilldownFilters = {}
+
+    if (input.branchId !== undefined) {
+      filters.branchId = input.branchId
+    }
+    if (input.employeeId !== undefined) {
+      filters.employeeId = input.employeeId
+    }
+    if (input.extensionUuid !== undefined) {
+      filters.extensionUuid = input.extensionUuid
+    }
+    if (input.extensionNumber !== undefined) {
+      filters.extensionNumber = input.extensionNumber
+    }
+    if (input.status !== undefined) {
+      filters.status = input.status
+    }
+    if (input.direction !== undefined) {
+      filters.direction = input.direction
+    }
+    if (input.callerNumber !== undefined) {
+      filters.callerNumber = input.callerNumber
+    }
+    if (input.destinationNumber !== undefined) {
+      filters.destinationNumber = input.destinationNumber
+    }
+    if (input.durationMin !== undefined) {
+      filters.durationMin = input.durationMin
+    }
+    if (input.durationMax !== undefined) {
+      filters.durationMax = input.durationMax
+    }
+    if (input.outcome !== undefined) {
+      filters.outcome = input.outcome
+    }
+
+    return filters
+  }
+
+  private toDrilldownRow(row: CallKpiDrilldownFactRow): CallKpiDrilldownRow {
+    return {
+      id: String(row.id),
+      startedAt: this.toIsoString(row.startedAt),
+      endedAt: row.endedAt == null ? null : this.toIsoString(row.endedAt),
+      durationSeconds: String(row.durationSeconds),
+      direction: row.direction,
+      status: row.status,
+      outcome: this.resolveOutcome(row),
+      callerNumber: row.callerNumber,
+      destinationNumber: row.destinationNumber,
+      extensionUuid: row.extensionUuid,
+      agentExtensionNumber: row.agentExtensionNumber,
+      isInboundToCompany: row.isInboundToCompany,
+      isReceived: row.isReceived,
+      isLost: row.isLost,
+      branchId: row.branchId,
+      branchName: row.branchName,
+      employeeId: row.employeeId,
+      employeeName: row.employeeName,
+    }
+  }
+
+  private resolveOutcome(row: Pick<CallKpiDrilldownFactRow, 'isReceived' | 'isLost'>): CallOutcome {
+    if (row.isReceived) {
+      return 'ANSWERED'
+    }
+
+    if (row.isLost) {
+      return 'UNANSWERED'
+    }
+
+    return 'UNCLASSIFIED'
+  }
+
+  private toIsoString(value: Date | string): string {
+    if (typeof value === 'string') {
+      return value
+    }
+
+    return value.toISOString()
+  }
+
   private buildSummaryFromRows(rows: CallKpiSnapshotRow[]): Omit<CallKpiSummaryResponse, 'period'> {
     const summary = {
       received: { count: 0 },
@@ -280,11 +549,13 @@ export class CallKpiQueryService {
   }
 
   private buildSummaryFromFacts(
-    callFacts: CallFactRecord[],
+    allCallFacts: CallFactRecord[],
+    agentCallFacts: CallFactRecord[],
     telemarketingBudgetRows: TelemarketingBudgetFactRecord[],
   ): Omit<CallKpiSummaryResponse, 'period'> {
-    const validCallFacts = this.onlyInboundFacts(callFacts)
-    const hourlyRows = this.buildHourlyFromFacts(validCallFacts)
+    const totalInboundFacts = this.onlyInboundFacts(allCallFacts)
+    const agentInboundFacts = this.onlyInboundFacts(agentCallFacts)
+    const hourlyRows = this.buildHourlyFromFacts(totalInboundFacts)
     const peakHour = hourlyRows.reduce(
       (best, row) =>
         row.totalInboundCount > best.totalInboundCount
@@ -294,9 +565,9 @@ export class CallKpiQueryService {
     )
 
     return {
-      received: { count: validCallFacts.filter((fact) => fact.isReceived).length },
-      lost: { count: validCallFacts.filter((fact) => fact.isLost).length },
-      totalInbound: { count: validCallFacts.length },
+      received: { count: agentInboundFacts.filter((fact) => fact.isReceived).length },
+      lost: { count: agentInboundFacts.filter((fact) => fact.isLost).length },
+      totalInbound: { count: totalInboundFacts.length },
       telemarketingOpenBudgets: {
         count: telemarketingBudgetRows.filter((row) => (row.statusNormalized ?? '').toUpperCase() === 'OPEN').length,
       },
@@ -550,22 +821,30 @@ export class CallKpiQueryService {
     return callFacts.filter((fact) => fact.isInboundToCompany)
   }
 
-  private async getFilteredFacts(input: CallKpiQueryPeriodInput, period: KpiPeriod): Promise<CallFactRecord[]> {
-    const callFacts = await this.repository.getCallFactRows({
+  private async getPeriodFacts(input: CallKpiQueryPeriodInput, period: KpiPeriod): Promise<CallFactRecord[]> {
+    return this.repository.getCallFactRows({
       clientId: input.clientId,
       period,
       branchId: input.branchId,
     })
+  }
 
+  private async getFilteredFacts(input: CallKpiQueryPeriodInput, period: KpiPeriod): Promise<CallFactRecord[]> {
+    const callFacts = await this.getPeriodFacts(input, period)
+    return this.filterFactsByAgent(callFacts, input)
+  }
+
+  private filterFactsByAgent(callFacts: CallFactRecord[], input: CallKpiQueryPeriodInput): CallFactRecord[] {
     const extensionUuid = this.normalizeOptionalText(input.extensionUuid)
     const extensionNumber = this.normalizeOptionalText(input.extensionNumber)
+    const employeeId = input.employeeId
 
-    if (extensionUuid === null && extensionNumber === null) {
+    if (extensionUuid === null && extensionNumber === null && employeeId === undefined) {
       return callFacts
     }
 
     return callFacts
-      .filter((fact) => this.matchesCallFilter(fact, { extensionUuid, extensionNumber }))
+      .filter((fact) => this.matchesCallFilter(fact, { extensionUuid, extensionNumber, employeeId }))
       .map((fact) => ({
         ...fact,
         extensionUuid:
@@ -602,14 +881,19 @@ export class CallKpiQueryService {
     return (
       input.branchId !== undefined ||
       input.extensionUuid !== undefined ||
-      input.extensionNumber !== undefined
+      input.extensionNumber !== undefined ||
+      input.employeeId !== undefined
     )
   }
 
   private matchesCallFilter(
     fact: CallFactRecord,
-    filter: { extensionUuid: string | null; extensionNumber: string | null },
+    filter: { extensionUuid: string | null; extensionNumber: string | null; employeeId?: number },
   ): boolean {
+    if (filter.employeeId !== undefined) {
+      return fact.employeeId === filter.employeeId
+    }
+
     return this.matchesExtensionUuid(fact, filter.extensionUuid) || this.matchesExtensionNumber(fact, filter.extensionNumber)
   }
 

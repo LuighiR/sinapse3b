@@ -38,6 +38,23 @@ describe('parseCallFactFiltersQuery', () => {
     })
   })
 
+  it('accepts employeeId filters', () => {
+    expect(
+      parseCallFactFiltersQuery(
+        {
+          from: '2026-01-01',
+          to: '2026-01-31',
+          employeeId: ' 7 ',
+        },
+        'Invalid call query params',
+      ),
+    ).toMatchObject({
+      from: '2026-01-01',
+      to: '2026-01-31',
+      employeeId: 7,
+    })
+  })
+
   it('rejects legacy sellerId filters for calls', () => {
     expect(() =>
       parseCallFactFiltersQuery(

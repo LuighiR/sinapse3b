@@ -10,6 +10,7 @@ export type CallBasePeriodQuery = {
 export type CallFactFiltersQuery = CallBasePeriodQuery & {
   extensionUuid?: string
   extensionNumber?: string
+  employeeId?: number
   branchId?: number
 }
 
@@ -33,6 +34,7 @@ const callBasePeriodSchema = z.object({
 const callFactFiltersSchema = callBasePeriodSchema.extend({
   extensionUuid: optionalFilterTextSchema,
   extensionNumber: optionalFilterTextSchema,
+  employeeId: optionalFilterNumberSchema,
   branchId: optionalFilterNumberSchema,
 })
 
@@ -49,6 +51,7 @@ export function parseCallFactFiltersQuery(
     to: query.to,
     extensionUuid: query.extensionUuid,
     extensionNumber: query.extensionNumber,
+    employeeId: query.employeeId,
     branchId: query.branchId,
   })
 
