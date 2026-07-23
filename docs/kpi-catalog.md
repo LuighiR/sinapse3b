@@ -446,6 +446,7 @@ Regras principais de normalizacao:
 - `is_received = true` quando inbound com `status = answered` e nao for fila-only
 - `is_lost = true` quando inbound com `status` em `missed`, `no_answer` ou `no_answered`
 - excecao de fila: inbound com `status = answered`, sem `extension_uuid` e destino com exatamente `3` digitos vira `is_received = false`, `is_lost = true` e sem atribuicao de atendente
+- `lostWithoutEmployee` / `withoutEmployee`: inclui perdas de fila (inbound, `extension_uuid` vazio, ramal de 3 digitos) mesmo com Employee de mesmo `extensionNumber`; exclusao por `extensionUuid` de Employee continua valendo
 - destino com `4+` digitos sem `extension_uuid` e `status = answered` continua como recebida
 - `agent_resolution_type` e `agent_resolution_key` ajudam a resolver o agente mesmo em chamadas perdidas (exceto fila-only answered)
 

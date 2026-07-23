@@ -1768,7 +1768,8 @@ Response `200`:
 
 Notas:
 
-- `lostWithoutEmployee.count` e o total de ligacoes inbound perdidas (`is_lost`) que nao resolvem para um Employee unico (mesmo criterio do filtro `withoutEmployee` no drilldown)
+- `lostWithoutEmployee.count` e o total de ligacoes inbound perdidas (`is_lost`) que nao resolvem para um Employee unico, salvo a excecao de fila abaixo (mesmo criterio do filtro `withoutEmployee` no drilldown)
+- chamadas inbound perdidas com `extension_uuid` vazio e ramal de exatamente 3 digitos (fila) entram em `withoutEmployee` / `lostWithoutEmployee` mesmo quando existe Employee com o mesmo `extensionNumber`; exclusao por `extensionUuid` de Employee continua valendo
 - o card deve abrir `GET /kpis/calls/drilldown?direction=inbound&outcome=UNANSWERED&withoutEmployee=true`
 
 ### `GET /kpis/calls/hourly`
@@ -1869,7 +1870,7 @@ Query Params:
 
 - `from`, `to` required
 - `branchId`, `employeeId`, `extensionUuid`, `extensionNumber` optional
-- `withoutEmployee` optional (`true`/`false`): lista apenas ligacoes que nao resolvem para um Employee unico; nao combina com `employeeId`, `extensionUuid` ou `extensionNumber`
+- `withoutEmployee` optional (`true`/`false`): lista apenas ligacoes que nao resolvem para um Employee unico, salvo perdas de fila de 3 digitos sem `extension_uuid` (ver nota em `GET /kpis/calls/summary`); nao combina com `employeeId`, `extensionUuid` ou `extensionNumber`
 - `status`, `direction` optional (valores brutos da central; nao sao enums rigidos)
 - `callerNumber`, `destinationNumber` optional (contains, case-insensitive)
 - `durationMin`, `durationMax` optional (segundos, nao negativos; `durationMin <= durationMax`)
