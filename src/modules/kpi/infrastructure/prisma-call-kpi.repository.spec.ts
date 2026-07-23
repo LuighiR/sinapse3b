@@ -777,13 +777,109 @@ describe('PrismaCallKpiRepository', () => {
         direction: 'inbound',
         isLost: true,
         NOT: {
+          OR: [{ extensionUuid: { in: ['ext-1'] } }],
+        },
+      },
+    })
+  })
+
+  it('does not exclude lost calls by 3-digit employee extensionNumber in withoutEmployee filter', async () => {
+    const prisma = {
+      callFact: {
+        count: jest.fn().mockResolvedValue(12),
+      },
+      employee: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 1,
+            name: 'Fila Comercial',
+            extensionUuid: '',
+            extensionNumber: '101',
+          },
+          {
+            id: 2,
+            name: 'Maria',
+            extensionUuid: 'ext-maria',
+            extensionNumber: '1041',
+          },
+        ]),
+      },
+    }
+
+    const repository = new PrismaCallKpiRepository(prisma as any)
+
+    await expect(
+      repository.countLostWithoutEmployee({
+        clientId: 'client-1',
+        period: {
+          from: utcDate(2026, 0, 5),
+          to: utcDate(2026, 0, 5),
+          key: '2026-01-05_2026-01-05',
+          eachDay: () => [],
+        } as any,
+      }),
+    ).resolves.toBe(12)
+
+    expect(prisma.callFact.count).toHaveBeenCalledWith({
+      where: {
+        clientId: 'client-1',
+        startedAt: expect.any(Object),
+        direction: 'inbound',
+        isLost: true,
+        NOT: {
           OR: [
-            { extensionUuid: { in: ['ext-1'] } },
-            { agentExtensionNumber: { in: ['104'] } },
-            { agentResolutionKey: { in: ['104'] } },
+            { extensionUuid: { in: ['ext-maria'] } },
+            { agentExtensionNumber: { in: ['1041'] } },
+            { agentResolutionKey: { in: ['1041'] } },
           ],
         },
       },
+    })
+  })
+
+  it('omits 3-digit extensionNumbers from withoutEmployee drilldown exclusion', async () => {
+    const prisma = {
+      callFact: {
+        count: jest.fn().mockResolvedValue(0),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      employee: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 1,
+            name: 'Maria',
+            extensionUuid: 'ext-1',
+            extensionNumber: '104',
+          },
+        ]),
+      },
+    }
+
+    const repository = new PrismaCallKpiRepository(prisma as any)
+
+    await repository.getDrilldownPage({
+      clientId: 'client-1',
+      period: {
+        from: utcDate(2026, 0, 5),
+        to: utcDate(2026, 0, 5),
+        key: '2026-01-05_2026-01-05',
+        eachDay: () => [],
+      } as any,
+      withoutEmployee: true,
+      outcome: 'UNANSWERED',
+      direction: 'inbound',
+      page: 1,
+      pageSize: 50,
+    })
+
+    expect(prisma.callFact.count).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        direction: 'inbound',
+        isLost: true,
+        NOT: {
+          OR: [{ extensionUuid: { in: ['ext-1'] } }],
+        },
+      }),
     })
   })
 })
