@@ -787,25 +787,34 @@ export class PrismaCallKpiRepository
       return {}
     }
 
-    const matchedEmployeeFilters: Array<Record<string, unknown>> = []
+    // NULL-safe "does not uniquely match employee":
+    // `NOT (extensionUuid IN (...))` drops rows where extensionUuid IS NULL in SQL.
+    // Queue losses usually have null extensionUuid + 3-digit agentExtensionNumber.
+    const andFilters: Array<Record<string, unknown>> = []
 
     if (uniqueExtensionUuids.length > 0) {
-      matchedEmployeeFilters.push({ extensionUuid: { in: uniqueExtensionUuids } })
+      andFilters.push({
+        OR: [{ extensionUuid: null }, { NOT: { extensionUuid: { in: uniqueExtensionUuids } } }],
+      })
     }
 
     if (uniqueExtensionNumbersForExclusion.length > 0) {
-      matchedEmployeeFilters.push({
-        agentExtensionNumber: { in: uniqueExtensionNumbersForExclusion },
+      andFilters.push({
+        OR: [
+          { agentExtensionNumber: null },
+          { NOT: { agentExtensionNumber: { in: uniqueExtensionNumbersForExclusion } } },
+        ],
       })
-      matchedEmployeeFilters.push({
-        agentResolutionKey: { in: uniqueExtensionNumbersForExclusion },
+      andFilters.push({
+        OR: [
+          { agentResolutionKey: null },
+          { NOT: { agentResolutionKey: { in: uniqueExtensionNumbersForExclusion } } },
+        ],
       })
     }
 
     return {
-      NOT: {
-        OR: matchedEmployeeFilters,
-      },
+      AND: andFilters,
     }
   }
 

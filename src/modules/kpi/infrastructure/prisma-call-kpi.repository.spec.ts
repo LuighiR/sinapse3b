@@ -718,9 +718,11 @@ describe('PrismaCallKpiRepository', () => {
         clientId: 'client-1',
         direction: 'inbound',
         isLost: true,
-        NOT: {
-          OR: [{ extensionUuid: { in: ['ext-1', 'ext-2'] } }],
-        },
+        AND: [
+          {
+            OR: [{ extensionUuid: null }, { NOT: { extensionUuid: { in: ['ext-1', 'ext-2'] } } }],
+          },
+        ],
       }),
     })
   })
@@ -776,9 +778,11 @@ describe('PrismaCallKpiRepository', () => {
         branchId: 12,
         direction: 'inbound',
         isLost: true,
-        NOT: {
-          OR: [{ extensionUuid: { in: ['ext-1'] } }],
-        },
+        AND: [
+          {
+            OR: [{ extensionUuid: null }, { NOT: { extensionUuid: { in: ['ext-1'] } } }],
+          },
+        ],
       },
     })
   })
@@ -826,13 +830,23 @@ describe('PrismaCallKpiRepository', () => {
         startedAt: expect.any(Object),
         direction: 'inbound',
         isLost: true,
-        NOT: {
-          OR: [
-            { extensionUuid: { in: ['ext-maria'] } },
-            { agentExtensionNumber: { in: ['1041'] } },
-            { agentResolutionKey: { in: ['1041'] } },
-          ],
-        },
+        AND: [
+          {
+            OR: [{ extensionUuid: null }, { NOT: { extensionUuid: { in: ['ext-maria'] } } }],
+          },
+          {
+            OR: [
+              { agentExtensionNumber: null },
+              { NOT: { agentExtensionNumber: { in: ['1041'] } } },
+            ],
+          },
+          {
+            OR: [
+              { agentResolutionKey: null },
+              { NOT: { agentResolutionKey: { in: ['1041'] } } },
+            ],
+          },
+        ],
       },
     })
   })
@@ -876,9 +890,11 @@ describe('PrismaCallKpiRepository', () => {
       where: expect.objectContaining({
         direction: 'inbound',
         isLost: true,
-        NOT: {
-          OR: [{ extensionUuid: { in: ['ext-1'] } }],
-        },
+        AND: [
+          {
+            OR: [{ extensionUuid: null }, { NOT: { extensionUuid: { in: ['ext-1'] } } }],
+          },
+        ],
       }),
     })
   })
