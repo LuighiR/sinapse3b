@@ -87,4 +87,40 @@ describe('parseCallDrilldownQuery', () => {
       }),
     ).toThrow(BadRequestException)
   })
+
+  it('parses withoutEmployee boolean filter', () => {
+    expect(
+      parseCallDrilldownQuery({
+        from: '2026-01-01',
+        to: '2026-01-31',
+        withoutEmployee: 'true',
+        outcome: 'UNANSWERED',
+      }),
+    ).toMatchObject({
+      withoutEmployee: true,
+      outcome: 'UNANSWERED',
+    })
+  })
+
+  it('rejects withoutEmployee combined with employeeId', () => {
+    expect(() =>
+      parseCallDrilldownQuery({
+        from: '2026-01-01',
+        to: '2026-01-31',
+        withoutEmployee: 'true',
+        employeeId: '7',
+      }),
+    ).toThrow(BadRequestException)
+  })
+
+  it('rejects withoutEmployee combined with extensionUuid', () => {
+    expect(() =>
+      parseCallDrilldownQuery({
+        from: '2026-01-01',
+        to: '2026-01-31',
+        withoutEmployee: true,
+        extensionUuid: 'ext-1',
+      }),
+    ).toThrow(BadRequestException)
+  })
 })

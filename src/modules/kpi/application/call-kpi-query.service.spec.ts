@@ -29,6 +29,7 @@ describe('CallKpiQueryService', () => {
       getCallFactRows: jest.fn(),
       getTelemarketingBudgetRows: jest.fn(),
       getDrilldownPage: jest.fn(),
+      countLostWithoutEmployee: jest.fn().mockResolvedValue(0),
       getFilterOptions: jest.fn(),
     }
 
@@ -55,6 +56,7 @@ describe('CallKpiQueryService', () => {
       },
       received: { count: 12 },
       lost: { count: 4 },
+      lostWithoutEmployee: { count: 0 },
       totalInbound: { count: 16 },
       telemarketingOpenBudgets: { count: 3 },
       peakHour: { hour: '10', totalInboundCount: 7 },
@@ -97,6 +99,7 @@ describe('CallKpiQueryService', () => {
         { budgetDatetime: utcDate(2026, 0, 5, 8, 30), statusNormalized: 'OPEN' },
       ]),
       getDrilldownPage: jest.fn(),
+      countLostWithoutEmployee: jest.fn().mockResolvedValue(0),
       getFilterOptions: jest.fn(),
     }
 
@@ -117,6 +120,7 @@ describe('CallKpiQueryService', () => {
       },
       received: { count: 1 },
       lost: { count: 1 },
+      lostWithoutEmployee: { count: 0 },
       totalInbound: { count: 2 },
       telemarketingOpenBudgets: { count: 1 },
       peakHour: { hour: '08', totalInboundCount: 2 },
@@ -181,6 +185,7 @@ describe('CallKpiQueryService', () => {
       getCallFactRows: jest.fn(),
       getTelemarketingBudgetRows: jest.fn(),
       getDrilldownPage: jest.fn(),
+      countLostWithoutEmployee: jest.fn().mockResolvedValue(0),
       getFilterOptions: jest.fn(),
     }
 
@@ -257,6 +262,7 @@ describe('CallKpiQueryService', () => {
       getCallFactRows: jest.fn(),
       getTelemarketingBudgetRows: jest.fn(),
       getDrilldownPage: jest.fn(),
+      countLostWithoutEmployee: jest.fn().mockResolvedValue(0),
       getFilterOptions: jest.fn(),
     }
 
@@ -317,6 +323,7 @@ describe('CallKpiQueryService', () => {
       ]),
       getTelemarketingBudgetRows: jest.fn(),
       getDrilldownPage: jest.fn(),
+      countLostWithoutEmployee: jest.fn().mockResolvedValue(0),
       getFilterOptions: jest.fn(),
     }
 
@@ -381,6 +388,7 @@ describe('CallKpiQueryService', () => {
       getCallFactRows: jest.fn(),
       getTelemarketingBudgetRows: jest.fn(),
       getDrilldownPage: jest.fn(),
+      countLostWithoutEmployee: jest.fn().mockResolvedValue(0),
       getFilterOptions: jest.fn(),
     }
 
@@ -463,6 +471,7 @@ describe('CallKpiQueryService', () => {
         { budgetDatetime: utcDate(2026, 0, 5, 8, 30), statusNormalized: 'OPEN' },
       ]),
       getDrilldownPage: jest.fn(),
+      countLostWithoutEmployee: jest.fn().mockResolvedValue(0),
       getFilterOptions: jest.fn(),
     }
 
@@ -485,6 +494,7 @@ describe('CallKpiQueryService', () => {
       },
       received: { count: 1 },
       lost: { count: 1 },
+      lostWithoutEmployee: { count: 0 },
       totalInbound: { count: 3 },
       telemarketingOpenBudgets: { count: 1 },
       peakHour: { hour: '08', totalInboundCount: 2 },
@@ -540,6 +550,7 @@ describe('CallKpiQueryService', () => {
       ]),
       getTelemarketingBudgetRows: jest.fn().mockResolvedValue([]),
       getDrilldownPage: jest.fn(),
+      countLostWithoutEmployee: jest.fn().mockResolvedValue(0),
       getFilterOptions: jest.fn(),
     }
 
@@ -560,6 +571,7 @@ describe('CallKpiQueryService', () => {
       },
       received: { count: 1 },
       lost: { count: 1 },
+      lostWithoutEmployee: { count: 0 },
       totalInbound: { count: 3 },
       telemarketingOpenBudgets: { count: 0 },
       peakHour: { hour: '08', totalInboundCount: 2 },
@@ -617,6 +629,7 @@ describe('CallKpiQueryService', () => {
           },
         ],
       }),
+      countLostWithoutEmployee: jest.fn(),
       getFilterOptions: jest.fn(),
     }
 
@@ -649,6 +662,126 @@ describe('CallKpiQueryService', () => {
     expect(result.rows[1].outcome).toBe('UNANSWERED')
   })
 
+  it('includes lostWithoutEmployee count from repository in summary', async () => {
+    const repository: jest.Mocked<CallKpiQueryRepository> = {
+      getSummaryRows: jest.fn().mockResolvedValue([
+        { metricKey: 'received.count', metricValue: '12', dimensionsJson: { family: 'calls' } },
+        { metricKey: 'lost.count', metricValue: '4', dimensionsJson: { family: 'calls' } },
+        { metricKey: 'total_inbound.count', metricValue: '16', dimensionsJson: { family: 'calls' } },
+        {
+          metricKey: 'telemarketing_open_budgets.count',
+          metricValue: '3',
+          dimensionsJson: { family: 'calls' },
+        },
+        {
+          metricKey: 'peak_hour.count',
+          metricValue: '7',
+          dimensionsJson: { family: 'calls', hour: '10' },
+        },
+      ]),
+      getHourlyRows: jest.fn(),
+      getAgentRankingRows: jest.fn(),
+      getHourlyComparisonRows: jest.fn(),
+      getCallFactRows: jest.fn(),
+      getTelemarketingBudgetRows: jest.fn(),
+      getDrilldownPage: jest.fn(),
+      countLostWithoutEmployee: jest.fn().mockResolvedValue(9),
+      getFilterOptions: jest.fn(),
+    }
+
+    const service = new CallKpiQueryService(repository)
+
+    const result = await service.getSummary({
+      clientId: 'c1',
+      from: '2026-01-01',
+      to: '2026-01-31',
+    })
+
+    expect(repository.countLostWithoutEmployee).toHaveBeenCalledWith({
+      clientId: 'c1',
+      period: expect.objectContaining({
+        from: saoPauloPeriodDate(2026, 0, 1),
+        to: saoPauloPeriodDate(2026, 0, 31),
+      }),
+      branchId: undefined,
+    })
+    expect(result.lostWithoutEmployee).toEqual({ count: 9 })
+  })
+
+  it('passes branchId to lostWithoutEmployee count while ignoring employeeId for that card', async () => {
+    const repository: jest.Mocked<CallKpiQueryRepository> = {
+      getSummaryRows: jest.fn(),
+      getHourlyRows: jest.fn(),
+      getAgentRankingRows: jest.fn(),
+      getHourlyComparisonRows: jest.fn(),
+      getCallFactRows: jest.fn().mockResolvedValue([]),
+      getTelemarketingBudgetRows: jest.fn().mockResolvedValue([]),
+      getDrilldownPage: jest.fn(),
+      countLostWithoutEmployee: jest.fn().mockResolvedValue(5),
+      getFilterOptions: jest.fn(),
+    }
+
+    const service = new CallKpiQueryService(repository)
+
+    const result = await service.getSummary({
+      clientId: 'c1',
+      from: '2026-01-05',
+      to: '2026-01-05',
+      branchId: 12,
+      employeeId: 7,
+    })
+
+    expect(repository.countLostWithoutEmployee).toHaveBeenCalledWith({
+      clientId: 'c1',
+      period: expect.objectContaining({
+        from: saoPauloPeriodDate(2026, 0, 5),
+        to: saoPauloPeriodDate(2026, 0, 5),
+      }),
+      branchId: 12,
+    })
+    expect(result.lostWithoutEmployee).toEqual({ count: 5 })
+  })
+
+  it('propagates withoutEmployee filter to drilldown repository and response filters', async () => {
+    const repository: jest.Mocked<CallKpiQueryRepository> = {
+      getSummaryRows: jest.fn(),
+      getHourlyRows: jest.fn(),
+      getAgentRankingRows: jest.fn(),
+      getHourlyComparisonRows: jest.fn(),
+      getCallFactRows: jest.fn(),
+      getTelemarketingBudgetRows: jest.fn(),
+      getDrilldownPage: jest.fn().mockResolvedValue({ total: 1, rows: [] }),
+      countLostWithoutEmployee: jest.fn(),
+      getFilterOptions: jest.fn(),
+    }
+
+    const service = new CallKpiQueryService(repository)
+
+    const result = await service.getDrilldown({
+      clientId: 'c1',
+      from: '2026-01-05',
+      to: '2026-01-05',
+      direction: 'inbound',
+      outcome: 'UNANSWERED',
+      withoutEmployee: true,
+      page: 1,
+      pageSize: 50,
+    })
+
+    expect(repository.getDrilldownPage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        withoutEmployee: true,
+        outcome: 'UNANSWERED',
+        direction: 'inbound',
+      }),
+    )
+    expect(result.filters).toEqual({
+      direction: 'inbound',
+      outcome: 'UNANSWERED',
+      withoutEmployee: true,
+    })
+  })
+
   it('returns distinct filter options for the period', async () => {
     const repository: jest.Mocked<CallKpiQueryRepository> = {
       getSummaryRows: jest.fn(),
@@ -658,6 +791,7 @@ describe('CallKpiQueryService', () => {
       getCallFactRows: jest.fn(),
       getTelemarketingBudgetRows: jest.fn(),
       getDrilldownPage: jest.fn(),
+      countLostWithoutEmployee: jest.fn(),
       getFilterOptions: jest.fn().mockResolvedValue({
         statuses: ['answered', 'missed'],
         directions: ['inbound', 'outbound'],
@@ -708,6 +842,7 @@ describe('CallKpiQueryService', () => {
         },
       ]),
       getDrilldownPage: jest.fn(),
+      countLostWithoutEmployee: jest.fn().mockResolvedValue(0),
       getFilterOptions: jest.fn(),
       getCallFactRows: jest.fn().mockResolvedValue([
         {
@@ -806,6 +941,7 @@ describe('CallKpiQueryService', () => {
         { budgetDatetime: utcDate(2026, 0, 5, 8, 30), statusNormalized: 'OPEN' },
       ]),
       getDrilldownPage: jest.fn(),
+      countLostWithoutEmployee: jest.fn().mockResolvedValue(0),
       getFilterOptions: jest.fn(),
     }
     const branchScopeService = {
@@ -866,6 +1002,7 @@ describe('CallKpiQueryService', () => {
         { budgetDatetime: utcDate(2026, 0, 5, 8, 30), statusNormalized: 'OPEN' },
       ]),
       getDrilldownPage: jest.fn(),
+      countLostWithoutEmployee: jest.fn().mockResolvedValue(0),
       getFilterOptions: jest.fn(),
     }
     const branchScopeService = {

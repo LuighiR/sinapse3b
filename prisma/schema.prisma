@@ -113,16 +113,18 @@ model Branch {
 model Employee {
   id              Int      @id @default(autoincrement())
   name            String
-  extensionNumber String   @map("extension_number")
-  extensionUuid   String   @map("extension_uuid")
+  extensionNumber String?  @map("extension_number")
+  extensionUuid   String?  @map("extension_uuid")
   erpId           BigInt   @map("erp_id")
-  chatId          String   @map("chat_id")
+  chatId          String?  @map("chat_id")
   dkwWebhook      String?  @map("dkw_webhook")
   isNonCommercial Boolean  @default(false) @map("is_non_commercial")
+  isActive        Boolean  @default(true) @map("is_active")
   branchId        Int      @map("branch_id")
   branch          Branch   @relation(fields: [branchId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
   @@index([branchId], map: "employees_branch_id_idx")
+  @@index([erpId], map: "employees_erp_id_idx")
   @@map("employees")
   @@schema("core")
 }

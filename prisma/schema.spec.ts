@@ -55,6 +55,10 @@ describe('prisma schema', () => {
 
     expect(schema).toContain('model Employee')
     expect(schema).toContain('isNonCommercial Boolean  @default(false) @map("is_non_commercial")')
+    expect(schema).toContain('isActive        Boolean  @default(true) @map("is_active")')
+    expect(schema).toContain('extensionNumber String?  @map("extension_number")')
+    expect(schema).toContain('extensionUuid   String?  @map("extension_uuid")')
+    expect(schema).toContain('chatId          String?  @map("chat_id")')
     expect(schema).toContain('@@map("employees")')
   })
 

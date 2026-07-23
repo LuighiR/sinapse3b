@@ -607,6 +607,26 @@ export class PrismaCallKpiRepository
     }
   }
 
+  async countLostWithoutEmployee(input: {
+    clientId: string
+    period: KpiPeriod
+    branchId?: number
+  }): Promise<number> {
+    const prisma = this.prisma as any
+    const withoutEmployeeFilter = await this.buildWithoutEmployeeFilter(input.clientId, input.branchId)
+
+    return prisma.callFact.count({
+      where: {
+        clientId: input.clientId,
+        startedAt: this.toTimestampWhere(input.period.from, input.period.to),
+        ...(input.branchId !== undefined ? { branchId: input.branchId } : {}),
+        direction: 'inbound',
+        isLost: true,
+        ...withoutEmployeeFilter,
+      },
+    })
+  }
+
   async getFilterOptions(input: {
     clientId: string
     period: KpiPeriod
@@ -652,8 +672,15 @@ export class PrismaCallKpiRepository
 
   private async buildAgentFilter(
     clientId: string,
-    input: Pick<CallKpiDrilldownRepositoryInput, 'employeeId' | 'extensionUuid' | 'extensionNumber'>,
+    input: Pick<
+      CallKpiDrilldownRepositoryInput,
+      'employeeId' | 'extensionUuid' | 'extensionNumber' | 'withoutEmployee' | 'branchId'
+    >,
   ): Promise<Record<string, unknown> | null | Record<string, never>> {
+    if (input.withoutEmployee === true) {
+      return this.buildWithoutEmployeeFilter(clientId, input.branchId)
+    }
+
     if (input.employeeId !== undefined) {
       const prisma = this.prisma as any
       const employee = await prisma.employee.findFirst({
@@ -708,6 +735,71 @@ export class PrismaCallKpiRepository
     }
 
     return { OR: orFilters }
+  }
+
+  private async buildWithoutEmployeeFilter(
+    clientId: string,
+    branchId?: number,
+  ): Promise<Record<string, unknown>> {
+    const prisma = this.prisma as any
+    const employees = (await prisma.employee.findMany({
+      where: {
+        branch: {
+          is: {
+            clientId,
+            ...(branchId !== undefined ? { id: branchId } : {}),
+          },
+        },
+      },
+      orderBy: [{ id: 'asc' }],
+      select: {
+        id: true,
+        name: true,
+        extensionUuid: true,
+        extensionNumber: true,
+      },
+    })) as EmployeeLookupRow[]
+
+    const byExtensionUuid = new Map<string, EmployeeLookupRow | null>()
+    const byExtensionNumber = new Map<string, EmployeeLookupRow | null>()
+
+    for (const employee of employees) {
+      if (this.hasText(employee.extensionUuid)) {
+        this.storeUniqueEmployeeLookup(byExtensionUuid, employee.extensionUuid, employee)
+      }
+
+      if (this.hasText(employee.extensionNumber)) {
+        this.storeUniqueEmployeeLookup(byExtensionNumber, employee.extensionNumber, employee)
+      }
+    }
+
+    const uniqueExtensionUuids = [...byExtensionUuid.entries()]
+      .filter(([, employee]) => employee !== null)
+      .map(([key]) => key)
+    const uniqueExtensionNumbers = [...byExtensionNumber.entries()]
+      .filter(([, employee]) => employee !== null)
+      .map(([key]) => key)
+
+    if (uniqueExtensionUuids.length === 0 && uniqueExtensionNumbers.length === 0) {
+      return {}
+    }
+
+    const matchedEmployeeFilters: Array<Record<string, unknown>> = []
+
+    if (uniqueExtensionUuids.length > 0) {
+      matchedEmployeeFilters.push({ extensionUuid: { in: uniqueExtensionUuids } })
+    }
+
+    if (uniqueExtensionNumbers.length > 0) {
+      matchedEmployeeFilters.push({ agentExtensionNumber: { in: uniqueExtensionNumbers } })
+      matchedEmployeeFilters.push({ agentResolutionKey: { in: uniqueExtensionNumbers } })
+    }
+
+    return {
+      NOT: {
+        OR: matchedEmployeeFilters,
+      },
+    }
   }
 
   private buildDurationWhere(

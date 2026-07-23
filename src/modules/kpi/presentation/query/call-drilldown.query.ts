@@ -11,6 +11,7 @@ export type CallDrilldownQuery = {
   employeeId?: number
   extensionUuid?: string
   extensionNumber?: string
+  withoutEmployee?: boolean
   status?: string
   direction?: string
   callerNumber?: string
@@ -40,6 +41,27 @@ const optionalNonNegativeNumberSchema = z
     z.coerce.number().nonnegative().optional(),
   )
 
+const optionalBooleanQuerySchema = z
+  .union([z.boolean(), z.string()])
+  .transform((value, ctx) => {
+    if (typeof value === 'boolean') {
+      return value
+    }
+
+    const normalized = value.trim().toLowerCase()
+    if (normalized === 'true' || normalized === '1') {
+      return true
+    }
+
+    if (normalized === 'false' || normalized === '0') {
+      return false
+    }
+
+    ctx.addIssue({ code: 'custom', message: 'invalid-boolean' })
+    return z.NEVER
+  })
+  .optional()
+
 const callDrilldownQuerySchema = z
   .object({
     from: z.string().trim().min(1),
@@ -48,6 +70,7 @@ const callDrilldownQuerySchema = z
     employeeId: optionalPositiveIntSchema,
     extensionUuid: optionalFilterTextSchema,
     extensionNumber: optionalFilterTextSchema,
+    withoutEmployee: optionalBooleanQuerySchema,
     status: optionalFilterTextSchema,
     direction: optionalFilterTextSchema,
     callerNumber: optionalFilterTextSchema,
@@ -76,6 +99,19 @@ const callDrilldownQuerySchema = z
         path: ['durationMin'],
       })
     }
+
+    if (
+      value.withoutEmployee === true &&
+      (value.employeeId !== undefined ||
+        value.extensionUuid !== undefined ||
+        value.extensionNumber !== undefined)
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'withoutEmployee cannot be combined with employeeId, extensionUuid or extensionNumber',
+        path: ['withoutEmployee'],
+      })
+    }
   })
 
 export function parseCallDrilldownQuery(query: Record<string, unknown>): CallDrilldownQuery {
@@ -90,6 +126,7 @@ export function parseCallDrilldownQuery(query: Record<string, unknown>): CallDri
     employeeId: query.employeeId,
     extensionUuid: query.extensionUuid,
     extensionNumber: query.extensionNumber,
+    withoutEmployee: query.withoutEmployee,
     status: query.status,
     direction: query.direction,
     callerNumber: query.callerNumber,

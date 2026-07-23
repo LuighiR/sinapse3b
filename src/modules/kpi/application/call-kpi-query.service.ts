@@ -29,6 +29,7 @@ export type CallKpiSummaryResponse = {
   period: CallKpiPeriodView
   received: { count: number }
   lost: { count: number }
+  lostWithoutEmployee: { count: number }
   totalInbound: { count: number }
   telemarketingOpenBudgets: { count: number }
   peakHour: { hour: string; totalInboundCount: number }
@@ -86,6 +87,11 @@ export type CallKpiQueryRepository = {
     branchId?: number
   }): Promise<TelemarketingBudgetFactRecord[]>
   getDrilldownPage(input: CallKpiDrilldownRepositoryInput): Promise<CallKpiDrilldownPage>
+  countLostWithoutEmployee(input: {
+    clientId: string
+    period: KpiPeriod
+    branchId?: number
+  }): Promise<number>
   getFilterOptions(input: {
     clientId: string
     period: KpiPeriod
@@ -96,6 +102,7 @@ export type CallKpiQueryRepository = {
 export type CallOutcome = 'ANSWERED' | 'UNANSWERED' | 'UNCLASSIFIED'
 
 export type CallKpiDrilldownInput = CallKpiQueryPeriodInput & {
+  withoutEmployee?: boolean
   status?: string
   direction?: string
   callerNumber?: string
@@ -112,6 +119,7 @@ export type CallKpiDrilldownFilters = {
   employeeId?: number
   extensionUuid?: string
   extensionNumber?: string
+  withoutEmployee?: boolean
   status?: string
   direction?: string
   callerNumber?: string
@@ -197,6 +205,7 @@ export type CallKpiDrilldownRepositoryInput = {
   employeeId?: number
   extensionUuid?: string
   extensionNumber?: string
+  withoutEmployee?: boolean
   status?: string
   direction?: string
   callerNumber?: string
@@ -240,27 +249,42 @@ export class CallKpiQueryService {
     const period = this.toPeriod(input)
     await this.assertBranchScope(input)
 
+    const lostWithoutEmployeePromise = this.repository.countLostWithoutEmployee({
+      clientId: input.clientId,
+      period,
+      branchId: input.branchId,
+    })
+
     if (this.hasFactFilters(input)) {
-      const [callFacts, telemarketingBudgetRows] = await Promise.all([
+      const [callFacts, telemarketingBudgetRows, lostWithoutEmployeeCount] = await Promise.all([
         this.getPeriodFacts(input, period),
         this.repository.getTelemarketingBudgetRows({
           clientId: input.clientId,
           period,
           branchId: input.branchId,
         }),
+        lostWithoutEmployeePromise,
       ])
       const agentFacts = this.filterFactsByAgent(callFacts, input)
 
       return {
         period: this.toPeriodView(period),
-        ...this.buildSummaryFromFacts(callFacts, agentFacts, telemarketingBudgetRows),
+        ...this.buildSummaryFromFacts(
+          callFacts,
+          agentFacts,
+          telemarketingBudgetRows,
+          lostWithoutEmployeeCount,
+        ),
       }
     }
 
-    const rows = await this.repository.getSummaryRows({
-      clientId: input.clientId,
-      period,
-    })
+    const [rows, lostWithoutEmployeeCount] = await Promise.all([
+      this.repository.getSummaryRows({
+        clientId: input.clientId,
+        period,
+      }),
+      lostWithoutEmployeePromise,
+    ])
 
     if (this.shouldFallback(rows)) {
       const [callFacts, telemarketingBudgetRows] = await Promise.all([
@@ -270,13 +294,18 @@ export class CallKpiQueryService {
 
       return {
         period: this.toPeriodView(period),
-        ...this.buildSummaryFromFacts(callFacts, callFacts, telemarketingBudgetRows),
+        ...this.buildSummaryFromFacts(
+          callFacts,
+          callFacts,
+          telemarketingBudgetRows,
+          lostWithoutEmployeeCount,
+        ),
       }
     }
 
     return {
       period: this.toPeriodView(period),
-      ...this.buildSummaryFromRows(rows),
+      ...this.buildSummaryFromRows(rows, lostWithoutEmployeeCount),
     }
   }
 
@@ -396,6 +425,7 @@ export class CallKpiQueryService {
       employeeId: input.employeeId,
       extensionUuid: input.extensionUuid,
       extensionNumber: input.extensionNumber,
+      withoutEmployee: input.withoutEmployee,
       status: input.status,
       direction: input.direction,
       callerNumber: input.callerNumber,
@@ -452,6 +482,9 @@ export class CallKpiQueryService {
     }
     if (input.extensionNumber !== undefined) {
       filters.extensionNumber = input.extensionNumber
+    }
+    if (input.withoutEmployee === true) {
+      filters.withoutEmployee = true
     }
     if (input.status !== undefined) {
       filters.status = input.status
@@ -521,10 +554,14 @@ export class CallKpiQueryService {
     return value.toISOString()
   }
 
-  private buildSummaryFromRows(rows: CallKpiSnapshotRow[]): Omit<CallKpiSummaryResponse, 'period'> {
+  private buildSummaryFromRows(
+    rows: CallKpiSnapshotRow[],
+    lostWithoutEmployeeCount: number,
+  ): Omit<CallKpiSummaryResponse, 'period'> {
     const summary = {
       received: { count: 0 },
       lost: { count: 0 },
+      lostWithoutEmployee: { count: lostWithoutEmployeeCount },
       totalInbound: { count: 0 },
       telemarketingOpenBudgets: { count: 0 },
       peakHour: { hour: '00', totalInboundCount: 0 },
@@ -552,6 +589,7 @@ export class CallKpiQueryService {
     allCallFacts: CallFactRecord[],
     agentCallFacts: CallFactRecord[],
     telemarketingBudgetRows: TelemarketingBudgetFactRecord[],
+    lostWithoutEmployeeCount: number,
   ): Omit<CallKpiSummaryResponse, 'period'> {
     const totalInboundFacts = this.onlyInboundFacts(allCallFacts)
     const agentInboundFacts = this.onlyInboundFacts(agentCallFacts)
@@ -567,6 +605,7 @@ export class CallKpiQueryService {
     return {
       received: { count: agentInboundFacts.filter((fact) => fact.isReceived).length },
       lost: { count: agentInboundFacts.filter((fact) => fact.isLost).length },
+      lostWithoutEmployee: { count: lostWithoutEmployeeCount },
       totalInbound: { count: totalInboundFacts.length },
       telemarketingOpenBudgets: {
         count: telemarketingBudgetRows.filter((row) => (row.statusNormalized ?? '').toUpperCase() === 'OPEN').length,
