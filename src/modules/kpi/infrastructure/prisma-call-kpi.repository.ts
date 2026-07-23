@@ -779,8 +779,11 @@ export class PrismaCallKpiRepository
     const uniqueExtensionNumbers = [...byExtensionNumber.entries()]
       .filter(([, employee]) => employee !== null)
       .map(([key]) => key)
+    const uniqueExtensionNumbersForExclusion = uniqueExtensionNumbers.filter(
+      (extensionNumber) => !this.isQueueExtensionNumber(extensionNumber),
+    )
 
-    if (uniqueExtensionUuids.length === 0 && uniqueExtensionNumbers.length === 0) {
+    if (uniqueExtensionUuids.length === 0 && uniqueExtensionNumbersForExclusion.length === 0) {
       return {}
     }
 
@@ -790,9 +793,13 @@ export class PrismaCallKpiRepository
       matchedEmployeeFilters.push({ extensionUuid: { in: uniqueExtensionUuids } })
     }
 
-    if (uniqueExtensionNumbers.length > 0) {
-      matchedEmployeeFilters.push({ agentExtensionNumber: { in: uniqueExtensionNumbers } })
-      matchedEmployeeFilters.push({ agentResolutionKey: { in: uniqueExtensionNumbers } })
+    if (uniqueExtensionNumbersForExclusion.length > 0) {
+      matchedEmployeeFilters.push({
+        agentExtensionNumber: { in: uniqueExtensionNumbersForExclusion },
+      })
+      matchedEmployeeFilters.push({
+        agentResolutionKey: { in: uniqueExtensionNumbersForExclusion },
+      })
     }
 
     return {
@@ -1182,6 +1189,10 @@ export class PrismaCallKpiRepository
     const next = new Date(value.getTime())
     next.setUTCDate(next.getUTCDate() + days)
     return next
+  }
+
+  private isQueueExtensionNumber(value: string): boolean {
+    return /^\d{3}$/.test(value)
   }
 
   private hasText(value: string | null | undefined): value is string {
