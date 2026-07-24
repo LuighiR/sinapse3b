@@ -51,6 +51,44 @@ export class KpiPeriod {
     return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate()))
   }
 
+  /**
+   * Serializes business timestamps stored as wall-clock America/Sao_Paulo
+   * (timestamp without time zone) with an explicit -03:00 offset.
+   * Does not shift the clock face — only relabels the offset.
+   */
+  static formatSaoPauloDateTime(value: Date | string): string {
+    if (typeof value === 'string') {
+      const match = value.trim().match(
+        /^(\d{4}-\d{2}-\d{2})[T\s](\d{2}):(\d{2}):(\d{2})(\.\d{1,3})?/,
+      )
+
+      if (match) {
+        const [, date, hours, minutes, seconds, fraction] = match
+        const millis = (fraction ?? '.000').padEnd(4, '0').slice(0, 4)
+
+        return `${date}T${hours}:${minutes}:${seconds}${millis}-03:00`
+      }
+
+      const parsed = new Date(value)
+
+      if (Number.isNaN(parsed.getTime())) {
+        throw new Error(`Invalid KPI datetime: ${value}`)
+      }
+
+      return this.formatSaoPauloDateTime(parsed)
+    }
+
+    const year = value.getUTCFullYear()
+    const month = String(value.getUTCMonth() + 1).padStart(2, '0')
+    const day = String(value.getUTCDate()).padStart(2, '0')
+    const hours = String(value.getUTCHours()).padStart(2, '0')
+    const minutes = String(value.getUTCMinutes()).padStart(2, '0')
+    const seconds = String(value.getUTCSeconds()).padStart(2, '0')
+    const millis = String(value.getUTCMilliseconds()).padStart(3, '0')
+
+    return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.${millis}-03:00`
+  }
+
   private static toSaoPauloDate(value: string | Date): Date {
     if (value instanceof Date) {
       return new Date(Date.UTC(

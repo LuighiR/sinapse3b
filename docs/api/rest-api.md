@@ -59,6 +59,8 @@ Para outras origens, configure `CORS_ALLOWED_ORIGINS` no backend com uma lista s
 - Datas usam `YYYY-MM-DD`
 - Periodos usam `from` e `to`
 - Calendario de KPI segue `America/Sao_Paulo`
+- Timestamps de drilldown de `calls`, `budgets` e `sales` (facts de negocio em `timestamp without time zone`) sao serializados com offset `-03:00`, sem deslocar o relogio de parede
+- Timestamps reais UTC (ex.: jobs internos e WhatsApp/`timestamptz`) continuam em ISO com `Z` quando aplicavel
 - Se `from > to`, a API responde `400 Bad Request`
 - Campos de canal sem valor retornam `Nao identificado`
 
@@ -1080,7 +1082,7 @@ Response `200`:
       "sourceTable": "raw.ferraco_budgets",
       "sourceRecordId": 123,
       "budgetDate": "2026-01-05",
-      "budgetDatetime": "2026-01-05T09:30:00.000Z",
+      "budgetDatetime": "2026-01-05T09:30:00.000-03:00",
       "closingDate": null,
       "cancellationDate": "2026-01-05",
       "cancelationTime": "11:15:00",
@@ -1342,7 +1344,7 @@ Response `200`:
       "sourceTable": "raw.ferraco_budgets",
       "sourceRecordId": 123,
       "budgetDate": "2026-01-02",
-      "budgetDatetime": "2026-01-02T09:30:00.000Z",
+      "budgetDatetime": "2026-01-02T09:30:00.000-03:00",
       "closingDate": null,
       "cancellationDate": "2026-01-03",
       "cancelationTime": "15:30:00",
@@ -1605,7 +1607,7 @@ Response `200`:
       "sourceTable": "raw.ferraco_sales",
       "sourceRecordId": 123,
       "saleDate": "2026-03-02",
-      "saleDatetime": "2026-03-02T14:33:00.000Z",
+      "saleDatetime": "2026-03-02T14:33:00.000-03:00",
       "branchId": 5,
       "branchName": "Matriz",
       "sellerId": 35747,
@@ -1903,8 +1905,8 @@ Response `200`:
   "rows": [
     {
       "id": "10",
-      "startedAt": "2026-01-05T09:00:00.000Z",
-      "endedAt": "2026-01-05T09:05:00.000Z",
+      "startedAt": "2026-01-05T09:00:00.000-03:00",
+      "endedAt": "2026-01-05T09:05:00.000-03:00",
       "durationSeconds": "300",
       "direction": "inbound",
       "status": "answered",

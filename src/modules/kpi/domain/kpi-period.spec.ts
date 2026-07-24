@@ -20,4 +20,30 @@ describe('KpiPeriod', () => {
       }),
     ).toThrow('Invalid KPI date: 2026-02-31')
   })
+
+  describe('formatSaoPauloDateTime', () => {
+    it('formats Date wall-clock components with -03:00 without shifting hours', () => {
+      expect(KpiPeriod.formatSaoPauloDateTime(new Date(Date.UTC(2026, 4, 18, 15, 25, 6, 0)))).toBe(
+        '2026-05-18T15:25:06.000-03:00',
+      )
+    })
+
+    it('relabels ISO strings with Z to -03:00 without shifting hours', () => {
+      expect(KpiPeriod.formatSaoPauloDateTime('2026-01-02T09:30:00.000Z')).toBe(
+        '2026-01-02T09:30:00.000-03:00',
+      )
+    })
+
+    it('keeps already-labeled Sao Paulo strings with the same clock face', () => {
+      expect(KpiPeriod.formatSaoPauloDateTime('2026-01-02T09:30:00.000-03:00')).toBe(
+        '2026-01-02T09:30:00.000-03:00',
+      )
+    })
+
+    it('accepts postgres-style timestamps with a space separator', () => {
+      expect(KpiPeriod.formatSaoPauloDateTime('2026-06-12 11:00:38.000')).toBe(
+        '2026-06-12T11:00:38.000-03:00',
+      )
+    })
+  })
 })

@@ -527,7 +527,7 @@ describe('BudgetKpiQueryService', () => {
           sourceTable: 'ferraco_budgets',
           sourceRecordId: 123,
           budgetDate: '2026-01-02',
-          budgetDatetime: budgetDatetime.toISOString(),
+          budgetDatetime: '2026-01-02T09:30:00.000-03:00',
           closingDate: null,
           cancellationDate: null,
           cancelationTime: null,
@@ -596,7 +596,7 @@ describe('BudgetKpiQueryService', () => {
         sourceTable: 'ferraco_budgets',
         sourceRecordId: 123,
         budgetDate: '2026-01-02',
-        budgetDatetime: '2026-01-02T09:30:00.000Z',
+        budgetDatetime: '2026-01-02T09:30:00.000-03:00',
         closingDate: '2026-01-03',
         cancellationDate: '2026-01-04',
         cancelationTime: '14:45:00',
@@ -797,14 +797,14 @@ describe('BudgetKpiQueryService', () => {
     expect(result.rows[0]).toMatchObject({
       id: '301',
       budgetDate: '2026-01-05',
-      budgetDatetime: utcDate(2026, 0, 5, 8, 0).toISOString(),
+      budgetDatetime: '2026-01-05T08:00:00.000-03:00',
       followUpWindow: 'after24h',
       followUpStatus: 'open',
     })
     expect(result.rows[1]).toMatchObject({
       id: '302',
       budgetDate: '2026-01-05',
-      budgetDatetime: utcDate(2026, 0, 5, 6, 0).toISOString(),
+      budgetDatetime: '2026-01-05T06:00:00.000-03:00',
       followUpWindow: 'after24h',
       followUpStatus: 'open',
     })

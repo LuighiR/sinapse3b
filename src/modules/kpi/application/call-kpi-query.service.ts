@@ -514,8 +514,8 @@ export class CallKpiQueryService {
   private toDrilldownRow(row: CallKpiDrilldownFactRow): CallKpiDrilldownRow {
     return {
       id: String(row.id),
-      startedAt: this.toIsoString(row.startedAt),
-      endedAt: row.endedAt == null ? null : this.toIsoString(row.endedAt),
+      startedAt: KpiPeriod.formatSaoPauloDateTime(row.startedAt),
+      endedAt: row.endedAt == null ? null : KpiPeriod.formatSaoPauloDateTime(row.endedAt),
       durationSeconds: String(row.durationSeconds),
       direction: row.direction,
       status: row.status,
@@ -544,14 +544,6 @@ export class CallKpiQueryService {
     }
 
     return 'UNCLASSIFIED'
-  }
-
-  private toIsoString(value: Date | string): string {
-    if (typeof value === 'string') {
-      return value
-    }
-
-    return value.toISOString()
   }
 
   private buildSummaryFromRows(

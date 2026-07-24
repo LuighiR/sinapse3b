@@ -1208,11 +1208,7 @@ export class BudgetKpiQueryService {
   }
 
   private toTimestampText(value: Date | string): string {
-    if (typeof value === 'string') {
-      return value
-    }
-
-    return value.toISOString()
+    return KpiPeriod.formatSaoPauloDateTime(value)
   }
 
   private toComparableTimestamp(value: Date | string): number {

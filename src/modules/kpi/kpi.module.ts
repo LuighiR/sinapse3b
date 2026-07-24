@@ -614,11 +614,7 @@ export class PrismaBudgetKpiRepository
   }
 
   private toTimestampText(value: Date | string): string {
-    if (typeof value === 'string') {
-      return value
-    }
-
-    return value.toISOString()
+    return KpiPeriod.formatSaoPauloDateTime(value)
   }
 }
 
@@ -1091,11 +1087,7 @@ export class PrismaSaleKpiRepository
   }
 
   private toTimestampText(value: Date | string): string {
-    if (typeof value === 'string') {
-      return value
-    }
-
-    return value.toISOString()
+    return KpiPeriod.formatSaoPauloDateTime(value)
   }
 }
 

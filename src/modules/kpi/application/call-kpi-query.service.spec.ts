@@ -659,7 +659,11 @@ describe('CallKpiQueryService', () => {
       totalPages: 1,
     })
     expect(result.rows[0].outcome).toBe('ANSWERED')
+    expect(result.rows[0].startedAt).toBe('2026-01-05T09:00:00.000-03:00')
+    expect(result.rows[0].endedAt).toBe('2026-01-05T09:05:00.000-03:00')
     expect(result.rows[1].outcome).toBe('UNANSWERED')
+    expect(result.rows[1].startedAt).toBe('2026-01-05T08:00:00.000-03:00')
+    expect(result.rows[1].endedAt).toBeNull()
   })
 
   it('includes lostWithoutEmployee count from repository in summary', async () => {
