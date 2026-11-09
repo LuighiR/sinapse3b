@@ -28,6 +28,21 @@ describe('Budget KPI endpoints', () => {
   let refreshService: BudgetKpiRefreshService
   const tenantOne = 'tenant-1'
   const tenantTwo = 'tenant-2'
+  const monthlyCards: Pick<
+    BudgetKpiSummaryResponse,
+    'wonInPeriod' | 'lostInPeriod' | 'closedOutsidePeriod' | 'resolvedInPeriod' | 'unclassified'
+  > = {
+    wonInPeriod: { count: 0, value: '0.0000' },
+    lostInPeriod: { count: 0, value: '0.0000' },
+    closedOutsidePeriod: {
+      count: 0,
+      value: '0.0000',
+      won: { count: 0, value: '0.0000' },
+      lost: { count: 0, value: '0.0000' },
+    },
+    resolvedInPeriod: { count: 0, value: '0.0000' },
+    unclassified: { count: 0, value: '0.0000' },
+  }
 
   beforeAll(async () => {
     ensureTestEnv()
@@ -61,6 +76,7 @@ describe('Budget KPI endpoints', () => {
           open: { count: 2, value: '200.0000' },
           won: { count: 4, value: '400.0000' },
           lost: { count: 3, value: '300.0000' },
+          ...monthlyCards,
         }
       }
 
@@ -70,6 +86,7 @@ describe('Budget KPI endpoints', () => {
         open: { count: 1, value: '100.0000' },
         won: { count: 1, value: '120.0000' },
         lost: { count: 1, value: '80.0000' },
+        ...monthlyCards,
       }
     })
     jest.spyOn(queryService, 'getDailySeries').mockResolvedValue({
@@ -224,6 +241,7 @@ describe('Budget KPI endpoints', () => {
         open: { count: 1, value: '100.0000' },
         won: { count: 1, value: '120.0000' },
         lost: { count: 1, value: '80.0000' },
+        ...monthlyCards,
       })
 
     expect(queryService.getSummary).toHaveBeenCalledWith({
@@ -263,6 +281,7 @@ describe('Budget KPI endpoints', () => {
         open: { count: 2, value: '200.0000' },
         won: { count: 4, value: '400.0000' },
         lost: { count: 3, value: '300.0000' },
+        ...monthlyCards,
       })
 
     expect(queryService.getSummary).toHaveBeenCalledWith({
