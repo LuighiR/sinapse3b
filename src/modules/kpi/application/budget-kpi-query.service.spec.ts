@@ -10,16 +10,39 @@ describe('BudgetKpiQueryService', () => {
   const saoPauloPeriodDate = (year: number, month: number, day: number) =>
     new Date(Date.UTC(year, month, day, 3, 0, 0))
 
-  it('returns budget summary cards for a client period', async () => {
+  it('returns monthly budget cards from facts without reading the summary snapshot', async () => {
+    const fact = (
+      id: number,
+      budgetDate: Date,
+      statusNormalized: string,
+      valueAmount: string,
+      extra: Record<string, unknown> = {},
+    ) => ({
+      id: BigInt(id),
+      budgetDate,
+      sellerId: 7,
+      sellerName: 'Maria',
+      statusNormalized,
+      valueAmount,
+      ...extra,
+    })
     const repository: jest.Mocked<BudgetKpiQueryRepository> = {
-      getSummaryRows: jest.fn().mockResolvedValue([
-        { metricKey: 'total.count', metricValue: '10', dimensionsJson: { status: 'TOTAL' } },
-        { metricKey: 'total.value', metricValue: '5000.00', dimensionsJson: { status: 'TOTAL' } },
-        { metricKey: 'won.count', metricValue: '4', dimensionsJson: { status: 'WON' } },
-        { metricKey: 'won.value', metricValue: '3200.00', dimensionsJson: { status: 'WON' } },
-      ]),
+      getSummaryRows: jest.fn(),
       getDailyRows: jest.fn(),
-      getBudgetFactRows: jest.fn(),
+      getBudgetFactRows: jest.fn().mockResolvedValue([
+        fact(1, utcDate(2026, 0, 5), 'WON', '100', { closingDate: utcDate(2026, 0, 10) }),
+        fact(2, utcDate(2025, 11, 20), 'WON', '200', { closingDate: utcDate(2026, 0, 3) }),
+        fact(3, utcDate(2026, 0, 15), 'WON', '300', { closingDate: utcDate(2026, 1, 2) }),
+        fact(4, utcDate(2026, 0, 20), 'LOST', '400', { cancellationDate: utcDate(2026, 1, 5) }),
+        fact(5, utcDate(2025, 11, 28), 'LOST', '500', { cancellationDate: utcDate(2026, 0, 8) }),
+        fact(6, utcDate(2026, 0, 25), 'OPEN', '600'),
+        fact(7, utcDate(2026, 0, 26), 'LOST', '700', {
+          cancellationDate: null,
+          payloadJson: { cancellation_date: '2026-01-27' },
+        }),
+        fact(8, utcDate(2026, 0, 28), 'UNKNOWN', '800'),
+        fact(9, utcDate(2025, 11, 10), 'WON', '900', { closingDate: utcDate(2025, 11, 15) }),
+      ] as any),
       getDrilldownRows: jest.fn(),
     }
 
@@ -31,12 +54,14 @@ describe('BudgetKpiQueryService', () => {
       to: '2026-01-31',
     })
 
-    expect(repository.getSummaryRows).toHaveBeenCalledWith({
+    expect(repository.getSummaryRows).not.toHaveBeenCalled()
+    expect(repository.getBudgetFactRows).toHaveBeenCalledWith({
       clientId: 'c1',
       period: expect.objectContaining({
         from: saoPauloPeriodDate(2026, 0, 1),
         to: saoPauloPeriodDate(2026, 0, 31),
       }),
+      dateScope: 'openingOrResolution',
     })
     expect(result).toEqual({
       period: {
@@ -44,55 +69,24 @@ describe('BudgetKpiQueryService', () => {
         to: '2026-01-31',
         key: '2026-01-01_2026-01-31',
       },
-      total: { count: 10, value: '5000.00' },
-      open: { count: 0, value: '0.0000' },
-      won: { count: 4, value: '3200.00' },
-      lost: { count: 0, value: '0.0000' },
+      total: { count: 6, value: '2900.0000' },
+      open: { count: 1, value: '600.0000' },
+      won: { count: 2, value: '400.0000' },
+      lost: { count: 2, value: '1100.0000' },
+      wonInPeriod: { count: 2, value: '300.0000' },
+      lostInPeriod: { count: 2, value: '1200.0000' },
+      closedOutsidePeriod: {
+        count: 2,
+        value: '700.0000',
+        won: { count: 1, value: '300.0000' },
+        lost: { count: 1, value: '400.0000' },
+      },
+      resolvedInPeriod: { count: 2, value: '800.0000' },
+      unclassified: { count: 1, value: '800.0000' },
     })
-  })
-
-  it('falls back to canonical facts when budget summary snapshots are empty', async () => {
-    const repository: jest.Mocked<BudgetKpiQueryRepository> = {
-      getSummaryRows: jest.fn().mockResolvedValue([]),
-      getDailyRows: jest.fn(),
-      getBudgetFactRows: jest.fn().mockResolvedValue([
-        {
-          id: 1n,
-          budgetDate: utcDate(2026, 2, 5),
-          budgetDatetime: utcDate(2026, 2, 5, 10, 0),
-          sellerId: 7,
-          sellerName: 'Maria',
-          statusNormalized: 'WON',
-          channel: null,
-          valueAmount: '6406599.99',
-        },
-        {
-          id: 2n,
-          budgetDate: utcDate(2026, 2, 5),
-          budgetDatetime: utcDate(2026, 2, 5, 11, 0),
-          sellerId: 7,
-          sellerName: 'Maria',
-          statusNormalized: 'WON',
-          channel: 'Pedido Televendas',
-          valueAmount: '666087.47',
-        },
-      ]),
-      getDrilldownRows: jest.fn(),
-    }
-
-    const service = new BudgetKpiQueryService(repository)
-
-    const result = await service.getSummary({
-      clientId: 'c1',
-      from: '2026-03-01',
-      to: '2026-03-31',
-    })
-
-    expect(repository.getBudgetFactRows).toHaveBeenCalled()
-    expect(result.total).toEqual({ count: 2, value: '7072687.4600' })
-    expect(result.won).toEqual({ count: 2, value: '7072687.4600' })
-    expect(result.open).toEqual({ count: 0, value: '0.0000' })
-    expect(result.lost).toEqual({ count: 0, value: '0.0000' })
+    expect(result.total.count).toBe(
+      result.resolvedInPeriod.count + result.open.count + result.closedOutsidePeriod.count + result.unclassified.count,
+    )
   })
 
   it('returns budget summary cards filtered by sellerId from canonical facts', async () => {
@@ -137,6 +131,7 @@ describe('BudgetKpiQueryService', () => {
         to: saoPauloPeriodDate(2026, 0, 31),
       }),
       sellerId: 7,
+      dateScope: 'openingOrResolution',
     })
     expect(result).toEqual({
       period: {
@@ -148,6 +143,16 @@ describe('BudgetKpiQueryService', () => {
       open: { count: 1, value: '50.0000' },
       won: { count: 1, value: '100.0000' },
       lost: { count: 0, value: '0.0000' },
+      wonInPeriod: { count: 0, value: '0.0000' },
+      lostInPeriod: { count: 0, value: '0.0000' },
+      closedOutsidePeriod: {
+        count: 0,
+        value: '0.0000',
+        won: { count: 0, value: '0.0000' },
+        lost: { count: 0, value: '0.0000' },
+      },
+      resolvedInPeriod: { count: 0, value: '0.0000' },
+      unclassified: { count: 1, value: '100.0000' },
     })
   })
 
@@ -195,6 +200,7 @@ describe('BudgetKpiQueryService', () => {
         to: saoPauloPeriodDate(2026, 0, 31),
       }),
       branchId: 5,
+      dateScope: 'openingOrResolution',
     })
     expect(result.total).toEqual({ count: 2, value: '150.0000' })
     expect(result.open).toEqual({ count: 1, value: '50.0000' })

@@ -14,6 +14,7 @@ import {
   type FollowUpStatus,
   type FollowUpWindow,
 } from './budget-follow-up-classifier'
+import { budgetPeriodCard, classifyBudgetForPeriod, toBudgetPeriodBounds } from './budget-period-classifier'
 
 export type BudgetStatusFilter = 'Cancelado' | 'Baixado' | 'Pendente'
 
@@ -44,12 +45,22 @@ export type BudgetKpiSummaryCard = {
   value: string
 }
 
+export type BudgetKpiClosedOutsidePeriodCard = BudgetKpiSummaryCard & {
+  won: BudgetKpiSummaryCard
+  lost: BudgetKpiSummaryCard
+}
+
 export type BudgetKpiSummaryResponse = {
   period: BudgetKpiPeriodView
   total: BudgetKpiSummaryCard
   open: BudgetKpiSummaryCard
   won: BudgetKpiSummaryCard
   lost: BudgetKpiSummaryCard
+  wonInPeriod: BudgetKpiSummaryCard
+  lostInPeriod: BudgetKpiSummaryCard
+  closedOutsidePeriod: BudgetKpiClosedOutsidePeriodCard
+  resolvedInPeriod: BudgetKpiSummaryCard
+  unclassified: BudgetKpiSummaryCard
 }
 
 export type BudgetKpiFollowUpMetric = {
@@ -258,7 +269,6 @@ export type BudgetKpiQueryRepository = {
   }): Promise<BudgetKpiDrilldownFactRow[]>
 }
 
-type SummaryBucket = 'total' | 'open' | 'won' | 'lost'
 type NormalizedBudgetStatus = 'OPEN' | 'WON' | 'LOST' | 'UNKNOWN'
 
 const MISSING_ORDER_TYPE_LABEL = 'Nao identificado'
@@ -272,53 +282,11 @@ export class BudgetKpiQueryService {
 
   async getSummary(input: BudgetKpiQueryPeriodInput): Promise<BudgetKpiSummaryResponse> {
     const period = this.toPeriod(input)
-
-    if (this.hasFactFilters(input)) {
-      const facts = await this.getFilteredFacts(input, period)
-
-      return {
-        period: this.toPeriodView(period),
-        ...this.buildSummaryFromFacts(facts),
-      }
-    }
-
-    const rows = await this.repository.getSummaryRows({
-      clientId: input.clientId,
-      period,
-    })
-
-    if (this.shouldFallbackToFactsForSummary(rows)) {
-      const facts = await this.getFilteredFacts(input, period)
-
-      return {
-        period: this.toPeriodView(period),
-        ...this.buildSummaryFromFacts(facts),
-      }
-    }
-
-    const summary = this.createEmptySummary()
-
-    for (const row of rows) {
-      const [bucket, metric] = row.metricKey.split('.', 2)
-
-      if (!this.isSummaryBucket(bucket) || (metric !== 'count' && metric !== 'value')) {
-        continue
-      }
-
-      if (metric === 'count') {
-        summary[bucket].count = this.toCount(row.metricValue)
-        continue
-      }
-
-      summary[bucket].value = this.toText(row.metricValue)
-    }
+    const facts = await this.getFilteredFacts(input, period, 'openingOrResolution')
 
     return {
       period: this.toPeriodView(period),
-      total: summary.total,
-      open: summary.open,
-      won: summary.won,
-      lost: summary.lost,
+      ...this.buildSummaryFromFacts(period, facts),
     }
   }
 
@@ -607,7 +575,11 @@ export class BudgetKpiQueryService {
     }
   }
 
-  private async getFilteredFacts(input: BudgetKpiQueryPeriodInput, period: KpiPeriod): Promise<BudgetFactRecord[]> {
+  private async getFilteredFacts(
+    input: BudgetKpiQueryPeriodInput,
+    period: KpiPeriod,
+    dateScope?: BudgetFactDateScope,
+  ): Promise<BudgetFactRecord[]> {
     const sellerId = this.normalizeSellerId(input.sellerId)
     const branchId = await this.resolveBranchScope(input.clientId, input.branchId)
     const facts = await this.repository.getBudgetFactRows({
@@ -615,6 +587,7 @@ export class BudgetKpiQueryService {
       period,
       branchId,
       sellerId,
+      ...(dateScope !== undefined ? { dateScope } : {}),
     })
 
     return facts.filter((fact) => {
@@ -639,44 +612,78 @@ export class BudgetKpiQueryService {
     )
   }
 
-  private createEmptySummary(): Record<SummaryBucket, BudgetKpiSummaryCard> {
-    return {
-      total: this.createEmptyCard(),
-      open: this.createEmptyCard(),
-      won: this.createEmptyCard(),
-      lost: this.createEmptyCard(),
+  private buildSummaryFromFacts(
+    period: KpiPeriod,
+    facts: BudgetFactRecord[],
+  ): Omit<BudgetKpiSummaryResponse, 'period'> {
+    const bounds = toBudgetPeriodBounds(period)
+    const created: BudgetFactRecord[] = []
+    const open: BudgetFactRecord[] = []
+    const won: BudgetFactRecord[] = []
+    const lost: BudgetFactRecord[] = []
+    const wonInPeriod: BudgetFactRecord[] = []
+    const lostInPeriod: BudgetFactRecord[] = []
+    const resolvedInPeriod: BudgetFactRecord[] = []
+    const unclassified: BudgetFactRecord[] = []
+    const closedOutsideWon: BudgetFactRecord[] = []
+    const closedOutsideLost: BudgetFactRecord[] = []
+
+    for (const fact of facts) {
+      const { cards, closedOutsideStatus } = classifyBudgetForPeriod(fact, bounds)
+
+      if (cards.includes(budgetPeriodCard.created)) {
+        created.push(fact)
+
+        const status = this.normalizeStatus(fact.statusNormalized)
+
+        if (status === 'WON') {
+          won.push(fact)
+        } else if (status === 'LOST') {
+          lost.push(fact)
+        }
+      }
+
+      if (cards.includes(budgetPeriodCard.open)) {
+        open.push(fact)
+      }
+
+      if (cards.includes(budgetPeriodCard.wonInPeriod)) {
+        wonInPeriod.push(fact)
+      }
+
+      if (cards.includes(budgetPeriodCard.lostInPeriod)) {
+        lostInPeriod.push(fact)
+      }
+
+      if (cards.includes(budgetPeriodCard.resolvedInPeriod)) {
+        resolvedInPeriod.push(fact)
+      }
+
+      if (cards.includes(budgetPeriodCard.unclassified)) {
+        unclassified.push(fact)
+      }
+
+      if (closedOutsideStatus === 'won') {
+        closedOutsideWon.push(fact)
+      } else if (closedOutsideStatus === 'lost') {
+        closedOutsideLost.push(fact)
+      }
     }
-  }
-
-  private createEmptyCard(): BudgetKpiSummaryCard {
-    return {
-      count: 0,
-      value: '0.0000',
-    }
-  }
-
-  private buildSummaryFromFacts(facts: BudgetFactRecord[]): Record<SummaryBucket, BudgetKpiSummaryCard> {
-    const openFacts = facts.filter((fact) => this.normalizeStatus(fact.statusNormalized) === 'OPEN')
-    const wonFacts = facts.filter((fact) => this.normalizeStatus(fact.statusNormalized) === 'WON')
-    const lostFacts = facts.filter((fact) => this.normalizeStatus(fact.statusNormalized) === 'LOST')
 
     return {
-      total: {
-        count: facts.length,
-        value: this.sumValues(facts),
+      total: this.toSummaryCardFromFacts(created),
+      open: this.toSummaryCardFromFacts(open),
+      won: this.toSummaryCardFromFacts(won),
+      lost: this.toSummaryCardFromFacts(lost),
+      wonInPeriod: this.toSummaryCardFromFacts(wonInPeriod),
+      lostInPeriod: this.toSummaryCardFromFacts(lostInPeriod),
+      closedOutsidePeriod: {
+        ...this.toSummaryCardFromFacts([...closedOutsideWon, ...closedOutsideLost]),
+        won: this.toSummaryCardFromFacts(closedOutsideWon),
+        lost: this.toSummaryCardFromFacts(closedOutsideLost),
       },
-      open: {
-        count: openFacts.length,
-        value: this.sumValues(openFacts),
-      },
-      won: {
-        count: wonFacts.length,
-        value: this.sumValues(wonFacts),
-      },
-      lost: {
-        count: lostFacts.length,
-        value: this.sumValues(lostFacts),
-      },
+      resolvedInPeriod: this.toSummaryCardFromFacts(resolvedInPeriod),
+      unclassified: this.toSummaryCardFromFacts(unclassified),
     }
   }
 
@@ -1026,18 +1033,6 @@ export class BudgetKpiQueryService {
       to: KpiPeriod.formatDateKey(period.to),
       key: period.key,
     }
-  }
-
-  private isSummaryBucket(value: string): value is SummaryBucket {
-    return value === 'total' || value === 'open' || value === 'won' || value === 'lost'
-  }
-
-  private shouldFallbackToFactsForSummary(rows: BudgetKpiSnapshotRow[]): boolean {
-    if (rows.length === 0) {
-      return true
-    }
-
-    return rows.every((row) => this.isZeroMetricValue(row.metricValue))
   }
 
   private shouldFallbackToFactsForDaily(rows: BudgetKpiBreakdownRow[]): boolean {
