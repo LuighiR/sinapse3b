@@ -789,6 +789,44 @@ Response `200`:
 Descricao:
 retorna os cards mensais de orcamentos. Sempre calculado a partir de `core.budget_facts`. Regras de cada campo em `docs/kpi-catalog.md` (secao "Cards mensais").
 
+Query Params:
+
+- `from` required (`YYYY-MM-DD`)
+- `to` required (`YYYY-MM-DD`)
+- `branchId` optional
+- `sellerId` optional
+- `status` optional: `Cancelado`, `Baixado`, `Pendente`
+- `orderType` optional
+
+Todos os filtros valem para todos os campos da resposta.
+
+Mapeamento dos cards da tela:
+
+| Card na tela | Campo da resposta | `card` no drilldown | Regra |
+| --- | --- | --- | --- |
+| Orcamentos Criados no Mes | `total` | `created` | aberto (`budget_date`) no periodo |
+| Orcamentos Fechados no Mes | `wonInPeriod` | `wonInPeriod` | ganho com data de fechamento no periodo, aberto em qualquer data |
+| Orcamentos em Aberto do Mes | `open` | `open` | aberto no periodo e ainda `Pendente` hoje |
+| Orcamentos Perdidos no Mes | `lostInPeriod` | `lostInPeriod` | cancelado com data de cancelamento no periodo, aberto em qualquer data |
+| Orcamentos Fechados Fora do Mes | `closedOutsidePeriod` | `closedOutsidePeriod` | aberto no periodo e fechado ou cancelado depois de `to`; `won` e `lost` trazem a separacao |
+
+Campos de conferencia (nao sao cards, mas servem para validar a tela):
+
+- `resolvedInPeriod` (`card=resolvedInPeriod`): aberto e resolvido (ganho ou cancelado) dentro do periodo
+- `unclassified` (`card=unclassified`): aberto no periodo sem encaixe (status desconhecido, ganho/cancelado sem data)
+- identidade garantida, em `count` e em `value`: `total = resolvedInPeriod + open + closedOutsidePeriod + unclassified`
+
+Campos legados (mantidos por compatibilidade, nao usar nos cards novos):
+
+- `won`: aberto no periodo e ganho hoje, independente de quando fechou
+- `lost`: aberto no periodo e cancelado hoje, independente de quando cancelou
+
+Observacoes para o frontend:
+
+- `value` e string decimal com 4 casas; somar como decimal, nao como float
+- no mes corrente `closedOutsidePeriod` e sempre 0 (nao existe fechamento depois de hoje)
+- `wonInPeriod` e `lostInPeriod` podem incluir orcamentos abertos em meses anteriores, por isso nao entram na identidade acima
+
 Response `200`:
 
 ```json
@@ -1312,6 +1350,8 @@ Query Params:
 - `branchId` optional
 - `branchName` optional
 - `card` (opcional): `created`, `open`, `wonInPeriod`, `lostInPeriod`, `closedOutsidePeriod`, `resolvedInPeriod` ou `unclassified`. Lista os registros que compoem o card de mesmo nome no summary (`created` = `total`). Pode ser combinado com `status`, `sellerId`, `branchId` e `branchName`.
+
+Com `card`, o numero de linhas retornadas e igual ao `count` do campo correspondente no `GET /kpis/budgets/summary` com os mesmos `from`, `to`, `sellerId`, `branchId` e `status`. O drilldown nao aceita `orderType`; se o summary estiver filtrado por `orderType`, os numeros nao vao bater. Quando informado, `card` volta em `filters.card` na resposta.
 
 Quando `sellerId` e informado nas rotas de budgets, ele representa `core.employees.erp_id`.
 Para filtrar por **pessoa** em varias lojas, veja o guia em `GET /companies/current/employees` (mesmo `sellerId` + `branchId` por loja; sem dados = 0).
