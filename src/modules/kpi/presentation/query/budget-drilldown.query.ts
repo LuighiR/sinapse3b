@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common'
 import { z } from 'zod'
+import { budgetPeriodCards, type BudgetPeriodCard } from '../../application/budget-period-classifier'
 import { KpiPeriod } from '../../domain/kpi-period'
 import { numericIdSchema } from './budget-filters.query'
 import type { BudgetStatusQuery } from './budget-filters.query'
@@ -11,6 +12,7 @@ export type BudgetDrilldownQuery = {
   status?: BudgetStatusQuery
   branchId?: number
   branchName?: string
+  card?: BudgetPeriodCard
 }
 
 const budgetDrilldownQuerySchema = z.object({
@@ -24,6 +26,7 @@ const budgetDrilldownQuerySchema = z.object({
     .trim()
     .transform((value) => (value === '' ? undefined : value))
     .optional(),
+  card: z.enum(budgetPeriodCards).optional(),
 })
 
 export function parseBudgetDrilldownQuery(query: Record<string, unknown>): BudgetDrilldownQuery {
@@ -34,6 +37,7 @@ export function parseBudgetDrilldownQuery(query: Record<string, unknown>): Budge
     status: query.status,
     branchId: query.branchId,
     branchName: query.branchName,
+    card: query.card,
   })
 
   if (!parsed.success) {

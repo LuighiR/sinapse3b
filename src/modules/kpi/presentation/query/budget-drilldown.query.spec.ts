@@ -20,6 +20,30 @@ describe('parseBudgetDrilldownQuery', () => {
     })
   })
 
+  it('accepts an optional card filter', () => {
+    expect(
+      parseBudgetDrilldownQuery({
+        from: '2026-01-01',
+        to: '2026-01-31',
+        card: 'closedOutsidePeriod',
+      }),
+    ).toEqual({
+      from: '2026-01-01',
+      to: '2026-01-31',
+      card: 'closedOutsidePeriod',
+    })
+  })
+
+  it('rejects unknown card values', () => {
+    expect(() =>
+      parseBudgetDrilldownQuery({
+        from: '2026-01-01',
+        to: '2026-01-31',
+        card: 'fechados',
+      }),
+    ).toThrow(BadRequestException)
+  })
+
   it('rejects invalid status values', () => {
     expect(() =>
       parseBudgetDrilldownQuery({

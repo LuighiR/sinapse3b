@@ -1,4 +1,4 @@
-import { BudgetKpiQueryService, type BudgetKpiQueryRepository } from './budget-kpi-query.service'
+import { BudgetKpiQueryService, type BudgetKpiDrilldownFactRow, type BudgetKpiQueryRepository } from './budget-kpi-query.service'
 
 describe('BudgetKpiQueryService', () => {
   afterEach(() => {
@@ -1630,5 +1630,100 @@ describe('BudgetKpiQueryService', () => {
       { orderType: 'Nao identificado', count: 1, value: '100.0000' },
       { orderType: 'Televendas', count: 1, value: '50.0000' },
     ])
+  })
+
+  describe('drilldown by card', () => {
+    const drilldownRow = (overrides: Partial<BudgetKpiDrilldownFactRow>): BudgetKpiDrilldownFactRow => ({
+      id: 1n,
+      clientId: 'c1',
+      sourceTable: 'raw.ferraco_budgets',
+      sourceRecordId: 1,
+      branchName: 'Matriz',
+      branchId: 5,
+      sellerId: 7,
+      sellerName: 'Maria',
+      budgetDate: utcDate(2026, 0, 2),
+      budgetDatetime: utcDate(2026, 0, 2, 9, 0),
+      closingDate: null,
+      cancellationDate: null,
+      cancelationTime: null,
+      statusNormalized: 'OPEN',
+      channel: null,
+      customerName: 'ACME LTDA',
+      cpfCnpj: null,
+      valueAmount: '100.0000',
+      sequential: null,
+      davId: 1n,
+      sequentialLinkedSale: null,
+      payloadJson: null,
+      ...overrides,
+    })
+    const rows = [
+      drilldownRow({ id: 1n, budgetDate: utcDate(2025, 11, 20), statusNormalized: 'WON', closingDate: utcDate(2026, 0, 3) }),
+      drilldownRow({ id: 2n, budgetDate: utcDate(2026, 0, 15), statusNormalized: 'WON', closingDate: utcDate(2026, 1, 2) }),
+      drilldownRow({ id: 3n, budgetDate: utcDate(2026, 0, 20), statusNormalized: 'LOST', cancellationDate: utcDate(2026, 1, 5) }),
+    ]
+    const buildRepository = (): jest.Mocked<BudgetKpiQueryRepository> => ({
+      getSummaryRows: jest.fn(),
+      getDailyRows: jest.fn(),
+      getBudgetFactRows: jest.fn(),
+      getDrilldownRows: jest.fn().mockResolvedValue(rows),
+    })
+
+    it('lists budgets won in the period even when opened before it', async () => {
+      const repository = buildRepository()
+      const service = new BudgetKpiQueryService(repository)
+
+      const result = await service.getDrilldown({
+        clientId: 'c1',
+        from: '2026-01-01',
+        to: '2026-01-31',
+        card: 'wonInPeriod',
+      })
+
+      expect(repository.getDrilldownRows).toHaveBeenCalledWith({
+        clientId: 'c1',
+        period: expect.objectContaining({
+          from: saoPauloPeriodDate(2026, 0, 1),
+          to: saoPauloPeriodDate(2026, 0, 31),
+        }),
+        sellerId: undefined,
+        branchId: undefined,
+        branchName: undefined,
+        dateScope: 'openingOrResolution',
+      })
+      expect(result.filters).toEqual({ card: 'wonInPeriod' })
+      expect(result.rows.map((row) => row.id)).toEqual(['1'])
+    })
+
+    it('lists budgets created in the period and closed after it', async () => {
+      const repository = buildRepository()
+      const service = new BudgetKpiQueryService(repository)
+
+      const result = await service.getDrilldown({
+        clientId: 'c1',
+        from: '2026-01-01',
+        to: '2026-01-31',
+        card: 'closedOutsidePeriod',
+      })
+
+      expect(result.rows.map((row) => row.id)).toEqual(['2', '3'])
+    })
+
+    it('intersects the card with the status filter', async () => {
+      const repository = buildRepository()
+      const service = new BudgetKpiQueryService(repository)
+
+      const result = await service.getDrilldown({
+        clientId: 'c1',
+        from: '2026-01-01',
+        to: '2026-01-31',
+        card: 'closedOutsidePeriod',
+        status: 'Cancelado',
+      })
+
+      expect(result.filters).toEqual({ card: 'closedOutsidePeriod', status: 'Cancelado' })
+      expect(result.rows.map((row) => row.id)).toEqual(['3'])
+    })
   })
 })

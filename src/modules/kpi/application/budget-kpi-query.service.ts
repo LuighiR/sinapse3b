@@ -14,7 +14,12 @@ import {
   type FollowUpStatus,
   type FollowUpWindow,
 } from './budget-follow-up-classifier'
-import { budgetPeriodCard, classifyBudgetForPeriod, toBudgetPeriodBounds } from './budget-period-classifier'
+import {
+  budgetPeriodCard,
+  classifyBudgetForPeriod,
+  toBudgetPeriodBounds,
+  type BudgetPeriodCard,
+} from './budget-period-classifier'
 
 export type BudgetStatusFilter = 'Cancelado' | 'Baixado' | 'Pendente'
 
@@ -156,6 +161,7 @@ export type BudgetKpiChannelAbandonmentResponse = {
 export type BudgetKpiDrilldownInput = BudgetKpiQueryPeriodInput & {
   branchId?: string | number | bigint
   branchName?: string
+  card?: BudgetPeriodCard
 }
 
 export type BudgetKpiDrilldownFilters = {
@@ -163,6 +169,7 @@ export type BudgetKpiDrilldownFilters = {
   status?: BudgetStatusFilter
   branchId?: number
   branchName?: string
+  card?: BudgetPeriodCard
 }
 
 export type BudgetKpiDrilldownFactRow = {
@@ -483,15 +490,22 @@ export class BudgetKpiQueryService {
     const sellerId = this.normalizeSellerId(input.sellerId)
     const branchId = await this.resolveBranchScope(input.clientId, input.branchId)
     const status = input.status
+    const card = input.card
+    const bounds = toBudgetPeriodBounds(period)
     const rows = await this.repository.getDrilldownRows({
       clientId: input.clientId,
       period,
       sellerId,
       branchId,
       branchName: input.branchName,
+      ...(card !== undefined ? { dateScope: 'openingOrResolution' as const } : {}),
     })
     const filteredRows = rows.filter((row) => {
       if (status !== undefined && this.normalizeStatusFilter(status) !== this.normalizeStatus(row.statusNormalized)) {
+        return false
+      }
+
+      if (card !== undefined && !classifyBudgetForPeriod(row, bounds).cards.includes(card)) {
         return false
       }
 
@@ -913,6 +927,7 @@ export class BudgetKpiQueryService {
     status?: BudgetStatusFilter
     branchId?: number
     branchName?: string
+    card?: BudgetPeriodCard
   }): BudgetKpiDrilldownFilters {
     const filters: BudgetKpiDrilldownFilters = {}
 
@@ -930,6 +945,10 @@ export class BudgetKpiQueryService {
 
     if (input.branchName !== undefined) {
       filters.branchName = input.branchName
+    }
+
+    if (input.card !== undefined) {
+      filters.card = input.card
     }
 
     return filters
