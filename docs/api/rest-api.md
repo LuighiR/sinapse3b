@@ -787,7 +787,7 @@ Response `200`:
 ### `GET /kpis/budgets/summary`
 
 Descricao:
-retorna cards consolidados de orcamentos.
+retorna os cards mensais de orcamentos. Sempre calculado a partir de `core.budget_facts`. Regras de cada campo em `docs/kpi-catalog.md` (secao "Cards mensais").
 
 Response `200`:
 
@@ -798,22 +798,20 @@ Response `200`:
     "to": "2026-01-31",
     "key": "2026-01-01_2026-01-31"
   },
-  "total": {
-    "count": 9233,
-    "value": "11845044.4842"
+  "total": { "count": 6, "value": "2900.0000" },
+  "open": { "count": 1, "value": "600.0000" },
+  "won": { "count": 2, "value": "400.0000" },
+  "lost": { "count": 2, "value": "1100.0000" },
+  "wonInPeriod": { "count": 2, "value": "300.0000" },
+  "lostInPeriod": { "count": 2, "value": "1200.0000" },
+  "closedOutsidePeriod": {
+    "count": 2,
+    "value": "700.0000",
+    "won": { "count": 1, "value": "300.0000" },
+    "lost": { "count": 1, "value": "400.0000" }
   },
-  "open": {
-    "count": 2759,
-    "value": "3210400.0000"
-  },
-  "won": {
-    "count": 6474,
-    "value": "8634644.4842"
-  },
-  "lost": {
-    "count": 0,
-    "value": "0.0000"
-  }
+  "resolvedInPeriod": { "count": 2, "value": "800.0000" },
+  "unclassified": { "count": 1, "value": "800.0000" }
 }
 ```
 
@@ -1313,6 +1311,7 @@ Query Params:
 - `status` optional: `Cancelado`, `Baixado`, `Pendente`
 - `branchId` optional
 - `branchName` optional
+- `card` (opcional): `created`, `open`, `wonInPeriod`, `lostInPeriod`, `closedOutsidePeriod`, `resolvedInPeriod` ou `unclassified`. Lista os registros que compoem o card de mesmo nome no summary (`created` = `total`). Pode ser combinado com `status`, `sellerId`, `branchId` e `branchName`.
 
 Quando `sellerId` e informado nas rotas de budgets, ele representa `core.employees.erp_id`.
 Para filtrar por **pessoa** em varias lojas, veja o guia em `GET /companies/current/employees` (mesmo `sellerId` + `branchId` por loja; sem dados = 0).
@@ -1321,6 +1320,7 @@ Exemplo:
 
 ```text
 GET /kpis/budgets/drilldown?from=2026-01-01&to=2026-01-31&sellerId=35747&status=Cancelado
+GET /kpis/budgets/drilldown?from=2026-01-01&to=2026-01-31&card=closedOutsidePeriod
 ```
 
 Response `200`:

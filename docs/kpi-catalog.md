@@ -127,17 +127,34 @@ Campos importantes em `core.budget_facts`:
 | KPI / endpoint | O que representa | Fonte principal | Salvo em `core.budget_facts`? | Salvo em `kpi.*`? | Como a API responde |
 | --- | --- | --- | --- | --- | --- |
 | `POST /kpis/budgets/refresh` | Reprocessa budgets do periodo | `raw.ferraco_budgets` | Sim | Sim | Normaliza e materializa |
-| `GET /kpis/budgets/summary` | Cards total/open/won/lost por quantidade e valor | `core.budget_facts` | Sim | Sim, em `kpi.snapshots` (`budgets.summary`) | Usa materializacao sem filtros; com filtros cai para `facts` |
+| `GET /kpis/budgets/summary` | Cards do mes: criados, em aberto, fechados no mes, perdidos no mes, fechados fora do mes (+ conferencia) | `core.budget_facts` | Sim | O refresh ainda grava `budgets.summary` em `kpi.snapshots`, mas a rota nao le mais | Sempre calcula on demand em `facts` (abertura OU fechamento OU cancelamento no periodo) |
 | `GET /kpis/budgets/daily` | Serie diaria de quantidade e valor | `core.budget_facts` | Sim | Sim, em `kpi.breakdowns` (`budgets.daily`) | Usa materializacao sem filtros; com filtros cai para `facts` |
 | `GET /kpis/budgets/hourly` | Serie por hora de quantidade e valor | `core.budget_facts` | Sim | Nao | Sempre calcula on demand em `facts` |
 | `GET /kpis/budgets/channel/daily` | Quebra diaria por canal/order type | `core.budget_facts` | Sim | Nao | Sempre calcula on demand em `facts` |
 | `GET /kpis/budgets/channel/hourly` | Quebra horaria por canal/order type | `core.budget_facts` | Sim | Nao | Sempre calcula on demand em `facts` |
 | `GET /kpis/budgets/channel/abandonment` | Cancelamentos por canal | `core.budget_facts` | Sim | Nao | Sempre calcula on demand em `facts` |
-| `GET /kpis/budgets/drilldown` | Lista auditavel de orcamentos do periodo | `core.budget_facts` | Sim | Existe materializacao `budgets.drilldown`, mas a rota atual le os facts | Sempre usa facts |
+| `GET /kpis/budgets/drilldown` | Lista auditavel de orcamentos do periodo; `card` opcional filtra pelos cards do summary | `core.budget_facts` | Sim | Existe materializacao `budgets.drilldown`, mas a rota atual le os facts | Sempre usa facts |
 | `GET /kpis/budgets/follow-up/summary` | Follow-up ate 24h vs apos 24h, separado em converted/lost/open | `core.budget_facts` + classificador | Sim | Nao | Sempre calcula on demand |
 | `GET /kpis/budgets/follow-up/daily` | Serie diaria do follow-up | `core.budget_facts` + classificador | Sim | Nao | Sempre calcula on demand |
 | `GET /kpis/budgets/follow-up/drilldown` | Drilldown auditavel do follow-up por registro | `core.budget_facts` + classificador | Sim | Nao | Sempre calcula on demand |
 | `POST /kpis/budgets/follow-up/dkw-dispatch` | Acao operacional de disparo para DKW | `core.budget_facts` + `raw.ferraco_budgets.sent_dkw_at` | Sim | Nao | Nao e KPI, e uma automacao operacional |
+
+### Cards mensais (`GET /kpis/budgets/summary`)
+
+Periodo = `from`..`to`. Datas comparadas como `YYYY-MM-DD`.
+
+- `total` (Criados no Mes): `budget_date` no periodo.
+- `open` (Em Aberto do Mes): criados no periodo com status atual `OPEN`.
+- `won` / `lost`: criados no periodo com status atual `WON` / `LOST` (campos legados).
+- `wonInPeriod` (Fechados no Mes): `WON` com `closing_date` no periodo, aberto em qualquer data.
+- `lostInPeriod` (Perdidos no Mes): `LOST` com `cancellation_date` (ou `payload_json.cancellation_date`) no periodo, aberto em qualquer data.
+- `closedOutsidePeriod` (Fechados Fora do Mes): criados no periodo e resolvidos depois de `to`; traz `won` e `lost`.
+- `resolvedInPeriod`: criados e resolvidos dentro do periodo (conferencia).
+- `unclassified`: criados no periodo sem encaixe (status `UNKNOWN`, ganho/cancelado sem data, resolucao antes de `from`).
+
+Identidade (count e value): `total = resolvedInPeriod + open + closedOutsidePeriod + unclassified`.
+
+Limitacao: cancelamentos com data so no `payload_json` entram em `lostInPeriod` apenas quando tambem foram abertos no periodo.
 
 ### Metricas materializadas de `budgets`
 
@@ -162,6 +179,7 @@ Semantica:
 - `lost`: somente `status_normalized = LOST`
 - `count`: quantidade de registros
 - `value`: soma de `value_amount`
+- a rota `GET /kpis/budgets/summary` nao le mais este snapshot; ele continua sendo gravado pelo refresh
 
 #### `budgets.daily` em `kpi.breakdowns`
 
