@@ -8,6 +8,8 @@ describe('prisma schema', () => {
     expect(schema).toContain('schemas  = ["public", "core", "raw", "kpi"]')
     expect(schema).toContain('model CallFact')
     expect(schema).toContain('model BudgetFact')
+    expect(schema).toContain('budget_facts_client_closing_date_idx')
+    expect(schema).toContain('budget_facts_client_cancellation_date_idx')
     expect(schema).toContain('@@schema("core")')
     expect(schema).toContain('model KpiDefinition')
     expect(schema).toContain('model KpiAvailability')

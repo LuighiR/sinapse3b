@@ -7,6 +7,80 @@ describe('KpiModule repositories', () => {
     to: '2026-01-31',
   })
 
+  const budgetPeriodRange = {
+    gte: new Date('2026-01-01T00:00:00.000Z'),
+    lte: new Date('2026-01-31T00:00:00.000Z'),
+  }
+
+  it('keeps filtering budget facts by opening date by default', async () => {
+    const prisma = {
+      budgetFact: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+    }
+
+    const repository = new PrismaBudgetKpiRepository(prisma as any)
+
+    await repository.getBudgetFactRows({ clientId: 'client-1', period })
+
+    expect(prisma.budgetFact.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { clientId: 'client-1', budgetDate: budgetPeriodRange },
+      }),
+    )
+  })
+
+  it('widens budget facts to closing and cancellation dates when dateScope is openingOrResolution', async () => {
+    const prisma = {
+      budgetFact: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+    }
+
+    const repository = new PrismaBudgetKpiRepository(prisma as any)
+
+    await repository.getBudgetFactRows({ clientId: 'client-1', period, dateScope: 'openingOrResolution' })
+
+    expect(prisma.budgetFact.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          clientId: 'client-1',
+          OR: [
+            { budgetDate: budgetPeriodRange },
+            { statusNormalized: 'WON', closingDate: budgetPeriodRange },
+            { statusNormalized: 'LOST', cancellationDate: budgetPeriodRange },
+          ],
+        },
+      }),
+    )
+  })
+
+  it('widens budget drilldown rows to closing and cancellation dates when dateScope is openingOrResolution', async () => {
+    const prisma = {
+      budgetFact: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+    }
+
+    const repository = new PrismaBudgetKpiRepository(prisma as any)
+
+    await repository.getDrilldownRows({ clientId: 'client-1', period, sellerId: 7, dateScope: 'openingOrResolution' })
+
+    expect(prisma.budgetFact.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          clientId: 'client-1',
+          OR: [
+            { budgetDate: budgetPeriodRange },
+            { statusNormalized: 'WON', closingDate: budgetPeriodRange },
+            { statusNormalized: 'LOST', cancellationDate: budgetPeriodRange },
+          ],
+          sellerId: 7,
+        },
+      }),
+    )
+  })
+
   it('applies branchId in the budget fact Prisma where clause', async () => {
     const prisma = {
       budgetFact: {

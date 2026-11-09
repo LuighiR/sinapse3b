@@ -236,6 +236,8 @@ export type BudgetKpiFollowUpDrilldownResponse = {
   rows: BudgetKpiFollowUpDrilldownRow[]
 }
 
+export type BudgetFactDateScope = 'opening' | 'openingOrResolution'
+
 export type BudgetKpiQueryRepository = {
   getSummaryRows(input: { clientId: string; period: KpiPeriod }): Promise<BudgetKpiSnapshotRow[]>
   getDailyRows(input: { clientId: string; period: KpiPeriod }): Promise<BudgetKpiBreakdownRow[]>
@@ -244,6 +246,7 @@ export type BudgetKpiQueryRepository = {
     period: KpiPeriod
     branchId?: number
     sellerId?: number
+    dateScope?: BudgetFactDateScope
   }): Promise<BudgetFactRecord[]>
   getDrilldownRows(input: {
     clientId: string
@@ -251,6 +254,7 @@ export type BudgetKpiQueryRepository = {
     sellerId?: number
     branchId?: number
     branchName?: string
+    dateScope?: BudgetFactDateScope
   }): Promise<BudgetKpiDrilldownFactRow[]>
 }
 

@@ -30,6 +30,7 @@ import {
   BudgetKpiAvailabilityService,
 } from './application/budget-kpi-availability.service'
 import {
+  BudgetFactDateScope,
   BudgetKpiDrilldownFactRow,
   BudgetKpiQueryRepository,
   BudgetKpiQueryService,
@@ -82,6 +83,25 @@ import { PrismaBudgetFollowUpDkwDispatchRepository } from './infrastructure/pris
 import { PrismaCallKpiRepository } from './infrastructure/prisma-call-kpi.repository'
 import { PrismaWhatsAppKpiRepository } from './infrastructure/prisma-whatsapp-kpi.repository'
 import { BranchScopeService } from '../companies/application/branch-scope.service'
+
+function budgetFactPeriodWhere(period: KpiPeriod, dateScope: BudgetFactDateScope | undefined) {
+  const range = {
+    gte: KpiPeriod.toDatabaseDate(period.from),
+    lte: KpiPeriod.toDatabaseDate(period.to),
+  }
+
+  if (dateScope === 'openingOrResolution') {
+    return {
+      OR: [
+        { budgetDate: range },
+        { statusNormalized: 'WON', closingDate: range },
+        { statusNormalized: 'LOST', cancellationDate: range },
+      ],
+    }
+  }
+
+  return { budgetDate: range }
+}
 
 @Injectable()
 export class PrismaBudgetKpiRepository
@@ -472,18 +492,14 @@ export class PrismaBudgetKpiRepository
     period: KpiPeriod
     branchId?: number
     sellerId?: number
+    dateScope?: BudgetFactDateScope
   }): Promise<BudgetFactRecord[]> {
     const prisma = this.prisma as any
-    const from = KpiPeriod.toDatabaseDate(input.period.from)
-    const to = KpiPeriod.toDatabaseDate(input.period.to)
 
     return prisma.budgetFact.findMany({
       where: {
         clientId: input.clientId,
-        budgetDate: {
-          gte: from,
-          lte: to,
-        },
+        ...budgetFactPeriodWhere(input.period, input.dateScope),
         ...(input.branchId !== undefined ? { branchId: input.branchId } : {}),
         ...(input.sellerId !== undefined ? { sellerId: input.sellerId } : {}),
       },
@@ -511,18 +527,14 @@ export class PrismaBudgetKpiRepository
     sellerId?: number
     branchId?: number
     branchName?: string
+    dateScope?: BudgetFactDateScope
   }): Promise<BudgetKpiDrilldownFactRow[]> {
     const prisma = this.prisma as any
-    const from = KpiPeriod.toDatabaseDate(input.period.from)
-    const to = KpiPeriod.toDatabaseDate(input.period.to)
 
     const rows = await prisma.budgetFact.findMany({
       where: {
         clientId: input.clientId,
-        budgetDate: {
-          gte: from,
-          lte: to,
-        },
+        ...budgetFactPeriodWhere(input.period, input.dateScope),
         ...(input.sellerId !== undefined ? { sellerId: input.sellerId } : {}),
         ...(input.branchId !== undefined ? { branchId: input.branchId } : {}),
         ...(input.branchName !== undefined ? { branchName: input.branchName } : {}),

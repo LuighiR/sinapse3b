@@ -367,6 +367,8 @@ model BudgetFact {
   @@index([clientId, budgetDate], map: "budget_facts_client_budget_date_idx")
   @@index([clientId, sellerId, budgetDate], map: "budget_facts_client_seller_budget_date_idx")
   @@index([clientId, branchId, budgetDate], map: "budget_facts_client_branch_budget_date_idx")
+  @@index([clientId, closingDate], map: "budget_facts_client_closing_date_idx")
+  @@index([clientId, cancellationDate], map: "budget_facts_client_cancellation_date_idx")
   @@map("budget_facts")
   @@schema("core")
 }
